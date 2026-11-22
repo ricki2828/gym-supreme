@@ -107,6 +107,8 @@ jobs:
       - name: supreme_ui tests
         working-directory: packages/supreme_ui
         run: flutter test
+      - name: Exercise data is current (tools/build_exercises.py --check; unknown ids or asset drift fail)
+        run: python3 tools/build_exercises.py --check
       - name: gym_engine tests
         working-directory: packages/gym_engine
         run: dart test

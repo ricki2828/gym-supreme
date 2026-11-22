@@ -1,0 +1,241 @@
+{
+ "version": 1,
+ "muscles": [
+  {
+   "id": "chest",
+   "name": "Chest"
+  },
+  {
+   "id": "front-delts",
+   "name": "Front delts"
+  },
+  {
+   "id": "side-delts",
+   "name": "Side delts"
+  },
+  {
+   "id": "rear-delts",
+   "name": "Rear delts"
+  },
+  {
+   "id": "biceps",
+   "name": "Biceps"
+  },
+  {
+   "id": "triceps",
+   "name": "Triceps"
+  },
+  {
+   "id": "forearms",
+   "name": "Forearms"
+  },
+  {
+   "id": "abs",
+   "name": "Abs"
+  },
+  {
+   "id": "obliques",
+   "name": "Obliques"
+  },
+  {
+   "id": "traps",
+   "name": "Traps"
+  },
+  {
+   "id": "lats",
+   "name": "Lats"
+  },
+  {
+   "id": "lower-back",
+   "name": "Lower back"
+  },
+  {
+   "id": "glutes",
+   "name": "Glutes"
+  },
+  {
+   "id": "quads",
+   "name": "Quads"
+  },
+  {
+   "id": "hamstrings",
+   "name": "Hamstrings"
+  },
+  {
+   "id": "calves",
+   "name": "Calves"
+  }
+ ],
+ "equipment": [
+  {
+   "id": "bodyweight",
+   "name": "Bodyweight",
+   "load": "bodyweight"
+  },
+  {
+   "id": "dumbbells",
+   "name": "Dumbbells",
+   "load": "dumbbell"
+  },
+  {
+   "id": "kettlebells",
+   "name": "Kettlebells",
+   "load": "dumbbell"
+  },
+  {
+   "id": "barbell",
+   "name": "Barbell",
+   "load": "barbell"
+  },
+  {
+   "id": "ez-bar",
+   "name": "EZ bar",
+   "load": "barbell"
+  },
+  {
+   "id": "trap-bar",
+   "name": "Trap bar",
+   "load": "barbell"
+  },
+  {
+   "id": "plates",
+   "name": "Plates",
+   "load": "plates"
+  },
+  {
+   "id": "squat-rack",
+   "name": "Squat rack",
+   "load": "none"
+  },
+  {
+   "id": "flat-bench",
+   "name": "Flat bench",
+   "load": "none"
+  },
+  {
+   "id": "adjustable-bench",
+   "name": "Adjustable bench",
+   "load": "none"
+  },
+  {
+   "id": "cable-stack",
+   "name": "Cable stack",
+   "load": "stack"
+  },
+  {
+   "id": "overhead-cable-bench",
+   "name": "Bench with overhead cable",
+   "load": "stack"
+  },
+  {
+   "id": "lat-pulldown",
+   "name": "Lat pulldown",
+   "load": "stack"
+  },
+  {
+   "id": "seated-row",
+   "name": "Seated row machine",
+   "load": "stack"
+  },
+  {
+   "id": "leg-press",
+   "name": "Leg press",
+   "load": "stack"
+  },
+  {
+   "id": "leg-extension",
+   "name": "Leg extension",
+   "load": "stack"
+  },
+  {
+   "id": "leg-curl",
+   "name": "Leg curl",
+   "load": "stack"
+  },
+  {
+   "id": "chest-press",
+   "name": "Chest press machine",
+   "load": "stack"
+  },
+  {
+   "id": "shoulder-press",
+   "name": "Shoulder press machine",
+   "load": "stack"
+  },
+  {
+   "id": "smith",
+   "name": "Smith machine",
+   "load": "barbell"
+  },
+  {
+   "id": "pull-up-bar",
+   "name": "Pull-up bar",
+   "load": "bodyweight"
+  },
+  {
+   "id": "dip-station",
+   "name": "Dip station",
+   "load": "bodyweight"
+  },
+  {
+   "id": "bands",
+   "name": "Resistance bands",
+   "load": "bands"
+  },
+  {
+   "id": "treadmill",
+   "name": "Treadmill",
+   "load": "distance"
+  },
+  {
+   "id": "bike",
+   "name": "Bike",
+   "load": "distance"
+  },
+  {
+   "id": "air-bike",
+   "name": "Air bike",
+   "load": "distance"
+  },
+  {
+   "id": "rower",
+   "name": "Rower",
+   "load": "distance"
+  },
+  {
+   "id": "ski-machine",
+   "name": "Ski machine",
+   "load": "distance"
+  },
+  {
+   "id": "sled",
+   "name": "Sled",
+   "load": "plates"
+  },
+  {
+   "id": "wall-ball",
+   "name": "Wall ball",
+   "load": "dumbbell"
+  },
+  {
+   "id": "box",
+   "name": "Plyo box",
+   "load": "none"
+  }
+ ],
+ "presets": [
+  {
+   "id": "condo",
+   "name": "Condo gym",
+   "source": "Ricki, Q14 (22-Nov-2026): bench, dumbbells, cables, a bench with an overhead cable, leg extension",
+   "equipment": [
+    "adjustable-bench",
+    "dumbbells",
+    "cable-stack",
+    "overhead-cable-bench",
+    "leg-extension"
+   ],
+   "notes": "Bodyweight is always present. Ricki's 'bench with an overhead cable' is its own id, NOT assumed to be a lat pulldown: pulldown exercises need 'lat-pulldown' and are not offered here until gym setup confirms it. Cables are assumed adjustable-height and dual (crossovers, high pulley, face pull). Dumbbell range unknown; gym setup asks on first run. No barbell, rack, smith or cardio kit listed."
+  }
+ ]
+}
