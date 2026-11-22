@@ -279,16 +279,15 @@ jobs:
           BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
           vc() { "$BT/aapt" dump badging "$1" | sed -n "s/^package: .*versionCode='\([0-9]*\)'.*/\1/p"; }
           prev_vc="$(vc prev-x86_64-dogfood.apk)"; new_vc="$(vc build/app/outputs/flutter-apk/app-x86_64-dogfood-release.apk)"
+          [[ $prev_vc =~ ^[0-9]+$ && $new_vc =~ ^[0-9]+$ ]] || { echo "::error::could not read versionCodes (prev='$prev_vc' new='$new_vc')"; exit 1; }
           echo "build N-1: $asset (versionCode $prev_vc); build N: versionCode $new_vc"
           if [ "$prev_vc" -ge "$new_vc" ]; then
-            # A PR that started before a newer main run published: N-1 is newer than this build.
-            if [ "${{ github.event_name }}" = "pull_request" ]; then
-              rm prev-x86_64-dogfood.apk
-              echo "has_prev=false" >> "$GITHUB_OUTPUT"
-              echo "::warning::dogfood-latest ($prev_vc) is newer than this PR build ($new_vc): install-over SKIPPED; re-run to test it"
-              exit 0
-            fi
-            echo "::error::main build $new_vc is not newer than dogfood-latest $prev_vc"; exit 1
+            # dogfood-latest is newer than this build: a PR that started before a newer main run
+            # published, or a re-run of an old main run. No install-over, and never publish it.
+            rm prev-x86_64-dogfood.apk
+            echo "has_prev=false" >> "$GITHUB_OUTPUT"; echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::dogfood-latest ($prev_vc) is newer than this build ($new_vc): install-over SKIPPED and dogfood-latest left alone; push again to test install-over"
+            exit 0
           fi
           echo "has_prev=true" >> "$GITHUB_OUTPUT"
       - name: Publish APKs (this run's release for the emulators; main also to dogfood-latest)
@@ -302,10 +301,8 @@ jobs:
           files=("$out/app-x86_64-dogfood-release.apk")
           [ -f prev-x86_64-dogfood.apk ] && files+=(prev-x86_64-dogfood.apk)
           tools/ci_release.sh put "ci-apk-${{ github.run_id }}" "ci apks ${{ github.run_id }}" "Dogfood APKs, run ${{ github.run_id }}, sha ${{ github.sha }}. Deleted after 2 days." "${files[@]}"
-          head="$(git ls-remote origin refs/heads/main | cut -f1)"
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ] && [ "$head" != "$GITHUB_SHA" ]; then
-            echo "::warning::main moved on to ${head::7}; not replacing dogfood-latest with older $sha7"
-          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          # The fetch step sets publish=false when dogfood-latest is already newer than this build.
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ steps.prev.outputs.publish }}" != "false" ]; then
             tools/ci_release.sh put dogfood-latest "Dogfood APK $sha7" "Latest dogfood build from main. sha ${{ github.sha }}, CI run ${{ github.run_id }}. arm64 for the phone, x64 for the emulators; replaced on every main push." --replace-assets "$out/gym-supreme-dogfood-$sha7-arm64.apk" "$out/gym-supreme-dogfood-$sha7-x64.apk"
           fi
 
