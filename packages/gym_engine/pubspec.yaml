@@ -1,0 +1,11 @@
+name: gym_engine
+description: "Pure Dart engine for Gym Supreme: exercises, muscles, suggestions, journal codec."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.4
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.0

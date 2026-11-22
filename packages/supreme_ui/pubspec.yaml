@@ -1,0 +1,16 @@
+name: supreme_ui
+description: "Supreme design system: theme copied from Run Supreme plus Gym Supreme's LIT tokens."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

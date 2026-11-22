@@ -1,0 +1,44 @@
+name: gym_supreme
+description: "Gym Supreme: local-only Android strength log with a lock-screen workout service."
+publish_to: 'none'
+
+# versionCode comes from the +N suffix; CI stamps 0.1.0+<run number> on dogfood builds.
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  gym_engine:
+    path: packages/gym_engine
+  supreme_ui:
+    path: packages/supreme_ui
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  pigeon: ^26.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/fonts/OFL-SairaExtraCondensed.txt
+    - assets/fonts/OFL-SchibstedGrotesk.txt
+
+  # Bundled (OFL, see assets/fonts/OFL-*.txt). Nothing is fetched at runtime: no INTERNET.
+  fonts:
+    - family: Saira Extra Condensed
+      fonts:
+        - asset: assets/fonts/SairaExtraCondensed-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/SairaExtraCondensed-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/SairaExtraCondensed-ExtraBold.ttf
+          weight: 800
+    - family: Schibsted Grotesk
+      fonts:
+        - asset: assets/fonts/SchibstedGrotesk-Variable.ttf
