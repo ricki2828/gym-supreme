@@ -242,7 +242,7 @@ jobs:
           for abi in arm64-v8a x86_64; do
             APK=build/app/outputs/flutter-apk/app-$abi-dogfood-release.apk
             "$BT/apksigner" verify --print-certs "$APK" > "$RUNNER_TEMP/signer.txt" 2>&1 || { cat "$RUNNER_TEMP/signer.txt"; exit 1; }
-            grep -E "Signer #1 certificate DN" "$RUNNER_TEMP/signer.txt"
+            grep -E "certificate DN|certificate SHA-256" "$RUNNER_TEMP/signer.txt" || cat "$RUNNER_TEMP/signer.txt"
             grep -q "CN=Gym Supreme dogfood" "$RUNNER_TEMP/signer.txt" || { echo "::error::$abi APK is not signed with the dogfood key"; exit 1; }
             "$BT/aapt" dump badging "$APK" | grep -E "^package:" | tee "$RUNNER_TEMP/pkg.txt"
             grep -q "name='$DOGFOOD_PKG'" "$RUNNER_TEMP/pkg.txt" || { echo "::error::unexpected applicationId"; exit 1; }
