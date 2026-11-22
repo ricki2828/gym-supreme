@@ -14,17 +14,25 @@ class CuePlanTest {
         assertEquals(10, rests.size)
         assertEquals((1..10).map { it * 90_000L }, rests.map { it.atMs })
         assertEquals(20, emom.size)
-        assertEquals((0 until 20).map { 900_000L + it * 60_000L }, emom.map { it.atMs })
+        assertEquals((0 until 20).map { 910_000L + it * 60_000L }, emom.map { it.atMs })
         assertEquals(listOf(45 * 60_000L), cues.filter { it.kind == CueKind.MARK }.map { it.atMs })
         assertEquals(cues.indices.toList(), cues.map { it.index })
         assertEquals(cues.sortedBy { it.atMs }, cues)
     }
 
     @Test
-    fun `spike - the last rest end and the first EMOM minute share a moment, rest first`() {
+    fun `spike - no two cues share a moment, so each alert is heard on its own`() {
         val cues = CuePlan.spike()
-        val at = 900_000L
-        assertEquals(listOf(CueKind.REST_END, CueKind.EMOM_MINUTE), cues.filter { it.atMs == at }.map { it.kind })
+        assertEquals(cues.size, cues.map { it.atMs }.distinct().size)
+        val lastRest = cues.last { it.kind == CueKind.REST_END }.atMs
+        val firstEmom = cues.first { it.kind == CueKind.EMOM_MINUTE }.atMs
+        assertEquals(CuePlan.SPIKE_GAP_MS, firstEmom - lastRest)
+    }
+
+    @Test
+    fun `spike - a zero gap still sorts rest before EMOM`() {
+        val cues = CuePlan.spike(gapMs = 0)
+        assertEquals(listOf(CueKind.REST_END, CueKind.EMOM_MINUTE), cues.filter { it.atMs == 900_000L }.map { it.kind })
     }
 
     @Test

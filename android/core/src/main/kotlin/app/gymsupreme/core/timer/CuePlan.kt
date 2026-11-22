@@ -23,8 +23,9 @@ enum class CueKind(val wire: String) {
 
 /**
  * The phase-0 spike (brief section 5, runbook card): from one "Start all" tap, [rests] rests of
- * [restMs] back to back (S1), then a [emomMinutes]-minute EMOM with a cue at the start of every
- * minute (S2), while the strap is tracked throughout (S3). A silent mark at [strapMarkMs]
+ * [restMs] back to back (S1), then, [gapMs] after the last rest ends, a [emomMinutes]-minute
+ * EMOM with a cue at the start of every minute (S2). The gap keeps the last rest's alert and the
+ * first EMOM cue apart, so each is heard and logged on its own, while the strap is tracked throughout (S3). A silent mark at [strapMarkMs]
  * records that the 45-minute strap window was reached; the service keeps tracking until Stop.
  */
 object CuePlan {
@@ -32,6 +33,7 @@ object CuePlan {
     const val SPIKE_REST_MS = 90_000L
     const val SPIKE_EMOM_MINUTES = 20
     const val SPIKE_STRAP_MARK_MS = 45 * 60_000L
+    const val SPIKE_GAP_MS = 10_000L
     const val SELFTEST_DELAY_MS = 3_000L
 
     fun spike(
@@ -39,11 +41,12 @@ object CuePlan {
         restMs: Long = SPIKE_REST_MS,
         emomMinutes: Int = SPIKE_EMOM_MINUTES,
         strapMarkMs: Long = SPIKE_STRAP_MARK_MS,
+        gapMs: Long = SPIKE_GAP_MS,
     ): List<Cue> {
-        require(rests >= 0 && restMs > 0 && emomMinutes >= 0)
+        require(rests >= 0 && restMs > 0 && emomMinutes >= 0 && gapMs >= 0)
         val out = ArrayList<Cue>()
         for (k in 1..rests) out.add(Cue(0, CueKind.REST_END, k * restMs, "rest $k of $rests"))
-        val emomStart = rests * restMs
+        val emomStart = rests * restMs + gapMs
         for (m in 0 until emomMinutes) out.add(Cue(0, CueKind.EMOM_MINUTE, emomStart + m * 60_000L, "EMOM minute ${m + 1} of $emomMinutes"))
         out.add(Cue(0, CueKind.MARK, strapMarkMs, "strap ${strapMarkMs / 60_000} min mark"))
         return out.sortedWith(compareBy<Cue> { it.atMs }.thenBy { it.kind.ordinal })

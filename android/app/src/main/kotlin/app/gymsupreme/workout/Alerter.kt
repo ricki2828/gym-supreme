@@ -59,7 +59,7 @@ class Alerter(context: Context, private val handler: Handler) {
             .build()
         return try {
             val r = audio.requestAudioFocus(req)
-            focus = req
+            if (r != AudioManager.AUDIOFOCUS_REQUEST_FAILED) focus = req
             when (r) {
                 AudioManager.AUDIOFOCUS_REQUEST_GRANTED -> "granted"
                 AudioManager.AUDIOFOCUS_REQUEST_DELAYED -> "delayed"

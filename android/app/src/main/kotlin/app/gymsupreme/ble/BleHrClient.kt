@@ -78,6 +78,7 @@ class BleHrClient(context: Context) {
     private val huntDevices = HashMap<String, BluetoothDevice>() // this hunt's scan results, connected by object (keeps the address type)
     private val owners = HashSet<String>()
     private var linger: Runnable? = null
+    private var pairHold: Runnable? = null
     private val seenNames = HashMap<String, String>() // address -> name from the last pairing scan, capped at MAX_SEEN_NAMES
     var listener: Listener? = null
 
@@ -157,10 +158,14 @@ class BleHrClient(context: Context) {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
                 val d = result.device ?: return
                 val name = result.scanRecord?.deviceName ?: safeName(d)
-                found[d.address] = Found(d.address, name)
-                if (name != null) {
-                    if (seenNames.size >= MAX_SEEN_NAMES) seenNames.clear()
-                    seenNames[d.address] = name
+                // Binder thread: hand over to main, where finish() reads the same maps.
+                main.post {
+                    if (finished) return@post
+                    found[d.address] = Found(d.address, name)
+                    if (name != null) {
+                        if (seenNames.size >= MAX_SEEN_NAMES) seenNames.clear()
+                        seenNames[d.address] = name
+                    }
                 }
             }
 
@@ -195,7 +200,13 @@ class BleHrClient(context: Context) {
         trail.note("pair ${addr(address)} name=${name ?: "-"}")
         // Pairing holds the strap for a while (the pairing screen shows its HR) even outside Start/Ready.
         want(OWNER_PAIR, start = false)
-        main.postDelayed({ release(OWNER_PAIR) }, PAIR_HOLD_MS)
+        pairHold?.let { main.removeCallbacks(it) }
+        val hold = Runnable {
+            pairHold = null
+            release(OWNER_PAIR)
+        }
+        pairHold = hold
+        main.postDelayed(hold, PAIR_HOLD_MS)
         apply(policy.pair(address, name))
     }
 

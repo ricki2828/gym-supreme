@@ -34,8 +34,11 @@ import java.io.File
  * manifest types; S5 (CI, API 29/33/34/36) reads the outcome from the log.
  *
  * Threads: cues run on [cueThread] from `elapsedRealtime`, anchored to the block start, under a
- * partial wake lock that ends with the last audible cue (R4). The strap and notification run on
- * the main thread.
+ * partial wake lock. The strap and notification run on the main thread. In the spike the wake
+ * lock is held until Stop (capped at [SAFETY_CAP_MS]), not just for the timed block as R4 says:
+ * the strap's reconnect timers are uptime-clock `postDelayed`s, so after the last cue a drop with
+ * the screen off could wait for the next wake-up and fail S3 for a reason that is ours, not the
+ * phone's. Phase 1 should hold a short wake lock in the strap client while it hunts instead.
  */
 class WorkoutService : Service() {
     private lateinit var notification: WorkoutNotification
@@ -106,7 +109,7 @@ class WorkoutService : Service() {
         }
         wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "gymsupreme:cues")
-            .also { it.acquire(plan.last().atMs + WAKE_MARGIN_MS) }
+            .also { it.acquire(if (m == MODE_SELFTEST) SELFTEST_RUN_MS + WAKE_MARGIN_MS else SAFETY_CAP_MS + WAKE_MARGIN_MS) }
         val th = HandlerThread("gym-cues", Process.THREAD_PRIORITY_URGENT_AUDIO).also { it.start() }
         cueThread = th
         val h = Handler(th.looper)
@@ -240,8 +243,6 @@ class WorkoutService : Service() {
                     .put("hr_bpm", status.hr),
             ),
         )
-        // R4: the wake lock is bounded to the timed block; the strap mark after it runs without one.
-        if (next == null || next.kind == CueKind.MARK) main.post { releaseWakeLock("block_done") }
     }
 
     private fun cueTitle(c: Cue) = when (c.kind) {
@@ -259,7 +260,6 @@ class WorkoutService : Service() {
 
     private fun onPlanDone() {
         if (!status.running) return
-        releaseWakeLock("plan_done")
         update { it.copy(title = if (mode == MODE_SELFTEST) "Self-test done" else "Strap only: tap Stop or Share log") }
         refreshNotification()
         SpikeLog.write(this, SpikeLog.line("plan_done").put("mode", mode).put("audible_fired", audibleFired).put("audible_total", audibleTotal).put("max_late_ms", maxLateMs))
@@ -344,7 +344,7 @@ class WorkoutService : Service() {
         SpikeLog.write(
             this,
             SpikeLog.line("service_stopped").put("mode", mode).put("reason", reason)
-                .put("elapsed_ms", SystemClock.elapsedRealtime() - t0)
+                .put("duration_ms", SystemClock.elapsedRealtime() - t0)
                 .put("cues_fired", c?.firedCount).put("audible_fired", audibleFired).put("audible_total", audibleTotal)
                 .put("max_late_ms", maxLateMs),
         )
