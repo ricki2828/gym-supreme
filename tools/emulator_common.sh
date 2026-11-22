@@ -25,6 +25,9 @@ launch() {
 }
 # marker_line: the newest install-marker log line (MainActivity.InstallMarker).
 marker_line() { timeout 30 adb logcat -d -s GymSupreme/install:I | grep 'install marker=' | tail -1 || true; }
+# marker_first: the first marker line since the last logcat -c. An activity recreate logs a
+# second line with fresh=false (seen once on API 34), so "fresh install" checks read the first.
+marker_first() { timeout 30 adb logcat -d -s GymSupreme/install:I | grep 'install marker=' | head -1 || true; }
 # fatal_check <pkg> <phase>: fails on any crash of OUR process in logcat: a Java/Kotlin
 # exception (AndroidRuntime), a native crash (tombstone ">>> pkg <<<" from DEBUG/crash_dump) or
 # an unhandled Dart error (`E flutter` with Unhandled Exception or [FATAL]; plain engine

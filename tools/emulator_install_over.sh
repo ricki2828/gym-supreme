@@ -14,7 +14,7 @@ adb logcat -c || true
 adb install "$PREV"
 launch "$PKG" || { echo "build N-1 did not start" >&2; exit 1; }
 fatal_check "$PKG" "build N-1 launch"
-before="$(marker_line)"; echo "N-1: $before"
+before="$(marker_first)"; echo "N-1: $before"
 case "$before" in *"fresh=true"*) ;; *) echo "N-1 did not write a fresh marker" >&2; exit 1 ;; esac
 adb shell am force-stop "$PKG"
 adb logcat -c || true
