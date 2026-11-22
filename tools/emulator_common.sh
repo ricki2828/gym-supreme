@@ -25,9 +25,18 @@ launch() {
 }
 # marker_line: the newest install-marker log line (MainActivity.InstallMarker).
 marker_line() { timeout 30 adb logcat -d -s GymSupreme/install:I | grep 'install marker=' | tail -1 || true; }
-# fatal_check <pkg> <phase>: fails on any crash of OUR process in logcat.
+# fatal_check <pkg> <phase>: fails on any crash of OUR process in logcat: a Java/Kotlin
+# exception (AndroidRuntime), a native crash (tombstone ">>> pkg <<<" from DEBUG/crash_dump) or
+# an unhandled Dart error (the `flutter` tag is only ever written by Flutter apps, i.e. us).
 fatal_check() {
-  if timeout 60 adb logcat -d | "$(dirname "${BASH_SOURCE[0]}")/app_fatal.sh" "$1" > /tmp/fatal.log; then
+  local log; log="$(timeout 60 adb logcat -d)"
+  if "$(dirname "${BASH_SOURCE[0]}")/app_fatal.sh" "$1" <<< "$log" > /tmp/fatal.log; then
     echo "fatal exception during $2:" >&2; cat /tmp/fatal.log >&2; exit 1
+  fi
+  if grep -F ">>> $1 <<<" <<< "$log" > /tmp/fatal.log; then
+    echo "native crash during $2:" >&2; grep -E ' F (DEBUG|libc) ' <<< "$log" | tail -n 60 >&2; exit 1
+  fi
+  if grep -E ' E flutter ' <<< "$log" > /tmp/fatal.log; then
+    echo "unhandled Dart error during $2:" >&2; cat /tmp/fatal.log >&2; exit 1
   fi
 }

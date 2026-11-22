@@ -20,13 +20,14 @@ case "$cmd" in
       gh release create "$tag" --prerelease --target main --title "$title" --notes "$notes" > /dev/null \
         || gh release view "$tag" > /dev/null
     fi
+    # Upload first, then drop stale assets: the release is never left without an APK.
+    gh release upload "$tag" "$@" --clobber
     if [ "$replace" = 1 ]; then
       keep="$(for f in "$@"; do basename "$f"; done)"
       gh release view "$tag" --json assets -q '.assets[].name' | while read -r asset; do
         grep -qxF "$asset" <<< "$keep" || gh release delete-asset "$tag" "$asset" --yes
       done
     fi
-    gh release upload "$tag" "$@" --clobber
     echo "published to release $tag: $(for f in "$@"; do basename "$f"; done | tr '\n' ' ')"
     ;;
   get)

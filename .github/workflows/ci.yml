@@ -14,7 +14,8 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  # Pushes to main always finish: every main sha keeps its dogfood APK.
+  # Main runs are never cancelled mid-run, but a newer queued main run replaces a pending one,
+  # so not every main sha gets an APK. dogfood-latest always tracks the newest finished main.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -42,7 +43,8 @@ jobs:
           BEFORE: ${{ github.event.before }}
           SHA: ${{ github.sha }}
         run: |
-          # code=false only when every changed file is documentation (*.md, docs/).
+          # code=false only when every changed file is documentation (root-level *.md, docs/).
+          # Bundled .md assets (e.g. a data LICENSE.md) still run everything.
           if [ "$EVENT" = "pull_request" ]; then
             range="$BASE...$HEAD"
           elif [ "$EVENT" = "push" ] && [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
@@ -51,7 +53,7 @@ jobs:
             range=""
           fi
           if [ -n "$range" ] && files="$(git diff --name-only "$range")" && [ -n "$files" ] \
-             && ! grep -qvE '(\.md$|^docs/)' <<< "$files"; then
+             && ! grep -qvE '(^[^/]+\.md$|^docs/)' <<< "$files"; then
             echo "code=false" >> "$GITHUB_OUTPUT"; echo "docs-only change: heavy jobs skipped"
           else
             echo "code=true" >> "$GITHUB_OUTPUT"
@@ -91,7 +93,8 @@ jobs:
       - name: Pigeon output is committed and current
         run: |
           dart run pigeon --input pigeons/platform_api.dart
-          git diff --exit-code -- lib/platform android/app/src/main/kotlin/app/gymsupreme/platform
+          drift="$(git status --porcelain -- lib/platform android/app/src/main/kotlin/app/gymsupreme/platform)"
+          if [ -n "$drift" ]; then echo "::error::Pigeon output drifted or is untracked:"; echo "$drift"; git diff; exit 1; fi
       - name: Format
         # Generated Pigeon output is excluded: it is checked for drift above, not formatted.
         run: |
@@ -221,9 +224,11 @@ jobs:
           if [ -z "$KS_B64" ]; then echo "::error::GYM_DOGFOOD_KEYSTORE_BASE64 secret missing" >&2; exit 1; fi
           echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/dogfood.jks"
           echo "GYM_DOGFOOD_KEYSTORE=$RUNNER_TEMP/dogfood.jks" >> "$GITHUB_ENV"
-      - name: Stamp version 0.1.0+<run number> (versionCode rises every build, so N installs over N-1)
+      - name: Stamp version 0.1.0+<run_number*10 + run_attempt> (rises every build, re-runs included)
+        # run_number resets if this workflow is renamed or recreated: then raise the base offset
+        # above the phone's installed versionCode, or the update is refused.
         run: |
-          sed -i "s/^version: .*/version: 0.1.0+${{ github.run_number }}/" pubspec.yaml
+          sed -i "s/^version: .*/version: 0.1.0+$(( ${{ github.run_number }} * 10 + ${{ github.run_attempt }} ))/" pubspec.yaml
           grep -n '^version:' pubspec.yaml
       - name: Build dogfood APKs (arm64 for the phone, x86_64 for the emulators)
         env:
@@ -246,7 +251,7 @@ jobs:
             grep -q "CN=Gym Supreme dogfood" "$RUNNER_TEMP/signer.txt" || { echo "::error::$abi APK is not signed with the dogfood key"; exit 1; }
             "$BT/aapt" dump badging "$APK" | grep -E "^package:" | tee "$RUNNER_TEMP/pkg.txt"
             grep -q "name='$DOGFOOD_PKG'" "$RUNNER_TEMP/pkg.txt" || { echo "::error::unexpected applicationId"; exit 1; }
-            tools/check_manifest_permissions.sh "$APK" "$BT/aapt"
+            tools/check_manifest_permissions.sh "$APK" "$BT" "$DOGFOOD_PKG"
             tools/check_16kb_alignment.sh "$APK" "$BT/zipalign"
           done
           SIZE=$(stat -c %s build/app/outputs/flutter-apk/app-arm64-v8a-dogfood-release.apk)
@@ -256,16 +261,36 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p prev
-          if gh release download dogfood-latest --dir prev --pattern 'gym-supreme-dogfood-*-x64.apk' 2>/dev/null \
-             && [ -n "$(ls prev)" ]; then
-            mv prev/*.apk prev-x86_64-dogfood.apk
-            echo "has_prev=true" >> "$GITHUB_OUTPUT"
-            echo "build N-1: $(gh release view dogfood-latest --json name -q .name)"
-          else
-            echo "has_prev=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::no dogfood-latest x64 APK yet (first main build): install-over SKIPPED this run"
+          # Only "the release does not exist yet" may skip install-over; any other error fails.
+          if ! view="$(gh release view dogfood-latest --json name,assets 2>&1)"; then
+            if grep -qi 'release not found' <<< "$view"; then
+              echo "has_prev=false" >> "$GITHUB_OUTPUT"
+              echo "::warning::no dogfood-latest release yet (first main build): install-over SKIPPED this run"
+              exit 0
+            fi
+            echo "$view" >&2; echo "::error::cannot read dogfood-latest"; exit 1
           fi
+          # Newest x64 asset (an interrupted publish can leave two for a moment).
+          asset="$(gh release view dogfood-latest --json assets -q '[.assets[] | select(.name | test("^gym-supreme-dogfood-.*-x64\\.apk$"))] | sort_by(.createdAt) | last | .name // empty')"
+          [ -n "$asset" ] || { echo "::error::dogfood-latest has no x64 APK"; exit 1; }
+          mkdir -p prev
+          gh release download dogfood-latest --dir prev --pattern "$asset"
+          mv "prev/$asset" prev-x86_64-dogfood.apk
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          vc() { "$BT/aapt" dump badging "$1" | sed -n "s/^package: .*versionCode='\([0-9]*\)'.*/\1/p"; }
+          prev_vc="$(vc prev-x86_64-dogfood.apk)"; new_vc="$(vc build/app/outputs/flutter-apk/app-x86_64-dogfood-release.apk)"
+          echo "build N-1: $asset (versionCode $prev_vc); build N: versionCode $new_vc"
+          if [ "$prev_vc" -ge "$new_vc" ]; then
+            # A PR that started before a newer main run published: N-1 is newer than this build.
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              rm prev-x86_64-dogfood.apk
+              echo "has_prev=false" >> "$GITHUB_OUTPUT"
+              echo "::warning::dogfood-latest ($prev_vc) is newer than this PR build ($new_vc): install-over SKIPPED; re-run to test it"
+              exit 0
+            fi
+            echo "::error::main build $new_vc is not newer than dogfood-latest $prev_vc"; exit 1
+          fi
+          echo "has_prev=true" >> "$GITHUB_OUTPUT"
       - name: Publish APKs (this run's release for the emulators; main also to dogfood-latest)
         env:
           GH_TOKEN: ${{ github.token }}
@@ -277,7 +302,10 @@ jobs:
           files=("$out/app-x86_64-dogfood-release.apk")
           [ -f prev-x86_64-dogfood.apk ] && files+=(prev-x86_64-dogfood.apk)
           tools/ci_release.sh put "ci-apk-${{ github.run_id }}" "ci apks ${{ github.run_id }}" "Dogfood APKs, run ${{ github.run_id }}, sha ${{ github.sha }}. Deleted after 2 days." "${files[@]}"
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          head="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ] && [ "$head" != "$GITHUB_SHA" ]; then
+            echo "::warning::main moved on to ${head::7}; not replacing dogfood-latest with older $sha7"
+          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
             tools/ci_release.sh put dogfood-latest "Dogfood APK $sha7" "Latest dogfood build from main. sha ${{ github.sha }}, CI run ${{ github.run_id }}. arm64 for the phone, x64 for the emulators; replaced on every main push." --replace-assets "$out/gym-supreme-dogfood-$sha7-arm64.apk" "$out/gym-supreme-dogfood-$sha7-x64.apk"
           fi
 
