@@ -1,24 +1,69 @@
 package app.gymsupreme
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import app.gymsupreme.platform.GymHostApi
 import app.gymsupreme.platform.HostInfo
+import app.gymsupreme.workout.SpikeChannel
+import app.gymsupreme.workout.SpikeLog
+import app.gymsupreme.workout.WorkoutService
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import java.io.File
 import java.util.UUID
 
 class MainActivity : FlutterActivity() {
+    private var spike: SpikeChannel? = null
+    private var selftestPending = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         InstallMarker.check(this)
+        // Not on a recreate (rotation): the intent that asked for the self-test is the same one.
+        if (savedInstanceState == null) noteSelftest(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        noteSelftest(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // S5 (CI emulators): the service starts only from the visible activity, so the
+        // self-test waits for onResume.
+        if (selftestPending) {
+            selftestPending = false
+            SpikeLog.write(this, SpikeLog.line("selftest_requested"))
+            WorkoutService.start(this, WorkoutService.ACTION_SELFTEST)
+        }
+    }
+
+    private fun noteSelftest(i: Intent?) {
+        if (i?.getBooleanExtra(EXTRA_SELFTEST, false) == true) {
+            i.removeExtra(EXTRA_SELFTEST)
+            selftestPending = true
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         GymHostApi.setUp(flutterEngine.dartExecutor.binaryMessenger, HostApiImpl(this))
+        spike = SpikeChannel(this, flutterEngine.dartExecutor.binaryMessenger)
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        spike?.dispose()
+        spike = null
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
+
+    companion object {
+        /** `am start -n <pkg>/app.gymsupreme.MainActivity --ez gym_selftest true` (tools/emulator_smoke.sh). */
+        const val EXTRA_SELFTEST = "gym_selftest"
     }
 }
 
