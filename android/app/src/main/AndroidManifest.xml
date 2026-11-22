@@ -38,6 +38,25 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Live workout service (plan 6.2, R1): specialUse at start, connectedDevice added once a
+             strap is linked. Started only from the visible activity; actions are broadcasts. -->
+        <service
+            android:name=".workout.WorkoutService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse|connectedDevice">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-started gym workout: rest and interval timers with lock-screen set logging and paired heart rate recording" />
+        </service>
+        <receiver
+            android:name=".workout.WorkoutActionReceiver"
+            android:exported="false" />
+        <!-- Serves only the shared spike log, read-only, per-URI grant. -->
+        <provider
+            android:name=".workout.SpikeLogProvider"
+            android:authorities="${applicationId}.spikelog"
+            android:exported="false"
+            android:grantUriPermissions="true" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
