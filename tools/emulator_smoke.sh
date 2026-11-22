@@ -37,9 +37,11 @@ started="$(wait_for '"event":"service_started".*"mode":"selftest"' 30)" || {
   echo "S5: no service_started line within 30 s" >&2; svc_lines | tail -n 20 >&2; timeout 60 adb logcat -d | tail -n 100 >&2; exit 1; }
 echo "S5 start: $started"
 grep -Eq '"outcome":"ok"|fallback=manifest_types:ok' <<< "$started" || { echo "S5: foreground start failed" >&2; exit 1; }
+if grep -q 'fallback=manifest_types:ok' <<< "$started"; then echo "::warning::S5 API $sdk used manifest_types fallback (specialUse alone was refused)"; fi
 fg="$(adb shell dumpsys activity services "$PKG" | tr -d '\r' | grep -E 'isForeground=true' | head -1 || true)"
 [ -n "$fg" ] || { echo "S5: service is not foreground" >&2; adb shell dumpsys activity services "$PKG" | tail -n 40 >&2; exit 1; }
 echo "S5 foreground: $fg"
+echo "S5 types: $(adb shell dumpsys activity services "$PKG" | tr -d '\r' | grep -oE '(foregroundServiceType|types)=[^ ]+' | sort -u | tr '\n' ' ' || true)"
 noti="$(adb shell dumpsys notification --noredact | tr -d '\r' | grep -E "pkg=$PKG .*id=2001" | head -1 || true)"
 [ -n "$noti" ] || { echo "S5: workout notification not posted" >&2; adb shell dumpsys notification --noredact | grep -A3 "$PKG" | head -n 40 >&2; exit 1; }
 echo "S5 notification: $noti"
