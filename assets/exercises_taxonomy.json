@@ -100,7 +100,7 @@
   {
    "id": "plates",
    "name": "Plates",
-   "load": "barbell"
+   "load": "plates"
   },
   {
    "id": "squat-rack",
@@ -120,6 +120,11 @@
   {
    "id": "cable-stack",
    "name": "Cable stack",
+   "load": "stack"
+  },
+  {
+   "id": "overhead-cable-bench",
+   "name": "Bench with overhead cable",
    "load": "stack"
   },
   {
@@ -227,10 +232,10 @@
     "adjustable-bench",
     "dumbbells",
     "cable-stack",
-    "lat-pulldown",
+    "overhead-cable-bench",
     "leg-extension"
    ],
-   "notes": "Bodyweight is always present. 'lat-pulldown' stands in for the bench with an overhead cable (could be a multi-station). Dumbbell range unknown; gym setup asks on first run. No barbell, rack, smith or cardio kit listed."
+   "notes": "Bodyweight is always present. Ricki's 'bench with an overhead cable' is its own id, NOT assumed to be a lat pulldown: pulldown exercises need 'lat-pulldown' and are not offered here until gym setup confirms it. Cables are assumed adjustable-height and dual (crossovers, high pulley, face pull). Dumbbell range unknown; gym setup asks on first run. No barbell, rack, smith or cardio kit listed."
   }
  ]
 }

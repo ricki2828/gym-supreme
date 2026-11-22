@@ -5,6 +5,10 @@
    [
     "dumbbells",
     "adjustable-bench"
+   ],
+   [
+    "dumbbells",
+    "flat-bench"
    ]
   ],
   "load": "dumbbell",
@@ -31,6 +35,10 @@
    [
     "dumbbells",
     "adjustable-bench"
+   ],
+   [
+    "dumbbells",
+    "flat-bench"
    ]
   ],
   "load": "dumbbell",
@@ -260,6 +268,10 @@
    [
     "dumbbells",
     "adjustable-bench"
+   ],
+   [
+    "dumbbells",
+    "flat-bench"
    ]
   ],
   "load": "dumbbell",
@@ -338,6 +350,10 @@
    [
     "dumbbells",
     "adjustable-bench"
+   ],
+   [
+    "dumbbells",
+    "flat-bench"
    ]
   ],
   "load": "dumbbell",
@@ -372,6 +388,9 @@
   "equip": [
    [
     "adjustable-bench"
+   ],
+   [
+    "flat-bench"
    ]
   ],
   "load": "bodyweight",
@@ -385,6 +404,10 @@
    [
     "dumbbells",
     "adjustable-bench"
+   ],
+   [
+    "dumbbells",
+    "flat-bench"
    ]
   ],
   "load": "dumbbell",
@@ -397,6 +420,10 @@
    [
     "dumbbells",
     "adjustable-bench"
+   ],
+   [
+    "dumbbells",
+    "flat-bench"
    ]
   ],
   "load": "dumbbell",
@@ -692,6 +719,10 @@
    [
     "dumbbells",
     "adjustable-bench"
+   ],
+   [
+    "dumbbells",
+    "flat-bench"
    ]
   ],
   "load": "dumbbell",
@@ -850,6 +881,10 @@
    [
     "dumbbells",
     "adjustable-bench"
+   ],
+   [
+    "dumbbells",
+    "flat-bench"
    ]
   ],
   "load": "dumbbell",
@@ -899,6 +934,10 @@
    [
     "dumbbells",
     "box"
+   ],
+   [
+    "dumbbells",
+    "flat-bench"
    ]
   ],
   "load": "dumbbell",
@@ -933,6 +972,10 @@
    [
     "dumbbells",
     "adjustable-bench"
+   ],
+   [
+    "dumbbells",
+    "flat-bench"
    ]
   ],
   "load": "dumbbell",
@@ -955,6 +998,10 @@
    [
     "smith",
     "flat-bench"
+   ],
+   [
+    "smith",
+    "adjustable-bench"
    ]
   ],
   "load": "barbell",

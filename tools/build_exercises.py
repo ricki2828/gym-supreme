@@ -63,6 +63,11 @@ def build():
     for k, v in tax["seed_muscle_map"].items():
         if v not in muscles:
             errs.append(f"seed_muscle_map {k!r} -> unknown muscle {v!r}")
+    if len({p["id"] for p in tax["presets"]}) != len(tax["presets"]):
+        errs.append("duplicate preset id")
+    for q in tax["equipment"]:
+        if q["load"] not in LOADS | {"none"}:
+            errs.append(f"equipment {q['id']}: unknown load {q['load']!r}")
     for p in tax["presets"]:
         for e in p["equipment"]:
             if e not in equip:
@@ -88,8 +93,8 @@ def build():
         if sh and sh not in SHOULDER_IDS:
             errs.append(f"{who}: bad shoulders {sh!r}")
         mm = tax["seed_muscle_map"]
-        prim = o.get("primary") or derive(s["primaryMuscles"], mm, sh, errs, who)
-        sec = o.get("secondary") or derive(s["secondaryMuscles"], mm, sh, errs, who)
+        prim = o["primary"] if "primary" in o else derive(s["primaryMuscles"], mm, sh, errs, who)
+        sec = o["secondary"] if "secondary" in o else derive(s["secondaryMuscles"], mm, sh, errs, who)
         sec = [m for m in sec if m not in prim]
         for m in prim + sec:
             if m not in muscles:
