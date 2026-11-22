@@ -1,0 +1,1959 @@
+{
+ "version": 1,
+ "source": "yuhonas/free-exercise-db (Unlicense), data fields only; cues are our own",
+ "exercises": [
+  {
+   "id": "arnold-dumbbell-press",
+   "seed_id": "Arnold_Dumbbell_Press",
+   "name": "Arnold Dumbbell Press",
+   "primary": [
+    "front-delts"
+   ],
+   "secondary": [
+    "triceps"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "intermediate",
+   "cue": "Start palms in, rotate out as you press, reverse on the way down."
+  },
+  {
+   "id": "barbell-bench-press-medium-grip",
+   "seed_id": "Barbell_Bench_Press_-_Medium_Grip",
+   "name": "Barbell Bench Press - Medium Grip",
+   "primary": [
+    "chest"
+   ],
+   "secondary": [
+    "front-delts",
+    "triceps"
+   ],
+   "equipment_sets": [
+    [
+     "barbell",
+     "squat-rack",
+     "flat-bench"
+    ],
+    [
+     "barbell",
+     "squat-rack",
+     "adjustable-bench"
+    ],
+    [
+     "smith",
+     "flat-bench"
+    ]
+   ],
+   "load": "barbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Blades pinned, bar to the lower chest, press back over the shoulders."
+  },
+  {
+   "id": "barbell-curl",
+   "seed_id": "Barbell_Curl",
+   "name": "Barbell Curl",
+   "primary": [
+    "biceps"
+   ],
+   "secondary": [
+    "forearms"
+   ],
+   "equipment_sets": [
+    [
+     "barbell"
+    ],
+    [
+     "ez-bar"
+    ]
+   ],
+   "load": "barbell",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Elbows pinned, curl to the chest, lower for three."
+  },
+  {
+   "id": "barbell-deadlift",
+   "seed_id": "Barbell_Deadlift",
+   "name": "Barbell Deadlift",
+   "primary": [
+    "lower-back"
+   ],
+   "secondary": [
+    "calves",
+    "forearms",
+    "glutes",
+    "hamstrings",
+    "lats",
+    "traps",
+    "quads"
+   ],
+   "equipment_sets": [
+    [
+     "barbell"
+    ]
+   ],
+   "load": "barbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "intermediate",
+   "cue": "Bar over mid-foot, flat back, push the floor away."
+  },
+  {
+   "id": "barbell-hip-thrust",
+   "seed_id": "Barbell_Hip_Thrust",
+   "name": "Barbell Hip Thrust",
+   "primary": [
+    "glutes"
+   ],
+   "secondary": [
+    "calves",
+    "hamstrings"
+   ],
+   "equipment_sets": [
+    [
+     "barbell",
+     "flat-bench"
+    ],
+    [
+     "barbell",
+     "adjustable-bench"
+    ]
+   ],
+   "load": "barbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "intermediate",
+   "cue": "Upper back on the bench, drive the hips up, squeeze glutes."
+  },
+  {
+   "id": "barbell-squat",
+   "seed_id": "Barbell_Squat",
+   "name": "Barbell Squat",
+   "primary": [
+    "quads"
+   ],
+   "secondary": [
+    "calves",
+    "glutes",
+    "hamstrings",
+    "lower-back"
+   ],
+   "equipment_sets": [
+    [
+     "barbell",
+     "squat-rack"
+    ],
+    [
+     "smith"
+    ]
+   ],
+   "load": "barbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Bar on the upper back, brace, sit to parallel, drive up."
+  },
+  {
+   "id": "bench-dips",
+   "seed_id": "Bench_Dips",
+   "name": "Bench Dips",
+   "primary": [
+    "triceps"
+   ],
+   "secondary": [
+    "chest",
+    "front-delts"
+   ],
+   "equipment_sets": [
+    [
+     "adjustable-bench"
+    ]
+   ],
+   "load": "bodyweight",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Hands on the bench edge, lower until the upper arms are level."
+  },
+  {
+   "id": "bent-over-barbell-row",
+   "seed_id": "Bent_Over_Barbell_Row",
+   "name": "Bent Over Barbell Row",
+   "primary": [
+    "lats",
+    "traps"
+   ],
+   "secondary": [
+    "biceps",
+    "rear-delts"
+   ],
+   "equipment_sets": [
+    [
+     "barbell"
+    ]
+   ],
+   "load": "barbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Hinge to near parallel, row the bar to the lower ribs."
+  },
+  {
+   "id": "bent-over-two-dumbbell-row",
+   "seed_id": "Bent_Over_Two-Dumbbell_Row",
+   "name": "Bent Over Two-Dumbbell Row",
+   "primary": [
+    "lats",
+    "traps"
+   ],
+   "secondary": [
+    "biceps",
+    "rear-delts"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Hinge to near parallel, flat back, row to the lower ribs."
+  },
+  {
+   "id": "bodyweight-squat",
+   "seed_id": "Bodyweight_Squat",
+   "name": "Bodyweight Squat",
+   "primary": [
+    "quads"
+   ],
+   "secondary": [
+    "glutes",
+    "hamstrings"
+   ],
+   "equipment_sets": [
+    [
+     "bodyweight"
+    ]
+   ],
+   "load": "bodyweight",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Feet shoulder width, sit to parallel, knees track the toes."
+  },
+  {
+   "id": "butt-lift-bridge",
+   "seed_id": "Butt_Lift_Bridge",
+   "name": "Butt Lift (Bridge)",
+   "primary": [
+    "glutes"
+   ],
+   "secondary": [
+    "hamstrings"
+   ],
+   "equipment_sets": [
+    [
+     "bodyweight"
+    ]
+   ],
+   "load": "bodyweight",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Feet flat, drive the hips up, squeeze at the top, no arching."
+  },
+  {
+   "id": "cable-crossover",
+   "seed_id": "Cable_Crossover",
+   "name": "Cable Crossover",
+   "primary": [
+    "chest"
+   ],
+   "secondary": [
+    "front-delts"
+   ],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Pulleys high, step forward, sweep hands down and together."
+  },
+  {
+   "id": "cable-crunch",
+   "seed_id": "Cable_Crunch",
+   "name": "Cable Crunch",
+   "primary": [
+    "abs"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Kneel under the rope, curl the ribs to the hips, hips stay still."
+  },
+  {
+   "id": "cable-hammer-curls-rope-attachment",
+   "seed_id": "Cable_Hammer_Curls_-_Rope_Attachment",
+   "name": "Cable Hammer Curls - Rope Attachment",
+   "primary": [
+    "biceps"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Rope on the low pulley, thumbs up, split the rope at the top."
+  },
+  {
+   "id": "cable-rear-delt-fly",
+   "seed_id": "Cable_Rear_Delt_Fly",
+   "name": "Cable Rear Delt Fly",
+   "primary": [
+    "rear-delts"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Cross the cables, pull each hand out wide at shoulder height."
+  },
+  {
+   "id": "cable-rope-overhead-triceps-extension",
+   "seed_id": "Cable_Rope_Overhead_Triceps_Extension",
+   "name": "Cable Rope Overhead Triceps Extension",
+   "primary": [
+    "triceps"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Face away from the stack, elbows by the ears, extend overhead."
+  },
+  {
+   "id": "cable-russian-twists",
+   "seed_id": "Cable_Russian_Twists",
+   "name": "Cable Russian Twists",
+   "primary": [
+    "obliques"
+   ],
+   "secondary": [
+    "abs"
+   ],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Sit tall, rotate the torso side to side with straight arms."
+  },
+  {
+   "id": "cable-seated-lateral-raise",
+   "seed_id": "Cable_Seated_Lateral_Raise",
+   "name": "Cable Seated Lateral Raise",
+   "primary": [
+    "side-delts"
+   ],
+   "secondary": [
+    "traps"
+   ],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": true,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Cable low behind you, raise the far arm out to the side."
+  },
+  {
+   "id": "cable-shrugs",
+   "seed_id": "Cable_Shrugs",
+   "name": "Cable Shrugs",
+   "primary": [
+    "traps"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Low pulley, shrug straight up, no rolling."
+  },
+  {
+   "id": "close-grip-front-lat-pulldown",
+   "seed_id": "Close-Grip_Front_Lat_Pulldown",
+   "name": "Close-Grip Front Lat Pulldown",
+   "primary": [
+    "lats"
+   ],
+   "secondary": [
+    "biceps",
+    "traps",
+    "rear-delts"
+   ],
+   "equipment_sets": [
+    [
+     "lat-pulldown"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Narrow grip, lean back slightly, pull to the upper chest."
+  },
+  {
+   "id": "concentration-curls",
+   "seed_id": "Concentration_Curls",
+   "name": "Concentration Curls",
+   "primary": [
+    "biceps"
+   ],
+   "secondary": [
+    "forearms"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells",
+     "adjustable-bench"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": true,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Elbow against the inner thigh, curl slowly, squeeze at the top."
+  },
+  {
+   "id": "crunches",
+   "seed_id": "Crunches",
+   "name": "Crunches",
+   "primary": [
+    "abs"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "bodyweight"
+    ]
+   ],
+   "load": "bodyweight",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Lower back on the floor, curl the ribs toward the hips."
+  },
+  {
+   "id": "dead-bug",
+   "seed_id": "Dead_Bug",
+   "name": "Dead Bug",
+   "primary": [
+    "abs"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "bodyweight"
+    ]
+   ],
+   "load": "bodyweight",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Back flat, lower opposite arm and leg, keep the ribs down."
+  },
+  {
+   "id": "dips-triceps-version",
+   "seed_id": "Dips_-_Triceps_Version",
+   "name": "Dips - Triceps Version",
+   "primary": [
+    "triceps"
+   ],
+   "secondary": [
+    "chest",
+    "front-delts"
+   ],
+   "equipment_sets": [
+    [
+     "dip-station"
+    ]
+   ],
+   "load": "bodyweight",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Upright torso, lower until the upper arms are level, press up."
+  },
+  {
+   "id": "dumbbell-bench-press",
+   "seed_id": "Dumbbell_Bench_Press",
+   "name": "Dumbbell Bench Press",
+   "primary": [
+    "chest"
+   ],
+   "secondary": [
+    "front-delts",
+    "triceps"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells",
+     "adjustable-bench"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Blades pinned, lower to mid-chest, press up and slightly in."
+  },
+  {
+   "id": "dumbbell-bicep-curl",
+   "seed_id": "Dumbbell_Bicep_Curl",
+   "name": "Dumbbell Bicep Curl",
+   "primary": [
+    "biceps"
+   ],
+   "secondary": [
+    "forearms"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Elbows pinned to the ribs, curl up, lower for a count of three."
+  },
+  {
+   "id": "dumbbell-flyes",
+   "seed_id": "Dumbbell_Flyes",
+   "name": "Dumbbell Flyes",
+   "primary": [
+    "chest"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "dumbbells",
+     "adjustable-bench"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Soft elbows, open wide until the chest stretches, hug back up."
+  },
+  {
+   "id": "dumbbell-incline-row",
+   "seed_id": "Dumbbell_Incline_Row",
+   "name": "Dumbbell Incline Row",
+   "primary": [
+    "lats",
+    "traps"
+   ],
+   "secondary": [
+    "biceps",
+    "rear-delts"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells",
+     "adjustable-bench"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Chest on an incline bench, row both dumbbells to the ribs."
+  },
+  {
+   "id": "dumbbell-lunges",
+   "seed_id": "Dumbbell_Lunges",
+   "name": "Dumbbell Lunges",
+   "primary": [
+    "quads"
+   ],
+   "secondary": [
+    "calves",
+    "glutes",
+    "hamstrings"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": true,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Long step, back knee to the floor, push back to standing."
+  },
+  {
+   "id": "dumbbell-rear-lunge",
+   "seed_id": "Dumbbell_Rear_Lunge",
+   "name": "Dumbbell Rear Lunge",
+   "primary": [
+    "quads"
+   ],
+   "secondary": [
+    "calves",
+    "glutes",
+    "hamstrings"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": true,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "intermediate",
+   "cue": "Step back, drop the back knee, front heel stays down."
+  },
+  {
+   "id": "dumbbell-seated-one-leg-calf-raise",
+   "seed_id": "Dumbbell_Seated_One-Leg_Calf_Raise",
+   "name": "Dumbbell Seated One-Leg Calf Raise",
+   "primary": [
+    "calves"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "dumbbells",
+     "adjustable-bench"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": true,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Seated, dumbbell on the knee, full range, one leg at a time."
+  },
+  {
+   "id": "dumbbell-shrug",
+   "seed_id": "Dumbbell_Shrug",
+   "name": "Dumbbell Shrug",
+   "primary": [
+    "traps"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Straight up toward the ears, pause, lower slowly."
+  },
+  {
+   "id": "dumbbell-side-bend",
+   "seed_id": "Dumbbell_Side_Bend",
+   "name": "Dumbbell Side Bend",
+   "primary": [
+    "obliques"
+   ],
+   "secondary": [
+    "abs"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": true,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Dumbbell in one hand, bend straight sideways, no twist."
+  },
+  {
+   "id": "dumbbell-squat",
+   "seed_id": "Dumbbell_Squat",
+   "name": "Dumbbell Squat",
+   "primary": [
+    "quads"
+   ],
+   "secondary": [
+    "calves",
+    "glutes",
+    "hamstrings",
+    "lower-back"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Dumbbells at the sides, chest up, sit between the hips."
+  },
+  {
+   "id": "dumbbell-squat-to-a-bench",
+   "seed_id": "Dumbbell_Squat_To_A_Bench",
+   "name": "Dumbbell Squat To A Bench",
+   "primary": [
+    "quads"
+   ],
+   "secondary": [
+    "calves",
+    "glutes",
+    "hamstrings",
+    "lower-back"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells",
+     "adjustable-bench"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "intermediate",
+   "cue": "Sit back to touch the bench, drive up through the whole foot."
+  },
+  {
+   "id": "dumbbell-step-ups",
+   "seed_id": "Dumbbell_Step_Ups",
+   "name": "Dumbbell Step Ups",
+   "primary": [
+    "quads"
+   ],
+   "secondary": [
+    "calves",
+    "glutes",
+    "hamstrings"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells",
+     "adjustable-bench"
+    ],
+    [
+     "dumbbells",
+     "box"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": true,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "intermediate",
+   "cue": "Whole foot on the bench, drive up, lower under control."
+  },
+  {
+   "id": "face-pull",
+   "seed_id": "Face_Pull",
+   "name": "Face Pull",
+   "primary": [
+    "rear-delts"
+   ],
+   "secondary": [
+    "traps"
+   ],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "intermediate",
+   "cue": "Rope at face height, pull to the forehead, elbows high, hands apart."
+  },
+  {
+   "id": "front-dumbbell-raise",
+   "seed_id": "Front_Dumbbell_Raise",
+   "name": "Front Dumbbell Raise",
+   "primary": [
+    "front-delts"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": true,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Raise to eye level with straight arms, no swing."
+  },
+  {
+   "id": "hammer-curls",
+   "seed_id": "Hammer_Curls",
+   "name": "Hammer Curls",
+   "primary": [
+    "biceps"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Thumbs up the whole way, no body swing."
+  },
+  {
+   "id": "hanging-leg-raise",
+   "seed_id": "Hanging_Leg_Raise",
+   "name": "Hanging Leg Raise",
+   "primary": [
+    "abs"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "pull-up-bar"
+    ]
+   ],
+   "load": "bodyweight",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "expert",
+   "cue": "Hang still, raise the legs to hip height or higher, no swing."
+  },
+  {
+   "id": "high-cable-curls",
+   "seed_id": "High_Cable_Curls",
+   "name": "High Cable Curls",
+   "primary": [
+    "biceps"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "intermediate",
+   "cue": "Two high pulleys, arms out wide, curl the hands to the ears."
+  },
+  {
+   "id": "hyperextensions-with-no-hyperextension-bench",
+   "seed_id": "Hyperextensions_With_No_Hyperextension_Bench",
+   "name": "Hyperextensions With No Hyperextension Bench",
+   "primary": [
+    "lower-back"
+   ],
+   "secondary": [
+    "glutes",
+    "hamstrings"
+   ],
+   "equipment_sets": [
+    [
+     "bodyweight"
+    ]
+   ],
+   "load": "bodyweight",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "intermediate",
+   "cue": "Lie face down, lift chest and legs together, pause, lower."
+  },
+  {
+   "id": "incline-dumbbell-curl",
+   "seed_id": "Incline_Dumbbell_Curl",
+   "name": "Incline Dumbbell Curl",
+   "primary": [
+    "biceps"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "dumbbells",
+     "adjustable-bench"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Bench at 45 degrees, arms hang back, curl without moving the shoulders."
+  },
+  {
+   "id": "incline-dumbbell-flyes",
+   "seed_id": "Incline_Dumbbell_Flyes",
+   "name": "Incline Dumbbell Flyes",
+   "primary": [
+    "chest"
+   ],
+   "secondary": [
+    "front-delts"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells",
+     "adjustable-bench"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Same arc as the flat fly, bench at 30 degrees, stop at shoulder height."
+  },
+  {
+   "id": "incline-dumbbell-press",
+   "seed_id": "Incline_Dumbbell_Press",
+   "name": "Incline Dumbbell Press",
+   "primary": [
+    "chest"
+   ],
+   "secondary": [
+    "front-delts",
+    "triceps"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells",
+     "adjustable-bench"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Bench at 30 degrees, press over the upper chest, no bounce."
+  },
+  {
+   "id": "leg-extensions",
+   "seed_id": "Leg_Extensions",
+   "name": "Leg Extensions",
+   "primary": [
+    "quads"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "leg-extension"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Pad on the shins, straighten fully, pause, lower for three."
+  },
+  {
+   "id": "leg-press",
+   "seed_id": "Leg_Press",
+   "name": "Leg Press",
+   "primary": [
+    "quads"
+   ],
+   "secondary": [
+    "calves",
+    "glutes",
+    "hamstrings"
+   ],
+   "equipment_sets": [
+    [
+     "leg-press"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Feet shoulder width, lower until the knees reach the chest, press."
+  },
+  {
+   "id": "lying-dumbbell-tricep-extension",
+   "seed_id": "Lying_Dumbbell_Tricep_Extension",
+   "name": "Lying Dumbbell Tricep Extension",
+   "primary": [
+    "triceps"
+   ],
+   "secondary": [
+    "chest",
+    "front-delts"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells",
+     "adjustable-bench"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "intermediate",
+   "cue": "Upper arms vertical, bend only the elbows, lower to the forehead."
+  },
+  {
+   "id": "lying-leg-curls",
+   "seed_id": "Lying_Leg_Curls",
+   "name": "Lying Leg Curls",
+   "primary": [
+    "hamstrings"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "leg-curl"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Hips down, curl the heels to the glutes, lower slowly."
+  },
+  {
+   "id": "machine-shoulder-military-press",
+   "seed_id": "Machine_Shoulder_Military_Press",
+   "name": "Machine Shoulder (Military) Press",
+   "primary": [
+    "front-delts"
+   ],
+   "secondary": [
+    "triceps"
+   ],
+   "equipment_sets": [
+    [
+     "shoulder-press"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Back on the pad, press up and stop just short of lockout."
+  },
+  {
+   "id": "one-arm-dumbbell-row",
+   "seed_id": "One-Arm_Dumbbell_Row",
+   "name": "One-Arm Dumbbell Row",
+   "primary": [
+    "lats",
+    "traps"
+   ],
+   "secondary": [
+    "biceps",
+    "rear-delts"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells",
+     "adjustable-bench"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": true,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Knee and hand on the bench, pull the elbow to the hip."
+  },
+  {
+   "id": "one-arm-lat-pulldown",
+   "seed_id": "One_Arm_Lat_Pulldown",
+   "name": "One Arm Lat Pulldown",
+   "primary": [
+    "lats"
+   ],
+   "secondary": [
+    "biceps",
+    "traps"
+   ],
+   "equipment_sets": [
+    [
+     "lat-pulldown"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": true,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Single handle, pull the elbow down and in toward the hip."
+  },
+  {
+   "id": "one-legged-cable-kickback",
+   "seed_id": "One-Legged_Cable_Kickback",
+   "name": "One-Legged Cable Kickback",
+   "primary": [
+    "glutes"
+   ],
+   "secondary": [
+    "hamstrings"
+   ],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": true,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "intermediate",
+   "cue": "Ankle strap, kick straight back without arching the lower back."
+  },
+  {
+   "id": "pallof-press",
+   "seed_id": "Pallof_Press",
+   "name": "Pallof Press",
+   "primary": [
+    "obliques"
+   ],
+   "secondary": [
+    "abs"
+   ],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": true,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Cable at chest height, press out and resist the pull to rotate."
+  },
+  {
+   "id": "palms-down-dumbbell-wrist-curl-over-a-bench",
+   "seed_id": "Palms-Down_Dumbbell_Wrist_Curl_Over_A_Bench",
+   "name": "Palms-Down Dumbbell Wrist Curl Over A Bench",
+   "primary": [
+    "forearms"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "dumbbells",
+     "adjustable-bench"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Forearms on the bench, palms down, lift the back of the hand."
+  },
+  {
+   "id": "palms-up-dumbbell-wrist-curl-over-a-bench",
+   "seed_id": "Palms-Up_Dumbbell_Wrist_Curl_Over_A_Bench",
+   "name": "Palms-Up Dumbbell Wrist Curl Over A Bench",
+   "primary": [
+    "forearms"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "dumbbells",
+     "adjustable-bench"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Forearms on the bench, let the weight roll to the fingertips, curl up."
+  },
+  {
+   "id": "plank",
+   "seed_id": "Plank",
+   "name": "Plank",
+   "primary": [
+    "abs"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "bodyweight"
+    ]
+   ],
+   "load": "timed",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "static",
+   "level": "beginner",
+   "cue": "Elbows under shoulders, ribs down, squeeze glutes, breathe."
+  },
+  {
+   "id": "pull-through",
+   "seed_id": "Pull_Through",
+   "name": "Pull Through",
+   "primary": [
+    "glutes"
+   ],
+   "secondary": [
+    "hamstrings",
+    "lower-back"
+   ],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Face away from a low cable, hinge back, snap the hips forward."
+  },
+  {
+   "id": "pullups",
+   "seed_id": "Pullups",
+   "name": "Pullups",
+   "primary": [
+    "lats"
+   ],
+   "secondary": [
+    "biceps",
+    "traps"
+   ],
+   "equipment_sets": [
+    [
+     "pull-up-bar"
+    ]
+   ],
+   "load": "bodyweight",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Start from a dead hang, pull the chest to the bar, lower fully."
+  },
+  {
+   "id": "pushups",
+   "seed_id": "Pushups",
+   "name": "Pushups",
+   "primary": [
+    "chest"
+   ],
+   "secondary": [
+    "front-delts",
+    "triceps"
+   ],
+   "equipment_sets": [
+    [
+     "bodyweight"
+    ]
+   ],
+   "load": "bodyweight",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Body in one line, chest to the floor, elbows about 45 degrees."
+  },
+  {
+   "id": "reverse-crunch",
+   "seed_id": "Reverse_Crunch",
+   "name": "Reverse Crunch",
+   "primary": [
+    "abs"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "bodyweight"
+    ]
+   ],
+   "load": "bodyweight",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Curl the hips off the floor, knees to chest, no swing."
+  },
+  {
+   "id": "reverse-flyes",
+   "seed_id": "Reverse_Flyes",
+   "name": "Reverse Flyes",
+   "primary": [
+    "rear-delts"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Hinge over, raise the arms out wide with the pinky side up."
+  },
+  {
+   "id": "romanian-deadlift",
+   "seed_id": "Romanian_Deadlift",
+   "name": "Romanian Deadlift",
+   "primary": [
+    "hamstrings"
+   ],
+   "secondary": [
+    "calves",
+    "glutes",
+    "lower-back"
+   ],
+   "equipment_sets": [
+    [
+     "barbell"
+    ]
+   ],
+   "load": "barbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "intermediate",
+   "cue": "Soft knees, hips back, bar slides down the thighs, stand tall."
+  },
+  {
+   "id": "seated-bent-over-rear-delt-raise",
+   "seed_id": "Seated_Bent-Over_Rear_Delt_Raise",
+   "name": "Seated Bent-Over Rear Delt Raise",
+   "primary": [
+    "rear-delts"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "intermediate",
+   "cue": "Sit tall, fold forward, lift the weights out and back."
+  },
+  {
+   "id": "seated-cable-rows",
+   "seed_id": "Seated_Cable_Rows",
+   "name": "Seated Cable Rows",
+   "primary": [
+    "lats",
+    "traps"
+   ],
+   "secondary": [
+    "biceps",
+    "rear-delts"
+   ],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Chest tall, pull the handle to the navel, pause, reach forward."
+  },
+  {
+   "id": "seated-dumbbell-press",
+   "seed_id": "Seated_Dumbbell_Press",
+   "name": "Seated Dumbbell Press",
+   "primary": [
+    "front-delts"
+   ],
+   "secondary": [
+    "triceps"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells",
+     "adjustable-bench"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Back on the pad, press overhead without flaring the ribs."
+  },
+  {
+   "id": "seated-one-arm-cable-pulley-rows",
+   "seed_id": "Seated_One-arm_Cable_Pulley_Rows",
+   "name": "Seated One-arm Cable Pulley Rows",
+   "primary": [
+    "lats",
+    "traps"
+   ],
+   "secondary": [
+    "biceps",
+    "rear-delts"
+   ],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": true,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "intermediate",
+   "cue": "One handle, pull the elbow past the ribs, keep the torso still."
+  },
+  {
+   "id": "seated-side-lateral-raise",
+   "seed_id": "Seated_Side_Lateral_Raise",
+   "name": "Seated Side Lateral Raise",
+   "primary": [
+    "side-delts"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "dumbbells",
+     "adjustable-bench"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Seated, lean slightly forward, raise to shoulder height."
+  },
+  {
+   "id": "side-bridge",
+   "seed_id": "Side_Bridge",
+   "name": "Side Bridge",
+   "primary": [
+    "obliques"
+   ],
+   "secondary": [
+    "abs",
+    "side-delts"
+   ],
+   "equipment_sets": [
+    [
+     "bodyweight"
+    ]
+   ],
+   "load": "timed",
+   "unilateral": true,
+   "mechanic": null,
+   "force": "static",
+   "level": "beginner",
+   "cue": "Elbow under shoulder, hips high in a straight line."
+  },
+  {
+   "id": "side-lateral-raise",
+   "seed_id": "Side_Lateral_Raise",
+   "name": "Side Lateral Raise",
+   "primary": [
+    "side-delts"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Lead with the elbows to shoulder height, slow on the way down."
+  },
+  {
+   "id": "single-leg-glute-bridge",
+   "seed_id": "Single_Leg_Glute_Bridge",
+   "name": "Single Leg Glute Bridge",
+   "primary": [
+    "glutes"
+   ],
+   "secondary": [
+    "hamstrings"
+   ],
+   "equipment_sets": [
+    [
+     "bodyweight"
+    ]
+   ],
+   "load": "bodyweight",
+   "unilateral": true,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "beginner",
+   "cue": "One foot down, other leg up, drive through the heel."
+  },
+  {
+   "id": "single-leg-leg-extension",
+   "seed_id": "Single-Leg_Leg_Extension",
+   "name": "Single-Leg Leg Extension",
+   "primary": [
+    "quads"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "leg-extension"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": true,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "beginner",
+   "cue": "One leg at a time, same smooth range, no kick."
+  },
+  {
+   "id": "split-squat-with-dumbbells",
+   "seed_id": "Split_Squat_with_Dumbbells",
+   "name": "Split Squat with Dumbbells",
+   "primary": [
+    "quads"
+   ],
+   "secondary": [
+    "glutes",
+    "hamstrings"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": true,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Feet fixed, drop straight down, front shin near vertical."
+  },
+  {
+   "id": "standing-biceps-cable-curl",
+   "seed_id": "Standing_Biceps_Cable_Curl",
+   "name": "Standing Biceps Cable Curl",
+   "primary": [
+    "biceps"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Low pulley, elbows still, curl to the chin."
+  },
+  {
+   "id": "standing-cable-chest-press",
+   "seed_id": "Standing_Cable_Chest_Press",
+   "name": "Standing Cable Chest Press",
+   "primary": [
+    "chest"
+   ],
+   "secondary": [
+    "front-delts",
+    "triceps"
+   ],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": true,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Stagger stance, press straight out from mid-chest, ribs down."
+  },
+  {
+   "id": "standing-cable-wood-chop",
+   "seed_id": "Standing_Cable_Wood_Chop",
+   "name": "Standing Cable Wood Chop",
+   "primary": [
+    "obliques"
+   ],
+   "secondary": [
+    "abs",
+    "front-delts"
+   ],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Cable high, rotate the torso and chop down across the body."
+  },
+  {
+   "id": "standing-dumbbell-calf-raise",
+   "seed_id": "Standing_Dumbbell_Calf_Raise",
+   "name": "Standing Dumbbell Calf Raise",
+   "primary": [
+    "calves"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "intermediate",
+   "cue": "Rise onto the toes, pause at the top, stretch at the bottom."
+  },
+  {
+   "id": "standing-dumbbell-press",
+   "seed_id": "Standing_Dumbbell_Press",
+   "name": "Standing Dumbbell Press",
+   "primary": [
+    "front-delts"
+   ],
+   "secondary": [
+    "triceps"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Glutes tight, press straight up, finish with biceps by the ears."
+  },
+  {
+   "id": "standing-dumbbell-triceps-extension",
+   "seed_id": "Standing_Dumbbell_Triceps_Extension",
+   "name": "Standing Dumbbell Triceps Extension",
+   "primary": [
+    "triceps"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Both hands under one dumbbell, lower behind the head, press up."
+  },
+  {
+   "id": "standing-dumbbell-upright-row",
+   "seed_id": "Standing_Dumbbell_Upright_Row",
+   "name": "Standing Dumbbell Upright Row",
+   "primary": [
+    "traps"
+   ],
+   "secondary": [
+    "biceps",
+    "side-delts"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Pull to lower chest, elbows lead and stay below the shoulders."
+  },
+  {
+   "id": "stiff-legged-dumbbell-deadlift",
+   "seed_id": "Stiff-Legged_Dumbbell_Deadlift",
+   "name": "Stiff-Legged Dumbbell Deadlift",
+   "primary": [
+    "hamstrings"
+   ],
+   "secondary": [
+    "glutes",
+    "lower-back"
+   ],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Soft knees, push the hips back, flat back, stand by squeezing glutes."
+  },
+  {
+   "id": "straight-arm-pulldown",
+   "seed_id": "Straight-Arm_Pulldown",
+   "name": "Straight-Arm Pulldown",
+   "primary": [
+    "lats"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Arms straight, sweep the bar to the thighs, lats only."
+  },
+  {
+   "id": "tricep-dumbbell-kickback",
+   "seed_id": "Tricep_Dumbbell_Kickback",
+   "name": "Tricep Dumbbell Kickback",
+   "primary": [
+    "triceps"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "dumbbells"
+    ]
+   ],
+   "load": "dumbbell",
+   "unilateral": true,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Hinge over, upper arm parallel to the floor, straighten the elbow."
+  },
+  {
+   "id": "triceps-pushdown",
+   "seed_id": "Triceps_Pushdown",
+   "name": "Triceps Pushdown",
+   "primary": [
+    "triceps"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Straight bar, elbows at the ribs, full lockout, slow return."
+  },
+  {
+   "id": "triceps-pushdown-rope-attachment",
+   "seed_id": "Triceps_Pushdown_-_Rope_Attachment",
+   "name": "Triceps Pushdown - Rope Attachment",
+   "primary": [
+    "triceps"
+   ],
+   "secondary": [],
+   "equipment_sets": [
+    [
+     "cable-stack"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "isolation",
+   "force": "push",
+   "level": "beginner",
+   "cue": "Elbows pinned, push down and split the rope at the bottom."
+  },
+  {
+   "id": "underhand-cable-pulldowns",
+   "seed_id": "Underhand_Cable_Pulldowns",
+   "name": "Underhand Cable Pulldowns",
+   "primary": [
+    "lats"
+   ],
+   "secondary": [
+    "biceps",
+    "traps",
+    "rear-delts"
+   ],
+   "equipment_sets": [
+    [
+     "lat-pulldown"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Palms toward you, pull to the chest, squeeze the lats."
+  },
+  {
+   "id": "wide-grip-lat-pulldown",
+   "seed_id": "Wide-Grip_Lat_Pulldown",
+   "name": "Wide-Grip Lat Pulldown",
+   "primary": [
+    "lats"
+   ],
+   "secondary": [
+    "biceps",
+    "traps",
+    "rear-delts"
+   ],
+   "equipment_sets": [
+    [
+     "lat-pulldown"
+    ]
+   ],
+   "load": "stack",
+   "unilateral": false,
+   "mechanic": "compound",
+   "force": "pull",
+   "level": "beginner",
+   "cue": "Chest up, pull the bar to the collarbone, elbows to the pockets."
+  }
+ ]
+}

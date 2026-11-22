@@ -1,0 +1,1109 @@
+[
+ {
+  "seed": "Dumbbell_Bench_Press",
+  "equip": [
+   [
+    "dumbbells",
+    "adjustable-bench"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Blades pinned, lower to mid-chest, press up and slightly in.",
+  "shoulders": "front-delts"
+ },
+ {
+  "seed": "Incline_Dumbbell_Press",
+  "equip": [
+   [
+    "dumbbells",
+    "adjustable-bench"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Bench at 30 degrees, press over the upper chest, no bounce.",
+  "shoulders": "front-delts"
+ },
+ {
+  "seed": "Dumbbell_Flyes",
+  "equip": [
+   [
+    "dumbbells",
+    "adjustable-bench"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Soft elbows, open wide until the chest stretches, hug back up."
+ },
+ {
+  "seed": "Incline_Dumbbell_Flyes",
+  "equip": [
+   [
+    "dumbbells",
+    "adjustable-bench"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Same arc as the flat fly, bench at 30 degrees, stop at shoulder height.",
+  "shoulders": "front-delts"
+ },
+ {
+  "seed": "Cable_Crossover",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Pulleys high, step forward, sweep hands down and together.",
+  "shoulders": "front-delts"
+ },
+ {
+  "seed": "Standing_Cable_Chest_Press",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": true,
+  "cue": "Stagger stance, press straight out from mid-chest, ribs down.",
+  "shoulders": "front-delts"
+ },
+ {
+  "seed": "Pushups",
+  "equip": [
+   [
+    "bodyweight"
+   ]
+  ],
+  "load": "bodyweight",
+  "unilateral": false,
+  "cue": "Body in one line, chest to the floor, elbows about 45 degrees.",
+  "shoulders": "front-delts"
+ },
+ {
+  "seed": "Seated_Dumbbell_Press",
+  "equip": [
+   [
+    "dumbbells",
+    "adjustable-bench"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Back on the pad, press overhead without flaring the ribs.",
+  "shoulders": "front-delts"
+ },
+ {
+  "seed": "Standing_Dumbbell_Press",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Glutes tight, press straight up, finish with biceps by the ears.",
+  "shoulders": "front-delts"
+ },
+ {
+  "seed": "Arnold_Dumbbell_Press",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Start palms in, rotate out as you press, reverse on the way down.",
+  "shoulders": "front-delts"
+ },
+ {
+  "seed": "Side_Lateral_Raise",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Lead with the elbows to shoulder height, slow on the way down.",
+  "shoulders": "side-delts"
+ },
+ {
+  "seed": "Seated_Side_Lateral_Raise",
+  "equip": [
+   [
+    "dumbbells",
+    "adjustable-bench"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Seated, lean slightly forward, raise to shoulder height.",
+  "shoulders": "side-delts"
+ },
+ {
+  "seed": "Cable_Seated_Lateral_Raise",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": true,
+  "cue": "Cable low behind you, raise the far arm out to the side.",
+  "shoulders": "side-delts"
+ },
+ {
+  "seed": "Front_Dumbbell_Raise",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": true,
+  "cue": "Raise to eye level with straight arms, no swing.",
+  "shoulders": "front-delts"
+ },
+ {
+  "seed": "Reverse_Flyes",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Hinge over, raise the arms out wide with the pinky side up.",
+  "shoulders": "rear-delts"
+ },
+ {
+  "seed": "Seated_Bent-Over_Rear_Delt_Raise",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Sit tall, fold forward, lift the weights out and back.",
+  "shoulders": "rear-delts"
+ },
+ {
+  "seed": "Face_Pull",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Rope at face height, pull to the forehead, elbows high, hands apart.",
+  "shoulders": "rear-delts"
+ },
+ {
+  "seed": "Cable_Rear_Delt_Fly",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Cross the cables, pull each hand out wide at shoulder height.",
+  "shoulders": "rear-delts"
+ },
+ {
+  "seed": "Dumbbell_Bicep_Curl",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Elbows pinned to the ribs, curl up, lower for a count of three."
+ },
+ {
+  "seed": "Hammer_Curls",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Thumbs up the whole way, no body swing."
+ },
+ {
+  "seed": "Incline_Dumbbell_Curl",
+  "equip": [
+   [
+    "dumbbells",
+    "adjustable-bench"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Bench at 45 degrees, arms hang back, curl without moving the shoulders."
+ },
+ {
+  "seed": "Concentration_Curls",
+  "equip": [
+   [
+    "dumbbells",
+    "adjustable-bench"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": true,
+  "cue": "Elbow against the inner thigh, curl slowly, squeeze at the top."
+ },
+ {
+  "seed": "Standing_Biceps_Cable_Curl",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Low pulley, elbows still, curl to the chin."
+ },
+ {
+  "seed": "High_Cable_Curls",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Two high pulleys, arms out wide, curl the hands to the ears."
+ },
+ {
+  "seed": "Cable_Hammer_Curls_-_Rope_Attachment",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Rope on the low pulley, thumbs up, split the rope at the top."
+ },
+ {
+  "seed": "Triceps_Pushdown_-_Rope_Attachment",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Elbows pinned, push down and split the rope at the bottom."
+ },
+ {
+  "seed": "Triceps_Pushdown",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Straight bar, elbows at the ribs, full lockout, slow return."
+ },
+ {
+  "seed": "Cable_Rope_Overhead_Triceps_Extension",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Face away from the stack, elbows by the ears, extend overhead."
+ },
+ {
+  "seed": "Lying_Dumbbell_Tricep_Extension",
+  "equip": [
+   [
+    "dumbbells",
+    "adjustable-bench"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Upper arms vertical, bend only the elbows, lower to the forehead.",
+  "shoulders": "front-delts"
+ },
+ {
+  "seed": "Tricep_Dumbbell_Kickback",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": true,
+  "cue": "Hinge over, upper arm parallel to the floor, straighten the elbow."
+ },
+ {
+  "seed": "Standing_Dumbbell_Triceps_Extension",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Both hands under one dumbbell, lower behind the head, press up."
+ },
+ {
+  "seed": "Bench_Dips",
+  "equip": [
+   [
+    "adjustable-bench"
+   ]
+  ],
+  "load": "bodyweight",
+  "unilateral": false,
+  "cue": "Hands on the bench edge, lower until the upper arms are level.",
+  "shoulders": "front-delts"
+ },
+ {
+  "seed": "Palms-Up_Dumbbell_Wrist_Curl_Over_A_Bench",
+  "equip": [
+   [
+    "dumbbells",
+    "adjustable-bench"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Forearms on the bench, let the weight roll to the fingertips, curl up."
+ },
+ {
+  "seed": "Palms-Down_Dumbbell_Wrist_Curl_Over_A_Bench",
+  "equip": [
+   [
+    "dumbbells",
+    "adjustable-bench"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Forearms on the bench, palms down, lift the back of the hand."
+ },
+ {
+  "seed": "Cable_Crunch",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Kneel under the rope, curl the ribs to the hips, hips stay still."
+ },
+ {
+  "seed": "Crunches",
+  "equip": [
+   [
+    "bodyweight"
+   ]
+  ],
+  "load": "bodyweight",
+  "unilateral": false,
+  "cue": "Lower back on the floor, curl the ribs toward the hips."
+ },
+ {
+  "seed": "Plank",
+  "equip": [
+   [
+    "bodyweight"
+   ]
+  ],
+  "load": "timed",
+  "unilateral": false,
+  "cue": "Elbows under shoulders, ribs down, squeeze glutes, breathe."
+ },
+ {
+  "seed": "Reverse_Crunch",
+  "equip": [
+   [
+    "bodyweight"
+   ]
+  ],
+  "load": "bodyweight",
+  "unilateral": false,
+  "cue": "Curl the hips off the floor, knees to chest, no swing."
+ },
+ {
+  "seed": "Dead_Bug",
+  "equip": [
+   [
+    "bodyweight"
+   ]
+  ],
+  "load": "bodyweight",
+  "unilateral": false,
+  "cue": "Back flat, lower opposite arm and leg, keep the ribs down."
+ },
+ {
+  "seed": "Hanging_Leg_Raise",
+  "equip": [
+   [
+    "pull-up-bar"
+   ]
+  ],
+  "load": "bodyweight",
+  "unilateral": false,
+  "cue": "Hang still, raise the legs to hip height or higher, no swing."
+ },
+ {
+  "seed": "Standing_Cable_Wood_Chop",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Cable high, rotate the torso and chop down across the body.",
+  "primary": [
+   "obliques"
+  ],
+  "secondary": [
+   "abs",
+   "front-delts"
+  ]
+ },
+ {
+  "seed": "Dumbbell_Side_Bend",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": true,
+  "cue": "Dumbbell in one hand, bend straight sideways, no twist.",
+  "primary": [
+   "obliques"
+  ],
+  "secondary": [
+   "abs"
+  ]
+ },
+ {
+  "seed": "Side_Bridge",
+  "equip": [
+   [
+    "bodyweight"
+   ]
+  ],
+  "load": "timed",
+  "unilateral": true,
+  "cue": "Elbow under shoulder, hips high in a straight line.",
+  "primary": [
+   "obliques"
+  ],
+  "secondary": [
+   "abs",
+   "side-delts"
+  ]
+ },
+ {
+  "seed": "Pallof_Press",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": true,
+  "cue": "Cable at chest height, press out and resist the pull to rotate.",
+  "primary": [
+   "obliques"
+  ],
+  "secondary": [
+   "abs"
+  ]
+ },
+ {
+  "seed": "Cable_Russian_Twists",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Sit tall, rotate the torso side to side with straight arms.",
+  "primary": [
+   "obliques"
+  ],
+  "secondary": [
+   "abs"
+  ]
+ },
+ {
+  "seed": "Dumbbell_Shrug",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Straight up toward the ears, pause, lower slowly."
+ },
+ {
+  "seed": "Cable_Shrugs",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Low pulley, shrug straight up, no rolling."
+ },
+ {
+  "seed": "Standing_Dumbbell_Upright_Row",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Pull to lower chest, elbows lead and stay below the shoulders.",
+  "shoulders": "side-delts"
+ },
+ {
+  "seed": "Wide-Grip_Lat_Pulldown",
+  "equip": [
+   [
+    "lat-pulldown"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Chest up, pull the bar to the collarbone, elbows to the pockets.",
+  "shoulders": "rear-delts"
+ },
+ {
+  "seed": "Close-Grip_Front_Lat_Pulldown",
+  "equip": [
+   [
+    "lat-pulldown"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Narrow grip, lean back slightly, pull to the upper chest.",
+  "shoulders": "rear-delts"
+ },
+ {
+  "seed": "Underhand_Cable_Pulldowns",
+  "equip": [
+   [
+    "lat-pulldown"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Palms toward you, pull to the chest, squeeze the lats.",
+  "shoulders": "rear-delts"
+ },
+ {
+  "seed": "One_Arm_Lat_Pulldown",
+  "equip": [
+   [
+    "lat-pulldown"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": true,
+  "cue": "Single handle, pull the elbow down and in toward the hip."
+ },
+ {
+  "seed": "Straight-Arm_Pulldown",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Arms straight, sweep the bar to the thighs, lats only."
+ },
+ {
+  "seed": "Seated_Cable_Rows",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Chest tall, pull the handle to the navel, pause, reach forward.",
+  "primary": [
+   "lats",
+   "traps"
+  ],
+  "secondary": [
+   "biceps",
+   "rear-delts"
+  ]
+ },
+ {
+  "seed": "Seated_One-arm_Cable_Pulley_Rows",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": true,
+  "cue": "One handle, pull the elbow past the ribs, keep the torso still.",
+  "primary": [
+   "lats",
+   "traps"
+  ],
+  "secondary": [
+   "biceps",
+   "rear-delts"
+  ]
+ },
+ {
+  "seed": "One-Arm_Dumbbell_Row",
+  "equip": [
+   [
+    "dumbbells",
+    "adjustable-bench"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": true,
+  "cue": "Knee and hand on the bench, pull the elbow to the hip.",
+  "primary": [
+   "lats",
+   "traps"
+  ],
+  "secondary": [
+   "biceps",
+   "rear-delts"
+  ]
+ },
+ {
+  "seed": "Bent_Over_Two-Dumbbell_Row",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Hinge to near parallel, flat back, row to the lower ribs.",
+  "primary": [
+   "lats",
+   "traps"
+  ],
+  "secondary": [
+   "biceps",
+   "rear-delts"
+  ]
+ },
+ {
+  "seed": "Dumbbell_Incline_Row",
+  "equip": [
+   [
+    "dumbbells",
+    "adjustable-bench"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Chest on an incline bench, row both dumbbells to the ribs.",
+  "primary": [
+   "lats",
+   "traps"
+  ],
+  "secondary": [
+   "biceps",
+   "rear-delts"
+  ]
+ },
+ {
+  "seed": "Hyperextensions_With_No_Hyperextension_Bench",
+  "equip": [
+   [
+    "bodyweight"
+   ]
+  ],
+  "load": "bodyweight",
+  "unilateral": false,
+  "cue": "Lie face down, lift chest and legs together, pause, lower."
+ },
+ {
+  "seed": "Stiff-Legged_Dumbbell_Deadlift",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Soft knees, push the hips back, flat back, stand by squeezing glutes."
+ },
+ {
+  "seed": "Pull_Through",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Face away from a low cable, hinge back, snap the hips forward."
+ },
+ {
+  "seed": "Butt_Lift_Bridge",
+  "equip": [
+   [
+    "bodyweight"
+   ]
+  ],
+  "load": "bodyweight",
+  "unilateral": false,
+  "cue": "Feet flat, drive the hips up, squeeze at the top, no arching."
+ },
+ {
+  "seed": "Single_Leg_Glute_Bridge",
+  "equip": [
+   [
+    "bodyweight"
+   ]
+  ],
+  "load": "bodyweight",
+  "unilateral": true,
+  "cue": "One foot down, other leg up, drive through the heel."
+ },
+ {
+  "seed": "One-Legged_Cable_Kickback",
+  "equip": [
+   [
+    "cable-stack"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": true,
+  "cue": "Ankle strap, kick straight back without arching the lower back."
+ },
+ {
+  "seed": "Leg_Extensions",
+  "equip": [
+   [
+    "leg-extension"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Pad on the shins, straighten fully, pause, lower for three."
+ },
+ {
+  "seed": "Single-Leg_Leg_Extension",
+  "equip": [
+   [
+    "leg-extension"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": true,
+  "cue": "One leg at a time, same smooth range, no kick."
+ },
+ {
+  "seed": "Dumbbell_Squat",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Dumbbells at the sides, chest up, sit between the hips."
+ },
+ {
+  "seed": "Dumbbell_Squat_To_A_Bench",
+  "equip": [
+   [
+    "dumbbells",
+    "adjustable-bench"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Sit back to touch the bench, drive up through the whole foot."
+ },
+ {
+  "seed": "Dumbbell_Lunges",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": true,
+  "cue": "Long step, back knee to the floor, push back to standing."
+ },
+ {
+  "seed": "Dumbbell_Rear_Lunge",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": true,
+  "cue": "Step back, drop the back knee, front heel stays down."
+ },
+ {
+  "seed": "Split_Squat_with_Dumbbells",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": true,
+  "cue": "Feet fixed, drop straight down, front shin near vertical."
+ },
+ {
+  "seed": "Dumbbell_Step_Ups",
+  "equip": [
+   [
+    "dumbbells",
+    "adjustable-bench"
+   ],
+   [
+    "dumbbells",
+    "box"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": true,
+  "cue": "Whole foot on the bench, drive up, lower under control."
+ },
+ {
+  "seed": "Bodyweight_Squat",
+  "equip": [
+   [
+    "bodyweight"
+   ]
+  ],
+  "load": "bodyweight",
+  "unilateral": false,
+  "cue": "Feet shoulder width, sit to parallel, knees track the toes."
+ },
+ {
+  "seed": "Standing_Dumbbell_Calf_Raise",
+  "equip": [
+   [
+    "dumbbells"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": false,
+  "cue": "Rise onto the toes, pause at the top, stretch at the bottom."
+ },
+ {
+  "seed": "Dumbbell_Seated_One-Leg_Calf_Raise",
+  "equip": [
+   [
+    "dumbbells",
+    "adjustable-bench"
+   ]
+  ],
+  "load": "dumbbell",
+  "unilateral": true,
+  "cue": "Seated, dumbbell on the knee, full range, one leg at a time."
+ },
+ {
+  "seed": "Barbell_Bench_Press_-_Medium_Grip",
+  "equip": [
+   [
+    "barbell",
+    "squat-rack",
+    "flat-bench"
+   ],
+   [
+    "barbell",
+    "squat-rack",
+    "adjustable-bench"
+   ],
+   [
+    "smith",
+    "flat-bench"
+   ]
+  ],
+  "load": "barbell",
+  "unilateral": false,
+  "cue": "Blades pinned, bar to the lower chest, press back over the shoulders.",
+  "shoulders": "front-delts"
+ },
+ {
+  "seed": "Barbell_Squat",
+  "equip": [
+   [
+    "barbell",
+    "squat-rack"
+   ],
+   [
+    "smith"
+   ]
+  ],
+  "load": "barbell",
+  "unilateral": false,
+  "cue": "Bar on the upper back, brace, sit to parallel, drive up."
+ },
+ {
+  "seed": "Barbell_Deadlift",
+  "equip": [
+   [
+    "barbell"
+   ]
+  ],
+  "load": "barbell",
+  "unilateral": false,
+  "cue": "Bar over mid-foot, flat back, push the floor away."
+ },
+ {
+  "seed": "Romanian_Deadlift",
+  "equip": [
+   [
+    "barbell"
+   ]
+  ],
+  "load": "barbell",
+  "unilateral": false,
+  "cue": "Soft knees, hips back, bar slides down the thighs, stand tall."
+ },
+ {
+  "seed": "Bent_Over_Barbell_Row",
+  "equip": [
+   [
+    "barbell"
+   ]
+  ],
+  "load": "barbell",
+  "unilateral": false,
+  "cue": "Hinge to near parallel, row the bar to the lower ribs.",
+  "primary": [
+   "lats",
+   "traps"
+  ],
+  "secondary": [
+   "biceps",
+   "rear-delts"
+  ]
+ },
+ {
+  "seed": "Barbell_Curl",
+  "equip": [
+   [
+    "barbell"
+   ],
+   [
+    "ez-bar"
+   ]
+  ],
+  "load": "barbell",
+  "unilateral": false,
+  "cue": "Elbows pinned, curl to the chest, lower for three."
+ },
+ {
+  "seed": "Barbell_Hip_Thrust",
+  "equip": [
+   [
+    "barbell",
+    "flat-bench"
+   ],
+   [
+    "barbell",
+    "adjustable-bench"
+   ]
+  ],
+  "load": "barbell",
+  "unilateral": false,
+  "cue": "Upper back on the bench, drive the hips up, squeeze glutes."
+ },
+ {
+  "seed": "Pullups",
+  "equip": [
+   [
+    "pull-up-bar"
+   ]
+  ],
+  "load": "bodyweight",
+  "unilateral": false,
+  "cue": "Start from a dead hang, pull the chest to the bar, lower fully.",
+  "shoulders": "rear-delts"
+ },
+ {
+  "seed": "Leg_Press",
+  "equip": [
+   [
+    "leg-press"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Feet shoulder width, lower until the knees reach the chest, press."
+ },
+ {
+  "seed": "Lying_Leg_Curls",
+  "equip": [
+   [
+    "leg-curl"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Hips down, curl the heels to the glutes, lower slowly."
+ },
+ {
+  "seed": "Machine_Shoulder_Military_Press",
+  "equip": [
+   [
+    "shoulder-press"
+   ]
+  ],
+  "load": "stack",
+  "unilateral": false,
+  "cue": "Back on the pad, press up and stop just short of lockout.",
+  "shoulders": "front-delts"
+ },
+ {
+  "seed": "Dips_-_Triceps_Version",
+  "equip": [
+   [
+    "dip-station"
+   ]
+  ],
+  "load": "bodyweight",
+  "unilateral": false,
+  "cue": "Upright torso, lower until the upper arms are level, press up.",
+  "shoulders": "front-delts"
+ }
+]
