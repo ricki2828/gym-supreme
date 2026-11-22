@@ -260,7 +260,8 @@ jobs:
           if gh release download dogfood-latest --dir prev --pattern 'gym-supreme-dogfood-*-x64.apk' 2>/dev/null \
              && [ -n "$(ls prev)" ]; then
             mv prev/*.apk prev-x86_64-dogfood.apk
-            echo "has_prev=true" >> "$GITHUB_OUTPUT"; echo "build N-1: $(ls prev 2>/dev/null; echo prev-x86_64-dogfood.apk)"
+            echo "has_prev=true" >> "$GITHUB_OUTPUT"
+            echo "build N-1: $(gh release view dogfood-latest --json name -q .name)"
           else
             echo "has_prev=false" >> "$GITHUB_OUTPUT"
             echo "::warning::no dogfood-latest x64 APK yet (first main build): install-over SKIPPED this run"
