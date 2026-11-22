@@ -38,7 +38,7 @@ class SpikeLogProvider : ContentProvider() {
         val cols = projection ?: arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)
         val c = MatrixCursor(cols, 1)
         c.addRow(
-            cols.map {
+            cols.map<String, Any?> {
                 when (it) {
                     OpenableColumns.DISPLAY_NAME -> f.name
                     OpenableColumns.SIZE -> f.length()
