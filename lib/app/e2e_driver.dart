@@ -129,11 +129,16 @@ class E2eDriver {
     final n = s.notifications;
     if (n == null) throw StateError('no NotificationAccess');
     // The request only shows a dialog while the activity is resumed (t5v).
-    for (var i = 0; i < 50; i++) {
-      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
-        break;
+    var resumed = false;
+    for (var i = 0; i < 50 && !resumed; i++) {
+      resumed =
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+      if (!resumed) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
       }
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    if (!resumed) {
+      throw StateError('activity not resumed: the ask would be cancelled');
     }
     await Future<void>.delayed(const Duration(milliseconds: 500));
     final allowed = await askNotificationsOnce(n);

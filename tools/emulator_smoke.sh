@@ -68,13 +68,22 @@ if [ "$sdk" -ge 33 ]; then
   focus="$(adb shell dumpsys window | tr -d '\r' | grep -E 'mCurrentFocus|mFocusedApp' | head -2)"
   echo "ask focus: $focus"
   grep -qi 'permissioncontroller' <<< "$focus" || { echo "::error::API $sdk: permission dialog not in front" >&2; exit 1; }
-  adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
-  adb shell input keyevent KEYCODE_BACK
+  # Tap the real Allow button, as Ricki would (uiautomator gives its bounds).
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1 || true
+  allow="$(adb shell cat /sdcard/ui.xml 2>/dev/null | tr -d '\r' | grep -o 'resource-id="com.android.permissioncontroller:id/permission_allow_button"[^>]*bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | grep -o 'bounds="[^"]*"' | head -1)"
+  [ -n "$allow" ] || { echo "::error::API $sdk: no Allow button in the permission dialog" >&2; exit 1; }
+  read -r x1 y1 x2 y2 <<< "$(grep -oE '[0-9]+' <<< "$allow" | tr '\n' ' ')"
+  adb shell input tap $(( (x1 + x2) / 2 )) $(( (y1 + y2) / 2 ))
   for i in $(seq 1 20); do ask_lines | grep -q '"event":"notif_request".*"asked":true' && break; sleep 1; done
-  ask_lines | grep -q '"event":"notif_request".*"asked":true' || { echo "::error::API $sdk: the ask never resolved" >&2; ask_lines >&2; exit 1; }
+  ask_lines | grep -q '"event":"notif_request".*"result":true.*"asked":true\|"event":"notif_request".*"asked":true.*"result":true' \
+    || { echo "::error::API $sdk: Allow did not resolve the ask as granted" >&2; ask_lines >&2; exit 1; }
 fi
 e2e_wait ok 30
 e2e_lines | sed 's/^/ask: /'
+e2e_lines | grep '"step":"ask"' | grep -q '"allowed":true' || { echo "::error::API $sdk: the ask did not end allowed" >&2; exit 1; }
+if [ "$sdk" -lt 33 ] && ask_lines | grep -q '"event":"notif_request_shown"'; then
+  echo "::error::API $sdk: a dialog was asked for below Android 13" >&2; exit 1
+fi
 ask_lines | sed 's/^/ask: /'
 
 if [ "$sdk" -ge 33 ]; then adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS; fi
