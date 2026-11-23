@@ -434,11 +434,18 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     children: [
       Expanded(
-        child: Text(
-          'LIFT ${view.lift} OF ${view.lifts} · SET ${view.set} OF ${view.sets}',
-          style: LitType.cap(14, ink),
+        // One line, shrinking at large text rather than wrapping; the gap
+        // keeps it from running into the clock ("OF 312:40").
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'LIFT ${view.lift} OF ${view.lifts} · SET ${view.set} OF ${view.sets}',
+            style: LitType.cap(14, ink),
+          ),
         ),
       ),
+      const SizedBox(width: 10),
       Text(
         clock(view.elapsedS),
         style: LitType.cap(14, ink),
