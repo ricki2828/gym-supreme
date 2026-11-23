@@ -64,8 +64,21 @@ s_start="$(wait_for '"event":"selftest_session".*"step":"start".*"ok":true' 30)"
 echo "session start: $s_start"
 alert="$(wait_for '"event":"rest_alert"' 30)" || { echo "session: no rest alert within 30 s" >&2; svc_lines | tail -n 20 >&2; exit 1; }
 echo "session rest alert: $alert"
-noti="$(adb shell dumpsys notification --noredact | tr -d '\r' | grep -E "pkg=$PKG .*id=2001" | head -1 || true)"
-[ -n "$noti" ] || { echo "session: workout notification not posted" >&2; exit 1; }
+# The session's ongoing notification is id 2003 (WorkoutNotification.SESSION_ID); the service is foreground.
+noti=""
+for i in 1 2 3 4 5; do
+  noti="$(adb shell dumpsys notification --noredact | tr -d '\r' | grep -E "pkg=$PKG .*id=2003" | head -1 || true)"
+  [ -n "$noti" ] && break
+  sleep 1
+done
+[ -n "$noti" ] || {
+  echo "session: workout notification (id 2003) not posted" >&2
+  adb shell dumpsys notification --noredact | tr -d '\r' | grep -E "pkg=$PKG" | head -n 10 >&2 || true
+  adb shell dumpsys activity services "$PKG" | tr -d '\r' | grep -E 'ServiceRecord|isForeground' | head -n 10 >&2 || true
+  svc_lines | grep -E 'service_|session_|rest_' | tail -n 10 >&2; exit 1; }
+echo "session notification: $noti"
+sfg="$(adb shell dumpsys activity services "$PKG" | tr -d '\r' | grep -E 'isForeground=true' | head -1 || true)"
+[ -n "$sfg" ] || { echo "session: service is not foreground" >&2; exit 1; }
 adb shell am force-stop "$PKG"
 sleep 2
 launch "$PKG" || { echo "session: relaunch after force-stop failed" >&2; exit 1; }

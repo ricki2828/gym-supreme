@@ -152,14 +152,14 @@ class WorkoutService : Service() {
         var outcome: String
         var ok = true
         try {
-            startForeground(WorkoutNotification.NOTIFICATION_ID, n, types)
+            startForeground(notificationId(), n, types)
             outcome = "ok"
         } catch (e: Exception) {
             outcome = "error:${e.javaClass.simpleName}:${e.message}"
             if (Build.VERSION.SDK_INT < 34 && why != "add_connected_device") {
                 try {
                     @Suppress("DEPRECATION")
-                    startForeground(WorkoutNotification.NOTIFICATION_ID, n)
+                    startForeground(notificationId(), n)
                     outcome += " fallback=manifest_types:ok"
                 } catch (e2: Exception) {
                     outcome += " fallback=manifest_types:error:${e2.javaClass.simpleName}"
@@ -544,8 +544,10 @@ class WorkoutService : Service() {
         return WorkoutNotification.Content(title, text, restEndWall, stopAction = false)
     }
 
+    private fun notificationId() = if (mode == MODE_SESSION) WorkoutNotification.SESSION_ID else WorkoutNotification.NOTIFICATION_ID
+
     private fun refreshNotification() {
-        if (status.running) notification.update(content())
+        if (status.running) notification.update(content(), notificationId())
     }
 
     override fun onDestroy() {

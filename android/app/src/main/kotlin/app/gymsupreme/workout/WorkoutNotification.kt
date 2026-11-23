@@ -58,8 +58,8 @@ class WorkoutNotification(private val context: Context) {
         return b.build()
     }
 
-    fun update(c: Content) = try {
-        manager.notify(NOTIFICATION_ID, build(c))
+    fun update(c: Content, id: Int) = try {
+        manager.notify(id, build(c))
     } catch (_: RuntimeException) {
     }
 
@@ -103,7 +103,16 @@ class WorkoutNotification(private val context: Context) {
     companion object {
         const val CHANNEL_ONGOING = "workout"
         const val CHANNEL_CUE = "cues"
+        /** Spike and self-test runs. */
         const val NOTIFICATION_ID = 2001
+
+        /**
+         * A workout. A different id from the spike's: on Android 13+ the removal of the previous
+         * run's foreground notification (stopForeground REMOVE) is processed asynchronously and,
+         * with the same id, can land after the new run posted its notification and delete it
+         * (seen in CI on API 33/34/36 when a session started 1 s after the spike self-test).
+         */
+        const val SESSION_ID = 2003
         const val CUE_ID = 2002
     }
 }
