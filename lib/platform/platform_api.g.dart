@@ -272,7 +272,8 @@ class GymHostApi {
 /// Refusals are PlatformException codes: `stale_rev`, `wrong_workout`,
 /// `finished`, `not_running`, `already_running`, `finish_pending` (a finished
 /// journal not yet deleted at start), `still_running` (delete while active),
-/// `bad_snapshot`, `bad_schema`, `bad_file_name`.
+/// `bad_snapshot`, `bad_schema`, `bad_file_name`, `io_error` (a real I/O
+/// failure, e.g. [deleteJournal]; counted natively as journal_delete_failed).
 ///
 /// Ordering: the service applies calls one at a time in the order received.
 /// Dart awaits each submit before the next call (finish included); there is
