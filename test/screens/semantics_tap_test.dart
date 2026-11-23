@@ -12,6 +12,7 @@ import 'package:gym_supreme/screens/picker_screen.dart';
 import 'package:gym_supreme/screens/post_workout_screen.dart';
 import 'package:gym_supreme/screens/view_models.dart';
 import 'package:gym_supreme/screens/weight_list_screen.dart';
+import 'package:gym_supreme/screens/workout_detail_screen.dart';
 
 import 'diagnostics_fixtures.dart';
 import 'fixtures.dart';
@@ -112,6 +113,7 @@ void main() {
         weightsG: [5000, 10000, 15000],
       ),
     ),
+    'workout detail': WorkoutDetailScreen(view: pushDetail),
     'post': PostWorkoutScreen(view: pushDone, onDone: noop),
     'history': HistoryScreen(rows: historyRows, onOpen: noop1),
     'body': const BodyScreen(muscles: bodyMuscles),
