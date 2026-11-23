@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Auto Backup, API 29-30 (plan 7, B6). The database (files/gym.db) and the native gate
+     counters are backed up; the live journal, exports, spike evidence, device-specific strap
+     state and the install marker are not (the marker must never be restored, or install-over
+     checks read fresh=false). The WAL is excluded: the app checkpoints gym.db on pause, so the
+     main file is complete. Same lists as data_extraction_rules.xml (API 31+). -->
+<full-backup-content>
+    <include domain="file" path="gym.db" />
+    <include domain="sharedpref" path="gymsupreme.counters.xml" />
+    <exclude domain="file" path="journal/" />
+    <exclude domain="file" path="export/" />
+    <exclude domain="file" path="spike/" />
+    <exclude domain="file" path="ble-trail.log" />
+    <exclude domain="file" path="install_marker.txt" />
+    <exclude domain="file" path="gym.db-wal" />
+    <exclude domain="file" path="gym.db-shm" />
+    <exclude domain="sharedpref" path="gymsupreme.journal.xml" />
+    <exclude domain="sharedpref" path="gymsupreme.ble.xml" />
+</full-backup-content>
