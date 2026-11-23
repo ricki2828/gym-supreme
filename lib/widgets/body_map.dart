@@ -14,6 +14,8 @@ class BodyMap extends StatelessWidget {
     this.resting = const {},
     this.noKit = const {},
     this.width = 176,
+    this.unlit = Colors.white,
+    this.outline = Lit.ink,
     this.onTapMuscle,
     this.semanticLabel,
   });
@@ -28,6 +30,11 @@ class BodyMap extends StatelessWidget {
   final Set<String> noKit;
   final double width;
 
+  /// Fill for muscles not in [fills]; the post-workout card uses a
+  /// translucent white on the type colour (b-post).
+  final Color unlit;
+  final Color outline;
+
   /// Called with the muscle id under a tap; null disables hit testing.
   final ValueChanged<String>? onTapMuscle;
 
@@ -41,7 +48,13 @@ class BodyMap extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final height = width * _vbH / _vbW;
-    final painter = _BodyPainter(fills: fills, resting: resting, noKit: noKit);
+    final painter = _BodyPainter(
+      fills: fills,
+      resting: resting,
+      noKit: noKit,
+      unlit: unlit,
+      outline: outline,
+    );
     Widget child = CustomPaint(size: Size(width, height), painter: painter);
     if (onTapMuscle != null) {
       child = GestureDetector(
@@ -187,10 +200,14 @@ class _BodyPainter extends CustomPainter {
     required this.fills,
     required this.resting,
     required this.noKit,
+    required this.unlit,
+    required this.outline,
   });
   final Map<String, Color> fills;
   final Set<String> resting;
   final Set<String> noKit;
+  final Color unlit;
+  final Color outline;
 
   static const Color _baseGrey = Color(0xFFDADCD6);
   static const Color _hatchGround = Color(0xFFD6FFC2);
@@ -210,7 +227,7 @@ class _BodyPainter extends CustomPainter {
       canvas.drawPath(s.path(), grey);
     }
     final stroke = Paint()
-      ..color = Lit.ink
+      ..color = outline
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.6
       ..strokeJoin = StrokeJoin.round;
@@ -224,13 +241,13 @@ class _BodyPainter extends CustomPainter {
         if (noKit.contains(id)) {
           canvas.drawPath(path, Paint()..color = Lit.ground);
           _dashed(canvas, path, stroke..color = Lit.inkQuiet);
-          stroke.color = Lit.ink;
+          stroke.color = outline;
           continue;
         }
         if (resting.contains(id)) {
           _hatch(canvas, path);
         } else {
-          canvas.drawPath(path, Paint()..color = fills[id] ?? Colors.white);
+          canvas.drawPath(path, Paint()..color = fills[id] ?? unlit);
         }
         canvas.drawPath(path, stroke);
       }
@@ -268,5 +285,9 @@ class _BodyPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BodyPainter old) =>
-      old.fills != fills || old.resting != resting || old.noKit != noKit;
+      old.fills != fills ||
+      old.resting != resting ||
+      old.noKit != noKit ||
+      old.unlit != unlit ||
+      old.outline != outline;
 }

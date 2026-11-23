@@ -150,3 +150,14 @@ String daysLabel(int? days) {
   if (days == 0) return 'today';
   return days == 1 ? '1 day' : '$days days';
 }
+
+/// "7,220".
+String thousands(int n) {
+  final s = n.abs().toString();
+  final b = StringBuffer(n < 0 ? '-' : '');
+  for (var i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 == 0) b.write(',');
+    b.write(s[i]);
+  }
+  return b.toString();
+}

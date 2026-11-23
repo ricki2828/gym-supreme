@@ -26,6 +26,9 @@ void main() {
 
   test('formatting', () {
     expect(kg(22000), '22');
+    expect(thousands(7220), '7,220');
+    expect(thousands(999), '999');
+    expect(thousands(1234567), '1,234,567');
     expect(kg(22500), '22.5');
     expect(kg(1250), '1.25');
     expect(daysLabel(null), 'new');
