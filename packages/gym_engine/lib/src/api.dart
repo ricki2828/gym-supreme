@@ -332,9 +332,13 @@ abstract interface class GymApi {
   /// call twice.
   void saveFinished(SessionSnapshot snapshot, {List<HrSample> hr});
   bool isStored(String workoutUuid);
+
+  /// [hrText] is the service's `hr.jsonl`, stored in the same transaction
+  /// on the save path (R2).
   ({RecoveryAction action, SessionSnapshot? snapshot}) recover(
-    String? journalText,
-  );
+    String? journalText, {
+    String? hrText,
+  });
 
   // Post-workout and history (items 6, 7).
   WorkoutSummary summary(String workoutUuid);

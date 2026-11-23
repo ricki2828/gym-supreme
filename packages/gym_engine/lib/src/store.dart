@@ -14,8 +14,9 @@ abstract interface class HistoryStore {
   Settings settings();
   void saveSettings(Settings settings);
 
-  /// Insert or replace the workout, its sets and its HR samples in one
-  /// transaction (B1, R2). Idempotent by uuid.
+  /// Insert or replace the workout and its sets, and add its HR samples, in
+  /// one transaction (B1, R2). Idempotent by uuid; samples already stored
+  /// are kept.
   void upsertWorkout(
     WorkoutRecord workout, {
     String? snapshotJson,
@@ -64,7 +65,10 @@ class MemoryStore implements HistoryStore {
     List<HrSample> hr = const [],
   }) {
     _workouts[workout.uuid] = workout;
-    hrByWorkout[workout.uuid] = List.of(hr);
+    final have = hrByWorkout[workout.uuid] ??= [];
+    for (final h in hr) {
+      if (!have.any((x) => x.tMs == h.tMs)) have.add(h);
+    }
   }
 
   @override

@@ -89,8 +89,8 @@ class Session {
     SessionSnapshot s,
     String setId, {
     required int nowMs,
-    int? loadG,
-    int? reps,
+    Object? loadG = _keep,
+    Object? reps = _keep,
     Completion? completion,
     SetSource source = SetSource.app,
   }) {
@@ -102,8 +102,10 @@ class Session {
     if (set.state != SetState.pending) return s;
 
     final live = s.state == SessionState.paused ? _resumed(s, nowMs) : s;
-    final load = loadG ?? set.targetLoadG;
-    final r = reps ?? set.targetReps;
+    // Omitted = the target; an explicit null logs no load (e.g. no added
+    // weight on a bodyweight move).
+    final load = identical(loadG, _keep) ? set.targetLoadG : loadG as int?;
+    final r = identical(reps, _keep) ? set.targetReps : reps as int?;
     final loaded = const {'dumbbell', 'stack', 'barbell'}.contains(ex.loadKind);
     final how =
         completion ??
@@ -172,12 +174,17 @@ class Session {
     if (at == null) return s;
     final set = s.exercises[at.e].sets[at.s];
     if (set.state != SetState.pending) return s;
-    return _replaceSet(
+    final next = _replaceSet(
       s,
       at.e,
       at.s,
       set.copyWith(state: SetState.skipped, endedAtMs: nowMs),
-    ).copyWith(rev: s.rev + 1);
+    );
+    return next.copyWith(
+      rev: s.rev + 1,
+      rest: next.current == null ? null : s.rest,
+      setReadyAtMs: s.rest == null ? nowMs : s.setReadyAtMs,
+    );
   }
 
   /// Changes what Done (and a lock-screen Done) will log for a pending set.

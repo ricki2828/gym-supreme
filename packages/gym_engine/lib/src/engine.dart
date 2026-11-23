@@ -99,8 +99,12 @@ class GymEngine implements GymApi {
           lastTrainedAtMs: last[m.id],
           daysSince: last[m.id] == null ? null : _dayDiff(last[m.id]!, now, tz),
           resting: last[m.id] != null && now - last[m.id]! < restingMs,
+          // Same pool as suggest (timed moves are not suggested).
           uncoveredAtGym: !catalog.exercises.any(
-            (e) => e.primary.contains(m.id) && e.availableWith(kit),
+            (e) =>
+                e.primary.contains(m.id) &&
+                e.load != 'timed' &&
+                e.availableWith(kit),
           ),
         ),
     };
@@ -508,15 +512,16 @@ class GymEngine implements GymApi {
 
   @override
   ({RecoveryAction action, SessionSnapshot? snapshot}) recover(
-    String? journalText,
-  ) {
+    String? journalText, {
+    String? hrText,
+  }) {
     final last = journalText == null ? null : readJournal(journalText).last;
     if (last == null) return (action: RecoveryAction.none, snapshot: null);
     if (store.hasWorkout(last.workoutUuid)) {
       return (action: RecoveryAction.deleteJournal, snapshot: last);
     }
     if (last.finished) {
-      saveFinished(last);
+      saveFinished(last, hr: hrText == null ? const [] : readHrJsonl(hrText));
       return (action: RecoveryAction.savedThenDelete, snapshot: last);
     }
     return (action: RecoveryAction.offerResume, snapshot: last);
@@ -558,7 +563,10 @@ class GymEngine implements GymApi {
           if ((weighted[m.id] ?? 0) > 0) m.id,
       ],
       pbs: _pbs(w, earlier),
-      weeklyStreak: weeklyStreak(all.sublist(0, i + 1)),
+      weeklyStreak: weeklyStreak([
+        for (final x in all.sublist(0, i + 1))
+          if (x.doneSets.isNotEmpty) x,
+      ]),
       durationMs: w.durationMs,
     );
   }
@@ -679,7 +687,8 @@ class GymEngine implements GymApi {
 
   @override
   Counters counters() {
-    final all = store.workouts();
+    // A start-then-finish with nothing done is not a session (gate).
+    final all = store.workouts().where((w) => w.doneSets.isNotEmpty).toList();
     final now = _now();
     var done = 0;
     var tap = 0;
@@ -776,7 +785,7 @@ class GymEngine implements GymApi {
           'kind': s.kind.name,
           'load_g': s.loadG,
           'reps': s.reps,
-          'completion': s.completion.wire,
+          'completion': s.completion?.wire,
           'skipped': s.skipped,
           'source': s.source.name,
           'started_at_ms': s.startedAtMs,
@@ -818,7 +827,7 @@ class GymEngine implements GymApi {
           s.kind.name,
           s.loadG == null ? '' : _num(s.loadG! / 1000),
           s.reps?.toString() ?? '',
-          s.completion.wire,
+          s.completion?.wire ?? '',
           s.skipped ? '1' : '0',
           s.source.name,
           iso(s.startedAtMs),
@@ -867,6 +876,23 @@ class GymEngine implements GymApi {
       _ => s,
     };
   }
+}
+
+/// Parses the service's `hr.jsonl` (R2): `{"t_ms":wall,"e_ms":..,"bpm":n}`
+/// per line. A torn or bad line is skipped.
+List<HrSample> readHrJsonl(String text) {
+  final out = <HrSample>[];
+  for (final line in const LineSplitter().convert(text)) {
+    try {
+      final j = jsonDecode(line);
+      if (j is Map && j['t_ms'] is int && j['bpm'] is int) {
+        out.add(HrSample(j['t_ms'] as int, j['bpm'] as int));
+      }
+    } on FormatException {
+      // torn tail
+    }
+  }
+  return out;
 }
 
 double _median(List<int> xs) {

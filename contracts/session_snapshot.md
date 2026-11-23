@@ -8,7 +8,9 @@ One JSON object, used three ways: the Pigeon event payload, one journal line (fs
 - One line, no whitespace, no trailing newline inside the value (journal adds `\n`).
 - Keys in exactly the order below. `null` is written out, never omitted.
 - Integers only (grams, ms). Booleans `true`/`false`.
-- Strings: raw UTF-8 for non-ASCII (no `\uXXXX` for printable text). Escape `"` `\\`, and `\b \f \n \r \t`; other control chars < 0x20 as `\u00xx` (lowercase hex). `/` is not escaped. (This is Dart's `jsonEncode`.)
+- Strings: raw UTF-8 for non-ASCII (no `\uXXXX` for printable text). Escape `"` `\\`, and `\b \f \n \r \t`; other control chars < 0x20 as `\u00xx` (lowercase hex). `/` is not escaped. **U+2028, U+2029 and DEL (0x7f) are written raw** (the fresh fixture's name has both). A lone surrogate is written `\udxxx` (lowercase); writers should never produce one. (This is Dart's `jsonEncode`, checked 23-Nov.)
+- **No floating-point numbers anywhere, including inside `block`.** Dart writes `1.0` for a double; every number in the snapshot is an integer (ms, grams, counts).
+- **Strict decode, both sides:** every key above is required (`null` where allowed); unknown enum values (`state`, `kind`, `completion`, `source`) are rejected; `paused_at_ms` is non-null exactly when `state` is `paused`; `completion` and `source` are non-null exactly when the set is `done`. Unknown extra keys are ignored.
 - Fixtures: `snapshot_v1_{fresh,resting,mid_set,paused,finished}.json` (one canonical line + `\n`) and `journal_v1_torn_tail.jsonl` (3 whole lines + half a line; the reader returns line 3; the half line is a torn tail (not corrupt)). Kotlin is the journal reader of record: `readPendingJournal` returns its last good line; a Dart `readJournal` is for tests only. Corrupt = a whole line before the last that does not parse, or one with another uuid or a non-rising rev (skipped). Byte-identical in `packages/gym_engine/test/fixtures/contract/` and `android/core/src/test/fixtures/contract/`. The finished fixture has a name with an en dash and a quote on purpose.
 
 ## Top level
@@ -46,7 +48,7 @@ One JSON object, used three ways: the Pigeon event payload, one journal line (fs
 - `set_ordinal` 1-based within its exercise; closes up when a pending set is removed.
 - plan_* = the engine's prefill, fixed when the set is created; never changed by +/-.
 - target_* = what Done (app or lock screen) will log untouched; +/- moves these. `target_load_g` null = cold start or plain bodyweight.
-- completion (done only): `tap_unchanged | adjusted | typed | cold_start`; null for pending/skipped. Judged against plan_*, not target_*: `cold_start` if a loaded kind (dumbbell/stack/barbell) had `plan_load_g` null; `tap_unchanged` if logged == plan or source is lockscreen; else `adjusted` (`typed` only when the UI says so).
+- completion (done only): `tap_unchanged | adjusted | typed | cold_start`; null for pending and skipped (also in storage and export). Judged against plan_*, not target_*: `cold_start` if a loaded kind (dumbbell/stack/barbell) had `plan_load_g` null; `tap_unchanged` if logged == plan or source is lockscreen; else `adjusted` (`typed` only when the UI says so).
 - source (done only): `app | lockscreen`. A lock-screen Done is `tap_unchanged`.
 - `offset_ms` = ended_at − started_at_ms(workout) − paused_total_ms (R6 ghost key).
 - `started_at_ms` of a set = `set_ready_at_ms` capped at now (so rest, skipped rest and paused time are not set time; R2 joins HR by these times).

@@ -210,8 +210,11 @@ enum Completion {
   const Completion(this.wire);
   final String wire;
 
-  static Completion fromWire(String w) =>
-      values.firstWhere((c) => c.wire == w, orElse: () => typed);
+  /// Throws [FormatException] on an unknown value (strict, like Kotlin).
+  static Completion fromWire(String w) => values.firstWhere(
+    (c) => c.wire == w,
+    orElse: () => throw FormatException('unknown completion "$w"'),
+  );
 }
 
 /// Where the Done came from (R3).
@@ -228,7 +231,7 @@ class SetRecord {
     required this.exerciseName,
     required this.exercisePosition,
     required this.setOrdinal,
-    required this.completion,
+    this.completion,
     this.skipped = false,
     this.kind = SetKind.reps,
     this.loadG,
@@ -261,7 +264,8 @@ class SetRecord {
   /// Milliseconds from workout start to the set's end (R6 ghost key).
   final int? offsetMs;
 
-  final Completion completion;
+  /// Null for skipped sets.
+  final Completion? completion;
 
   /// Skipped sets are kept (ghost and history show them) but carry no
   /// volume and do not count for days-since.

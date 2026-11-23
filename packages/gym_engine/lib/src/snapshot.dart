@@ -116,7 +116,7 @@ class SnapshotSet {
   factory SnapshotSet.fromJson(Map<String, Object?> j) => SnapshotSet(
     setId: j['set_id'] as String,
     setOrdinal: j['set_ordinal'] as int,
-    kind: SetKind.values.byName(j['kind'] as String? ?? 'reps'),
+    kind: SetKind.values.byName(j['kind'] as String),
     planLoadG: j['plan_load_g'] as int?,
     planReps: j['plan_reps'] as int?,
     targetLoadG: j['target_load_g'] as int?,
@@ -188,7 +188,7 @@ class SnapshotExercise {
     exerciseId: j['exercise_id'] as String,
     name: j['name'] as String,
     loadKind: j['load_kind'] as String,
-    unilateral: j['unilateral'] as bool? ?? false,
+    unilateral: j['unilateral'] as bool,
     restS: j['rest_s'] as int,
     repLo: j['rep_lo'] as int?,
     repHi: j['rep_hi'] as int?,
@@ -369,25 +369,26 @@ class SessionSnapshot {
     if (schema is! int || schema < 1 || schema > snapshotSchema) {
       throw FormatException('unsupported snapshot schema $schema');
     }
-    if (j['state'] == 'paused' && j['paused_at_ms'] is! int) {
-      throw const FormatException('paused snapshot without paused_at_ms');
+    if ((j['state'] == 'paused') != (j['paused_at_ms'] is int)) {
+      throw const FormatException(
+        'paused_at_ms must be set exactly when state is paused',
+      );
     }
+    final SessionSnapshot snap;
     try {
-      return SessionSnapshot(
+      snap = SessionSnapshot(
         schema: schema,
         workoutUuid: j['workout_uuid'] as String,
         rev: j['rev'] as int,
-        appVersion: j['app_version'] as String? ?? '',
+        appVersion: j['app_version'] as String,
         gymId: j['gym_id'] as String,
         typeId: j['type_id'] as String?,
-        muscles: [
-          for (final m in (j['muscles'] as List? ?? const [])) m as String,
-        ],
+        muscles: [for (final m in j['muscles'] as List) m as String],
         startedAtMs: j['started_at_ms'] as int,
         tzOffsetMin: j['tz_offset_min'] as int,
         state: SessionState.values.byName(j['state'] as String),
         pausedAtMs: j['paused_at_ms'] as int?,
-        pausedTotalMs: j['paused_total_ms'] as int? ?? 0,
+        pausedTotalMs: j['paused_total_ms'] as int,
         rest: j['rest'] == null
             ? null
             : Rest.fromJson((j['rest'] as Map).cast<String, Object?>()),
@@ -406,6 +407,17 @@ class SessionSnapshot {
     } on ArgumentError catch (e) {
       throw FormatException('bad snapshot value: $e');
     }
+    for (final e in snap.exercises) {
+      for (final x in e.sets) {
+        final done = x.state == SetState.done;
+        if (done != (x.completion != null) || done != (x.source != null)) {
+          throw FormatException(
+            'set ${x.setId}: completion and source are set exactly when done',
+          );
+        }
+      }
+    }
+    return snap;
   }
 
   /// Finished sets in the stored form (done and skipped; pending dropped).
@@ -422,7 +434,7 @@ class SessionSnapshot {
             kind: s.kind,
             loadG: s.loadG,
             reps: s.reps,
-            completion: s.completion ?? Completion.typed,
+            completion: s.completion,
             skipped: s.state == SetState.skipped,
             source: s.source ?? SetSource.app,
             startedAtMs: s.startedAtMs,

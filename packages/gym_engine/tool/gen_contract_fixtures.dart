@@ -35,7 +35,8 @@ SessionPlan plan() => const SessionPlan(
     ),
     PlannedItem(
       exerciseId: 'cable-triceps-pushdown',
-      name: 'Cable Triceps Pushdown – "rope"',
+      // En dash, quote, U+2028 and DEL: canonical-encoding traps (raw bytes).
+      name: 'Cable Triceps Pushdown – "rope"\u2028\x7f',
       unit: LoadUnit.kg,
       sets: [
         PlannedSet(loadG: null, reps: 12),

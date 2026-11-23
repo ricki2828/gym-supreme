@@ -268,6 +268,59 @@ void main() {
     expect(s.exercises[0].sets[1].startedAtMs, t0 + 80000);
   });
 
+  test('done can log an explicit null load; omitted = target', () {
+    var s = Session.done(start(), 'u:0', nowMs: t0 + 1, loadG: null);
+    expect(s.exercises[0].sets[0].loadG, isNull);
+    s = Session.done(s, 'u:1', nowMs: t0 + 2);
+    expect(s.exercises[0].sets[1].loadG, 20000);
+  });
+
+  test('skipping the last pending set clears the rest', () {
+    var s = Session.done(start(), 'u:0', nowMs: t0 + 1);
+    s = Session.done(s, 'u:1', nowMs: t0 + 2);
+    expect(s.rest, isNotNull);
+    s = Session.skip(s, 'u:2', nowMs: t0 + 3);
+    expect(s.current, isNull);
+    expect(s.rest, isNull);
+  });
+
+  test('skipped sets carry no completion into the stored form', () {
+    var s = Session.skip(start(), 'u:0', nowMs: t0 + 1);
+    s = Session.finish(s, nowMs: t0 + 2);
+    expect(s.toRecord().sets.single.completion, isNull);
+  });
+
+  test('strict decode: unknown completion, done without completion, active with paused_at', () {
+    final done = Session.done(start(), 'u:0', nowMs: t0 + 1).encode();
+    expect(
+      () => SessionSnapshot.decode(
+        done.replaceFirst('"tap_unchanged"', '"bogus"'),
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => SessionSnapshot.decode(
+        done.replaceFirst('"completion":"tap_unchanged"', '"completion":null'),
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => SessionSnapshot.decode(
+        start().encode().replaceFirst(
+          '"paused_at_ms":null',
+          '"paused_at_ms":5',
+        ),
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => SessionSnapshot.decode(
+        start().encode().replaceFirst('"app_version":"",', ''),
+      ),
+      throwsFormatException,
+    );
+  });
+
   test('uuidV4 shape', () {
     expect(
       uuidV4(),

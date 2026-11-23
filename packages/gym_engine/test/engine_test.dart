@@ -56,13 +56,15 @@ class Rig {
       for (final x in e.sets) {
         now += 120000;
         final cold = x.targetLoadG == null && e.loadKind != 'bodyweight';
-        s = Session.done(
-          s,
-          x.setId,
-          nowMs: now,
-          loadG: cold ? coldLoadG : null,
-          reps: reps,
-        );
+        s = cold
+            ? Session.done(
+                s,
+                x.setId,
+                nowMs: now,
+                loadG: coldLoadG,
+                reps: reps ?? x.targetReps,
+              )
+            : Session.done(s, x.setId, nowMs: now, reps: reps ?? x.targetReps);
       }
     }
     s = Session.finish(s, nowMs: now += 60000);
@@ -377,6 +379,32 @@ void main() {
     expect(r.engine.isStored(s.workoutUuid), isTrue);
     expect(r.engine.recover(j).action, RecoveryAction.deleteJournal);
     expect(() => r.engine.saveFinished(s), throwsArgumentError);
+  });
+
+  test('recover stores hr.jsonl with a finished journal (R2)', () {
+    final r = Rig();
+    final p = r.engine.suggest(gymId: r.gymId, muscleIds: ['abs'], minutes: 15);
+    var s = Session.start(p, nowMs: r.now, tzOffsetMin: 480);
+    s = Session.done(s, s.currentSet!.setId, nowMs: r.now + 1000);
+    s = Session.finish(s, nowMs: r.now + 2000);
+    final res = r.engine.recover(
+      '${s.encode()}\n',
+      hrText: '{"t_ms":1,"e_ms":1,"bpm":100}\n{"t_ms":2,"e_ms":2,"bpm":101}\n{"t_ms":3,"b',
+    );
+    expect(res.action, RecoveryAction.savedThenDelete);
+    expect(r.store.hrByWorkout[s.workoutUuid], hasLength(2));
+  });
+
+  test('an empty start-then-finish is not a session in counters', () {
+    final r = Rig();
+    final p = r.engine.suggest(gymId: r.gymId, muscleIds: ['abs'], minutes: 15);
+    final s = Session.finish(
+      Session.start(p, nowMs: r.now, tzOffsetMin: 480),
+      nowMs: r.now + 1000,
+    );
+    r.engine.saveFinished(s);
+    expect(r.engine.counters().sessionsTotal, 0);
+    expect(r.engine.history(), hasLength(1));
   });
 
   test('saveFinished is idempotent by uuid', () {
