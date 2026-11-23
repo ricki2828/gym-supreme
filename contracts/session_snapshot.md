@@ -16,7 +16,7 @@ One JSON object, used three ways: the Pigeon event payload, one journal line (fs
 |---|---|---|
 | schema | int | 1. Readers refuse a higher value. |
 | workout_uuid | string | UUID v4, set at start |
-| rev | int | 0 at start. Each submit: baseRev = current, new rev = base + 1. Kotlin is the authority; stale → `stale_rev`. Resume never calls startSession: readPendingJournal → rev R → submit (rev R+1, baseRev R). |
+| rev | int | Written by Dart into every snapshot it sends: 0 at start, baseRev + 1 at submit. The service validates it (`bad_snapshot` on mismatch, `stale_rev` on a stale baseRev) and stores it as sent. Resume never calls startSession: readPendingJournal → rev R → submit (rev R+1, baseRev R). |
 | app_version | string | |
 | gym_id | string | |
 | type_id | string\|null | push, pull, legs, core, engine |
