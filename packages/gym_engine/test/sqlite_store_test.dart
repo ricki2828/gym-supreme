@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:gym_engine/gym_engine.dart';
 import 'package:gym_engine/sqlite_store.dart';
+import 'package:gym_engine/src/fsync_dir.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 
@@ -207,5 +208,88 @@ void main() {
       db.select('PRAGMA user_version').first.columnAt(0),
       latestSchemaVersion,
     );
+  });
+
+  group('snapshot backup (#15)', () {
+    late Directory dir;
+    setUp(() => dir = Directory.systemTemp.createTempSync('gymsnap'));
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('round trip: write, lose the db, restore, read', () {
+      final dbPath = '${dir.path}/gym.db';
+      final snapPath = '${dir.path}/backup/gym-snapshot.db'; // dir made
+      final a = SqliteStore.open(dbPath);
+      a.upsertWorkout(workout('w1'), hr: const [HrSample(5, 99)]);
+      expect(a.writeSnapshot(snapPath), isTrue);
+      expect(a.writeSnapshot(snapPath), isTrue); // overwrite is fine
+      expect(File('$snapPath.tmp').existsSync(), isFalse);
+      a.close();
+      for (final f in dir.listSync().whereType<File>()) {
+        f.deleteSync(); // fresh install: db, wal, shm gone
+      }
+      File('$dbPath-wal').writeAsStringSync('stale'); // must be discarded
+      expect(
+        SqliteStore.restoreSnapshotIfMissing(dbPath, snapPath),
+        RestoreResult.restored,
+      );
+      expect(File('$dbPath-wal').existsSync(), isFalse);
+      expect(File(snapPath).existsSync(), isTrue); // kept
+      final b = SqliteStore.open(dbPath);
+      expect(b.workout('w1')!.sets, hasLength(2));
+      expect(b.hrSamples('w1').single.bpm, 99);
+      b.close();
+      // db now present: never overwritten by the snapshot.
+      expect(
+        SqliteStore.restoreSnapshotIfMissing(dbPath, snapPath),
+        RestoreResult.notNeeded,
+      );
+    });
+
+    test('corrupt or junk snapshot is refused and the db stays missing', () {
+      final dbPath = '${dir.path}/gym.db';
+      final snapPath = '${dir.path}/snap.db';
+      final a = SqliteStore.open('${dir.path}/src.db');
+      for (var i = 0; i < 40; i++) {
+        a.upsertWorkout(workout('w$i', sets: 20));
+      }
+      expect(a.writeSnapshot(snapPath), isTrue);
+      a.close();
+      // Damage pages past the header.
+      final bytes = File(snapPath).readAsBytesSync();
+      expect(bytes.length, greaterThan(8192));
+      for (var i = 4096; i < bytes.length - 100; i += 7) {
+        bytes[i] = 0xA5;
+      }
+      File(snapPath).writeAsBytesSync(bytes);
+      expect(
+        SqliteStore.restoreSnapshotIfMissing(dbPath, snapPath),
+        RestoreResult.refused,
+      );
+      expect(File(snapPath).existsSync(), isFalse); // discarded
+      expect(File(dbPath).existsSync(), isFalse);
+      expect(File('$dbPath.restore').existsSync(), isFalse);
+
+      File(snapPath).writeAsStringSync('not a database at all');
+      expect(
+        SqliteStore.restoreSnapshotIfMissing(dbPath, snapPath),
+        RestoreResult.refused,
+      );
+      expect(File(dbPath).existsSync(), isFalse);
+    });
+
+    test('directory fsync works on this platform', () {
+      expect(fsyncDirectory(dir.path), Platform.isLinux || Platform.isAndroid);
+      expect(fsyncDirectory('${dir.path}/missing'), isFalse);
+    });
+
+    test('no snapshot: nothing happens', () {
+      expect(
+        SqliteStore.restoreSnapshotIfMissing(
+          '${dir.path}/gym.db',
+          '${dir.path}/none.db',
+        ),
+        RestoreResult.notNeeded,
+      );
+    });
   });
 }

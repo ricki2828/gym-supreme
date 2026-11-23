@@ -5,10 +5,12 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:sqlite3/sqlite3.dart';
 
 import 'api.dart';
+import 'fsync_dir.dart';
 import 'model.dart';
 import 'store.dart';
 
@@ -82,6 +84,18 @@ CREATE TABLE hr_sample (
 
 int get latestSchemaVersion => migrations.length;
 
+enum RestoreResult {
+  /// The db exists, or there is no snapshot: open as usual.
+  notNeeded,
+
+  /// The snapshot passed quick_check and is now the db.
+  restored,
+
+  /// The snapshot failed quick_check and was deleted. Open a fresh db and
+  /// count `restore_failed` for the export.
+  refused,
+}
+
 class SqliteStore implements HistoryStore {
   SqliteStore._(this.db) {
     db.execute('PRAGMA foreign_keys = ON');
@@ -139,6 +153,85 @@ class SqliteStore implements HistoryStore {
   }
 
   void close() => db.close();
+
+  /// Backup source (plan 7, B6; t5t #15): a consistent single-file copy via
+  /// `VACUUM INTO <path>.tmp`, fsync, then rename onto [path]. Auto Backup
+  /// copies only this file, never the live db/WAL pair. Returns false if the
+  /// database was busy (try again later); other errors throw.
+  bool writeSnapshot(String path) {
+    final tmp = File('$path.tmp'); // same dir: rename stays atomic
+    tmp.parent.createSync(recursive: true);
+    if (tmp.existsSync()) tmp.deleteSync();
+    try {
+      db.execute('VACUUM INTO ?', [tmp.path]);
+    } on SqliteException catch (e) {
+      if (tmp.existsSync()) tmp.deleteSync();
+      if ((e.resultCode & 0xff) == 5 || (e.resultCode & 0xff) == 6) {
+        return false; // SQLITE_BUSY / SQLITE_LOCKED
+      }
+      rethrow;
+    }
+    final raf = tmp.openSync(mode: FileMode.append);
+    try {
+      raf.flushSync(); // fsync
+    } finally {
+      raf.closeSync();
+    }
+    tmp.renameSync(path);
+    fsyncDirectory(tmp.parent.path); // make the rename durable
+    return true;
+  }
+
+  /// Before [SqliteStore.open]: if [dbPath] is missing and [snapshotPath]
+  /// exists (a fresh install restored by Auto Backup), put the snapshot in
+  /// place, but only if `PRAGMA quick_check` says ok. Stray `-wal`/`-shm`
+  /// files of the missing db are deleted first so they cannot be replayed
+  /// onto the snapshot. The snapshot is kept after a restore. A snapshot
+  /// that fails the check is deleted and [RestoreResult.refused] returned:
+  /// the app opens a fresh empty db and bumps `restore_failed`.
+  static RestoreResult restoreSnapshotIfMissing(
+    String dbPath,
+    String snapshotPath,
+  ) {
+    if (File(dbPath).existsSync()) return RestoreResult.notNeeded;
+    final snap = File(snapshotPath);
+    if (!snap.existsSync()) return RestoreResult.notNeeded;
+    for (final suffix in ['-wal', '-shm', '-journal']) {
+      final f = File('$dbPath$suffix');
+      if (f.existsSync()) f.deleteSync();
+    }
+    final tmp = File('$dbPath.restore');
+    if (tmp.existsSync()) tmp.deleteSync();
+    snap.copySync(tmp.path);
+    var ok = false;
+    try {
+      final check = sqlite3.open(tmp.path, mode: OpenMode.readOnly);
+      try {
+        final r = check.select('PRAGMA quick_check');
+        ok = r.length == 1 && r.first.columnAt(0) == 'ok';
+        final v = check.select('PRAGMA user_version').first.columnAt(0) as int;
+        ok = ok && v >= 1;
+      } finally {
+        check.close();
+      }
+    } on SqliteException {
+      ok = false;
+    }
+    if (!ok) {
+      tmp.deleteSync();
+      snap.deleteSync();
+      return RestoreResult.refused;
+    }
+    final raf = tmp.openSync(mode: FileMode.append);
+    try {
+      raf.flushSync();
+    } finally {
+      raf.closeSync();
+    }
+    tmp.renameSync(dbPath);
+    fsyncDirectory(tmp.parent.path);
+    return RestoreResult.restored;
+  }
 
   @override
   int get schemaVersion =>
