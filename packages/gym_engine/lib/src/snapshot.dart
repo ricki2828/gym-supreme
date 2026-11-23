@@ -41,8 +41,9 @@ class SnapshotSet {
   final int setOrdinal;
   final SetKind kind;
 
-  /// The engine's prefill, fixed at plan time. Completion is judged against
-  /// it: Done with exactly these values is `tap_unchanged`.
+  /// The engine's prefill, fixed at plan time; never changed by +/- or
+  /// carry-forward. Completion is judged against it or the value carried
+  /// from the lift's last logged set (see Session.done).
   final int? planLoadG;
   final int? planReps;
 
