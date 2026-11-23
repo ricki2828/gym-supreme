@@ -2,8 +2,9 @@ name: gym_supreme
 description: "Gym Supreme: local-only Android strength log with a lock-screen workout service."
 publish_to: 'none'
 
-# versionCode comes from the +N suffix; CI stamps 0.1.0+<run number> on dogfood builds.
-version: 0.1.0+1
+# versionName = the dogfood release label (bump per release: 0.1.1 was cut from 0.1.0 code;
+# 0.2.0 = ghost + rotation on). CI stamps only the +N build number (versionCode).
+version: 0.2.0+1
 
 environment:
   sdk: ^3.13.4

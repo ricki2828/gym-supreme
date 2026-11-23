@@ -203,7 +203,11 @@ Future<AppServices> bootstrap() async {
     store: store,
     engine: eng.GymEngine(catalog: catalog, store: store),
     port: PigeonWorkoutPort(),
-    appVersion: '0.1.0+$versionCode $flavor $buildLabel',
+    // Label from pubspec (CI) + the installed versionCode from the device
+    // (split APKs add 1000 * ABI, so it differs from pubspec's +N).
+    appVersion:
+        '${kAppVersion.isEmpty ? 'local' : kAppVersion.split('+').first}'
+        '+$versionCode $flavor $buildLabel',
     snapshotPath: pending ? null : snapshotPath(dir),
     restoreFailed: restoreFailed,
     restorePending: pending,
