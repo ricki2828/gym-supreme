@@ -400,7 +400,7 @@ eng.PlannedItem swapItem(
 /// sets by ordinal. Units from the catalog's load kind.
 WorkoutDetailView workoutDetailOf(
   eng.WorkoutRecord w, {
-  required eng.HistoryRow row,
+  required String gymName,
   required eng.Catalog catalog,
 }) {
   final byPos = <int, List<eng.SetRecord>>{};
@@ -429,12 +429,13 @@ WorkoutDetailView workoutDetailOf(
         );
       }(),
   ];
+  // All from the stored record (no history scan; review of #43).
   return WorkoutDetailView(
-    type: workoutTypeOf(row.typeId),
-    startedAt: localOf(row.startedAtMs, row.tzOffsetMin),
-    gymName: row.gymName,
-    durationS: row.durationMs ~/ 1000,
-    volumeKg: row.volumeKg,
+    type: workoutTypeOf(w.typeId),
+    startedAt: localOf(w.startedAtMs, w.tzOffsetMin),
+    gymName: gymName,
+    durationS: w.durationMs ~/ 1000,
+    volumeKg: w.volumeGReps / 1000,
     lifts: lifts,
   );
 }

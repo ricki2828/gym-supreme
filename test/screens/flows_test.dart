@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_engine/gym_engine.dart' as eng;
 import 'package:gym_supreme/screens/flows/flows.dart';
+import 'package:gym_supreme/screens/history_screen.dart';
 import 'package:gym_supreme/screens/live_screen.dart';
 import 'package:gym_supreme/screens/picker_screen.dart';
 import 'package:gym_supreme/screens/post_workout_screen.dart';
@@ -482,7 +483,10 @@ void main() {
       await tester.pumpAndSettle();
     }
     await tapText(tester, 'DONE');
-    await tapText(tester, 'PUSH');
+    await tester.ensureVisible(find.byType(HistoryRowTile).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(HistoryRowTile).first);
+    await tester.pumpAndSettle();
     expect(find.byType(WorkoutDetailScreen), findsOneWidget);
     final w = store.workout(engine.history().first.uuid)!;
     final logged = w.doneSets.single;

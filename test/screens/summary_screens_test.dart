@@ -174,7 +174,11 @@ void main() {
       expect(find.text('PUSH'), findsOneWidget);
       expect(find.text('Tue 24 Nov · Condo gym'), findsOneWidget);
       expect(find.text('7,220 KG'), findsOneWidget);
-      expect(find.text('5'), findsWidgets, reason: '5 sets, skipped left out');
+      expect(
+        find.text('5'),
+        findsOneWidget,
+        reason: '5 sets, skipped left out',
+      );
       expect(find.text('10 × 22 KG EA'), findsNWidgets(2));
       expect(find.text('8 × 22 KG EA'), findsOneWidget);
       expect(find.text('SKIPPED'), findsOneWidget);

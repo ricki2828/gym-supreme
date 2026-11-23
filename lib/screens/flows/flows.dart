@@ -500,15 +500,12 @@ class _Today extends StatelessWidget {
 
   void _openDetail(BuildContext context, String uuid) {
     final w = deps.store!.workout(uuid);
-    final row = deps.engine
-        .history(limit: 500)
-        .where((r) => r.uuid == uuid)
-        .firstOrNull;
-    if (w == null || row == null) return;
+    if (w == null) return;
+    final gymName = deps.engine.gym(w.gymId)?.name ?? '';
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => WorkoutDetailScreen(
-          view: workoutDetailOf(w, row: row, catalog: deps.catalog),
+          view: workoutDetailOf(w, gymName: gymName, catalog: deps.catalog),
         ),
       ),
     );
