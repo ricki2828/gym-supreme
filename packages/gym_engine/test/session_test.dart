@@ -375,6 +375,14 @@ void main() {
     expect(s.exercises[0].sets[0].startedAtMs, t0 + 670000);
   });
 
+  test('undo after a skipped rest still restores the set start', () {
+    var s = Session.done(start(), 'u:0', nowMs: t0 + 60000);
+    s = Session.skipRest(s, nowMs: t0 + 70000);
+    s = Session.undo(s, 'u:0');
+    s = Session.done(s, 'u:0', nowMs: t0 + 80000);
+    expect(s.exercises[0].sets[0].startedAtMs, t0);
+  });
+
   test('decode rejects next_set_n that would reuse an id', () {
     final enc = start().encode().replaceFirst(
       '"next_set_n":3',

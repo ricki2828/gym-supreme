@@ -172,9 +172,11 @@ class Session {
         }
       }
     }
-    // ...but not across a pause: a resume after the set moved readiness
-    // past its end, and paused time is never set time.
-    final resumedSince = (s.setReadyAtMs ?? 0) > (set.endedAtMs ?? 0);
+    // ...but not across a pause (paused time is never set time). The set's
+    // offset recorded the paused total at its end; a pause since changed it.
+    final pausedAtEnd =
+        (set.endedAtMs ?? 0) - s.startedAtMs - (set.offsetMs ?? 0);
+    final resumedSince = set.offsetMs != null && s.pausedTotalMs != pausedAtEnd;
     final restore = clears || (s.rest == null && latest && !resumedSince);
     return next.copyWith(
       rev: s.rev + 1,

@@ -155,22 +155,57 @@ void main() {
     b.close();
   });
 
-  test('every past schema fixture migrates and reads (R7)', () {
-    final dir = Directory('test/fixtures/db');
-    final files = dir.listSync().whereType<File>().where(
-      (f) => f.path.endsWith('.sql'),
+  test('v1 fixture DDL equals migration v1 (R7: fresh = upgraded)', () {
+    String schema(Database db) => db
+        .select(
+          "SELECT type, name, sql FROM sqlite_master "
+          "WHERE name NOT LIKE 'sqlite_%' ORDER BY name",
+        )
+        .map(
+          (r) =>
+              '${r['type']}|${r['name']}|'
+              '${(r['sql'] as String?)?.replaceAll(RegExp(r'\s+'), ' ')}',
+        )
+        .join('\n');
+    final fresh = sqlite3.openInMemory();
+    SqliteStore.migrate(fresh);
+    final fixture = sqlite3.openInMemory()
+      ..execute(File('test/fixtures/db/v1.sql').readAsStringSync());
+    expect(schema(fixture), schema(fresh));
+  });
+
+  test(
+    'every past schema fixture migrates and reads through the store (R7)',
+    () {
+      final files = Directory('test/fixtures/db')
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.sql'));
+      expect(files, isNotEmpty);
+      for (final f in files) {
+        final store = SqliteStore.fromDatabase(
+          sqlite3.openInMemory()..execute(f.readAsStringSync()),
+        );
+        expect(store.schemaVersion, latestSchemaVersion, reason: f.path);
+        final w = store.workouts();
+        expect(w, isNotEmpty, reason: f.path);
+        expect(w.first.sets, isNotEmpty);
+        expect(w.first.sets.first.offsetMs, isNotNull);
+        expect(store.gyms(), isNotEmpty);
+        expect(store.settings().bodyweightG, 80000);
+        expect(store.hrSamples(w.first.uuid), isNotEmpty);
+        store.close();
+      }
+    },
+  );
+
+  test('migrate is a no-op when re-run', () {
+    final db = sqlite3.openInMemory();
+    SqliteStore.migrate(db);
+    SqliteStore.migrate(db);
+    expect(
+      db.select('PRAGMA user_version').first.columnAt(0),
+      latestSchemaVersion,
     );
-    expect(files, isNotEmpty);
-    for (final f in files) {
-      final db = sqlite3.openInMemory()..execute(f.readAsStringSync());
-      SqliteStore.migrate(db);
-      final v = db.select('PRAGMA user_version').first.columnAt(0);
-      expect(v, latestSchemaVersion, reason: f.path);
-      expect(
-        db.select('SELECT count(*) AS n FROM set_row').first['n'],
-        greaterThan(0),
-      );
-      db.close();
-    }
   });
 }
