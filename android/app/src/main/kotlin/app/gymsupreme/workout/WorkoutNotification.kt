@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import app.gymsupreme.MainActivity
 
 /**
@@ -49,6 +50,10 @@ class WorkoutNotification(private val context: Context) {
             .setCategory(Notification.CATEGORY_SERVICE)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentIntent(openApp())
+        // Android 12+ may hold a new foreground service's notification back for up to 10 s unless
+        // it has actions or asks to show at once; in that window updates are swallowed. The
+        // workout notification has no actions in cut 1 and must be on the lock screen at once (R3).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) b.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
         if (c.stopAction) b.addAction(Notification.Action.Builder(null, "Stop", action(WorkoutActionReceiver.ACTION_STOP)).build())
         if (c.nextCueWallMs != null) {
             b.setUsesChronometer(true).setChronometerCountDown(true).setWhen(c.nextCueWallMs).setShowWhen(true)
