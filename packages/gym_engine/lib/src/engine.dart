@@ -24,6 +24,58 @@ const int restingMs = 48 * 3600 * 1000;
 /// Work time assumed per set when fitting the time budget.
 const int workSecondsPerSet = 45;
 
+/// Most lifts a suggestion holds, however long the budget.
+const int maxSuggestedLifts = 9;
+
+/// Stable 32-bit FNV-1a of `seed:id` for tie-breaks (same on every
+/// platform, unlike String.hashCode).
+int tieHash(int seed, String id) {
+  var h = 0x811c9dc5;
+  for (final c in utf8.encode('$seed:$id')) {
+    h ^= c;
+    h = (h * 0x01000193) & 0xffffffff;
+  }
+  return h;
+}
+
+/// Movement pattern (P1-4): compounds group by their primary muscles, with
+/// an incline (or, for legs, one-sided) version as a distinct variant; at most two
+/// compounds per group and never the same variant twice (so one overhead
+/// press, not Arnold + seated + standing). Isolations group by primary
+/// muscles, load kind and variant (a cable and a dumbbell raise may pair;
+/// two dumbbell wrist curls may not).
+String movementVariant(Exercise e) {
+  if (e.id.contains('incline')) return 'incline';
+  // One-sided is a different movement for legs (squat vs lunge), not for a
+  // press, a row or an isolation (same machine, one arm).
+  final legs = e.primary.any(_legMuscles.contains);
+  return e.isCompound && legs && e.unilateral ? 'one-side' : 'base';
+}
+
+bool _samePrimary(Exercise a, Exercise b) =>
+    a.primary.length == b.primary.length && a.primary.every(b.primary.contains);
+
+const Set<String> _coreMuscles = {'abs', 'obliques'};
+
+const Set<String> _legMuscles = {'quads', 'hamstrings', 'glutes', 'calves'};
+
+String movementGroup(Exercise e) {
+  final p = ([...e.primary]..sort()).join('+');
+  return e.isCompound ? 'c:$p' : 'i:$p:${e.load}';
+}
+
+/// Whether [e] adds a new movement next to [chosen].
+bool isFreshPattern(Exercise e, Iterable<Exercise> chosen) {
+  final g = movementGroup(e);
+  final same = chosen.where((x) => movementGroup(x) == g).toList();
+  if (same.isEmpty) return true;
+  if (!e.isCompound) {
+    return same.every((x) => movementVariant(x) != movementVariant(e));
+  }
+  return same.length < 2 &&
+      same.every((x) => movementVariant(x) != movementVariant(e));
+}
+
 /// Export bundle format version.
 const int exportFormat = 1;
 
@@ -157,7 +209,7 @@ class GymEngine implements GymApi {
     final settings = store.settings();
     final budgetS = (minutes ?? settings.defaultMinutes) * 60;
     final picked = [
-      for (final m in muscleIds)
+      for (final m in {...muscleIds})
         if (catalog.muscles.any((x) => x.id == m)) m,
     ];
     final status = muscleStatus(gymId: gymId);
@@ -183,98 +235,237 @@ class GymEngine implements GymApi {
       (m) => picked.contains(m) || !(status[m]?.resting ?? false),
     );
 
+    // Ties break on a hash of (seed, id), never on the alphabet (P1-4).
+    // Order: loaded before bodyweight (P1-4; also over 0.1 history, which
+    // led legs with a bodyweight squat), then lifts he has history on (plan
+    // 5.5), then compounds before isolation (plan 5.3).
     int rank(Exercise a, Exercise b) {
-      if (a.isCompound != b.isCompound) return a.isCompound ? -1 : 1;
+      final la = a.load != bodyweight, lb = b.load != bodyweight;
+      if (la != lb) return la ? -1 : 1;
       final h = (historyCount[b.id] ?? 0).compareTo(historyCount[a.id] ?? 0);
       if (h != 0) return h;
-      return a.id.compareTo(b.id);
+      if (a.isCompound != b.isCompound) return a.isCompound ? -1 : 1;
+      final t = tieHash(seed, a.id).compareTo(tieHash(seed, b.id));
+      return t != 0 ? t : a.id.compareTo(b.id);
     }
 
-    final need = <String, double>{
+    List<Exercise> poolFor(String m) =>
+        available.where((e) => e.primary.contains(m) && allowed(e)).toList()
+          ..sort(rank);
+
+    // Set targets (plan 5.3). Secondary work counts for at most half of a
+    // muscle's target, so every picked muscle gets a direct lift (P1-4:
+    // presses no longer use up the triceps).
+    final target = <String, double>{
       for (var i = 0; i < picked.length; i++) picked[i]: i == 0 ? 9 : 6,
     };
+    final need = {...target};
+    final secondaryGot = <String, double>{};
     final chosen = <Exercise>[];
     final setsOf = <String, int>{};
-    for (final m in picked) {
-      final pool =
-          available.where((e) => e.primary.contains(m) && allowed(e)).toList()
-            ..sort(rank);
-      for (final e in pool) {
-        if ((need[m] ?? 0) <= 0) break;
-        if (chosen.contains(e)) continue;
-        chosen.add(e);
-        setsOf[e.id] = 3;
-        for (final p in e.primary) {
-          if (need.containsKey(p)) need[p] = need[p]! - 3;
-        }
-        for (final s in e.secondary) {
-          if (need.containsKey(s) && !e.primary.contains(s)) {
-            need[s] = need[s]! - 1.5;
-          }
-        }
+
+    void credit(Exercise e, int sets) {
+      for (final p in e.primary) {
+        if (need.containsKey(p)) need[p] = need[p]! - sets;
+      }
+      for (final s in e.secondary) {
+        if (!need.containsKey(s) || e.primary.contains(s)) continue;
+        final room = target[s]! / 2 - (secondaryGot[s] ?? 0);
+        final c = min(sets / 2, max(0.0, room));
+        secondaryGot[s] = (secondaryGot[s] ?? 0) + c;
+        need[s] = need[s]! - c;
       }
     }
 
-    // Rotate one slot per session for variety (plan 5.5).
-    if (chosen.length > 1 && seed != 0) {
-      final slot = seed.abs() % chosen.length;
+    void add(Exercise e) {
+      chosen.add(e);
+      setsOf[e.id] = 3;
+      credit(e, 3);
+    }
+
+    Exercise? rotatedOut; // the seed rotation's lift stays out, fill too
+    bool fresh(Exercise e) => e != rotatedOut && isFreshPattern(e, chosen);
+
+    for (final m in picked) {
+      while ((need[m] ?? 0) > 0) {
+        final cands = [
+          for (final e in poolFor(m))
+            if (!chosen.contains(e)) e,
+        ];
+        final f = cands.where(fresh);
+        if (f.isNotEmpty) {
+          add(f.first);
+          continue;
+        }
+        // No new movement left: a 4th set on a lift he already has; never a
+        // near-duplicate lift (he gets less than the target instead).
+        final bump = chosen
+            .where((e) => e.primary.contains(m) && setsOf[e.id]! < 4)
+            .firstOrNull;
+        if (bump != null) {
+          setsOf[bump.id] = setsOf[bump.id]! + 1;
+          credit(bump, 1);
+          continue;
+        }
+        break;
+      }
+    }
+
+    // Rotate one accessory per session for variety (plan 5.5). Only an
+    // isolation slot rotates, so the main lifts keep their history,
+    // progression and ghost.
+    final iso = [
+      for (var i = 0; i < chosen.length; i++)
+        if (!chosen[i].isCompound) i,
+    ];
+    if (iso.isNotEmpty && seed != 0) {
+      final slot = iso[seed.abs() % iso.length];
       final out = chosen[slot];
+      final rest = [...chosen]..removeAt(slot);
       final lead = out.primary.firstWhere(
         picked.contains,
         orElse: () => out.primary.first,
       );
-      final alt =
-          available
-              .where(
-                (e) =>
-                    !chosen.contains(e) &&
-                    e.primary.contains(lead) &&
-                    allowed(e) &&
-                    e.isCompound == out.isCompound,
-              )
-              .toList()
-            ..sort(rank);
+      final alt = [
+        for (final e in poolFor(lead))
+          if (!chosen.contains(e) && !e.isCompound && isFreshPattern(e, rest))
+            e,
+      ];
       if (alt.isNotEmpty) {
+        rotatedOut = out;
         chosen[slot] = alt.first;
         setsOf[alt.first.id] = setsOf.remove(out.id)!;
       }
     }
 
     // Compounds first, then isolation, keeping pick order inside each.
-    final ordered = [
+    List<Exercise> ordered() => [
       ...chosen.where((e) => e.isCompound),
       ...chosen.where((e) => !e.isCompound),
     ];
 
     int restOf(Exercise e) =>
         e.isCompound ? settings.restCompoundS : settings.restIsolationS;
+    int setCost(Exercise e) => workSecondsPerSet + restOf(e);
     int estimate() {
       var t = 0;
-      for (final e in ordered) {
-        t += setsOf[e.id]! * (workSecondsPerSet + restOf(e));
+      for (final e in chosen) {
+        t += setsOf[e.id]! * setCost(e);
       }
       return t;
     }
 
-    // Fit the time: trim sets (isolation first, never below 2), then drop
-    // exercises from the end.
-    while (ordered.isNotEmpty && estimate() > budgetS) {
-      Exercise? trim;
-      for (final e in ordered.reversed) {
-        if (setsOf[e.id]! > 2) {
-          trim = e;
-          break;
+    // Fit the time, cheapest loss first: 4th sets; then a second lift for
+    // a muscle other than the lead; then sets down to 2 (isolation first);
+    // then any second lift; then from the end. Every picked muscle keeps a
+    // direct lift as long as possible.
+    bool covered(Exercise e) => e.primary
+        .where(picked.contains)
+        .every((p) => chosen.any((x) => x != e && x.primary.contains(p)));
+    final lead = picked.isEmpty ? null : picked.first;
+    bool trimTo(int floor) {
+      for (final e in ordered().reversed) {
+        if (setsOf[e.id]! > floor) {
+          setsOf[e.id] = setsOf[e.id]! - 1;
+          return true;
         }
       }
-      if (trim != null) {
-        setsOf[trim.id] = setsOf[trim.id]! - 1;
-      } else {
-        setsOf.remove(ordered.removeLast().id);
+      return false;
+    }
+
+    bool drop(bool Function(Exercise) which) {
+      for (final e in ordered().reversed) {
+        if (which(e)) {
+          chosen.remove(e);
+          setsOf.remove(e.id);
+          return true;
+        }
       }
+      return false;
+    }
+
+    while (chosen.isNotEmpty && estimate() > budgetS) {
+      if (trimTo(3)) continue;
+      if (drop((e) => covered(e) && !e.primary.contains(lead))) continue;
+      if (trimTo(2)) continue;
+      if (drop(covered)) continue;
+      drop((_) => true);
+    }
+
+    // Fill the time (P1-4: 60 minutes is more than 45). The muscle furthest
+    // below its target gets the next new movement that fits; when none
+    // fits, a 4th set on a main lift; then 4th sets on the rest; core
+    // muscles may then take a third move.
+    double share(String m) {
+      var v = 0.0;
+      for (final e in chosen) {
+        if (e.primary.contains(m)) {
+          v += setsOf[e.id]!;
+        } else if (e.secondary.contains(m)) {
+          v += setsOf[e.id]! / 2;
+        }
+      }
+      return v / target[m]!;
+    }
+
+    while (chosen.length < maxSuggestedLifts) {
+      final room = budgetS - estimate();
+      final byNeed = [
+        for (final m in picked)
+          if (!uncovered.contains(m)) m,
+      ];
+      final shares = {for (final m in byNeed) m: share(m)};
+      byNeed.sort((a, b) => shares[a]!.compareTo(shares[b]!));
+      Exercise? next;
+      for (final m in byNeed) {
+        for (final e in poolFor(m)) {
+          if (!chosen.contains(e) && fresh(e) && 3 * setCost(e) <= room) {
+            next = e;
+            break;
+          }
+        }
+        if (next != null) break;
+      }
+      if (next != null) {
+        add(next);
+        continue;
+      }
+      final more = ordered()
+          .where((e) => e.isCompound && setsOf[e.id]! < 4 && setCost(e) <= room)
+          .firstOrNull;
+      if (more != null) {
+        setsOf[more.id] = setsOf[more.id]! + 1;
+        continue;
+      }
+      // Then 4th sets on the rest.
+      final iso4 = ordered()
+          .where((e) => setsOf[e.id]! < 4 && setCost(e) <= room)
+          .firstOrNull;
+      if (iso4 != null) {
+        setsOf[iso4.id] = setsOf[iso4.id]! + 1;
+        continue;
+      }
+      // Core moves are short variants of each other: up to three per muscle
+      // (cable crunch, dead bug, reverse crunch) so a long core day fills.
+      Exercise? core;
+      for (final m in byNeed.where(_coreMuscles.contains)) {
+        for (final e in poolFor(m)) {
+          if (!chosen.contains(e) &&
+              e != rotatedOut &&
+              3 * setCost(e) <= room &&
+              chosen.where((x) => _samePrimary(x, e)).length < 3) {
+            core = e;
+            break;
+          }
+        }
+        if (core != null) break;
+      }
+      if (core == null) break;
+      add(core);
     }
 
     final items = [
-      for (final e in ordered)
+      for (final e in ordered())
         _plannedItem(
           e,
           gymId: gymId,
