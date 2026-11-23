@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:supreme_ui/supreme_ui.dart';
 
@@ -201,7 +203,23 @@ class PickerScreen extends StatelessWidget {
                 ],
               ),
             ),
-            big ? _peek(context) : _sheet(),
+            if (big)
+              _peek(context)
+            else
+              // Small phones (320x616 with a status bar): the sheet never
+              // takes more than ~3/4 of the screen and scrolls past that, and
+              // the plan list's own cap scales with the screen (ui-e2e, #42).
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+                ),
+                child: _sheet(
+                  listCap: math.min(
+                    300,
+                    MediaQuery.sizeOf(context).height * 0.3,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -315,7 +333,11 @@ class PickerScreen extends StatelessWidget {
     );
   }
 
-  Widget _sheet({bool readOnly = false, VoidCallback? onStartHere}) {
+  Widget _sheet({
+    bool readOnly = false,
+    VoidCallback? onStartHere,
+    double listCap = 300,
+  }) {
     final p = plan;
     if (p == null || p.items.isEmpty) {
       final rested = _mostRested();
@@ -357,41 +379,57 @@ class PickerScreen extends StatelessWidget {
       if (_allResting) 'Or tap any resting row to train it anyway.',
       if (readOnly) 'Reorder once you start.',
     ];
+    final middle = <Widget>[
+      ?sheetExtra,
+      _sheetHead('${p.items.length} LIFTS · ${p.minutes} MIN'),
+      // Not in the read-only peek: it shows a plan captured when it
+      // opened, so a new budget there would start the old plan.
+      if (!readOnly && onMinutes != null && minutes != null) ...[
+        const SizedBox(height: 8),
+        _MinutesChips(value: minutes!, onChanged: onMinutes!),
+      ],
+      const SizedBox(height: 4),
+      PlanList(
+        items: p.items,
+        onReorder: readOnly ? null : onReorder,
+        dark: true,
+        // Many or long lifts scroll inside the sheet instead of overflowing.
+        maxHeight: readOnly ? null : listCap,
+      ),
+      for (final n in note)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(n, style: LitType.body(13, const Color(0xFFA5A9B1))),
+        ),
+    ];
+    final start = BigButton(
+      label: p.type == null ? 'START' : 'START ${p.type!.label.toUpperCase()}',
+      colour: _pickColour,
+      ink: _onPick,
+      onTap: readOnly ? onStartHere : onStart,
+    );
     return DarkSheet(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          ?sheetExtra,
-          _sheetHead('${p.items.length} LIFTS · ${p.minutes} MIN'),
-          // Not in the read-only peek: it shows a plan captured when it
-          // opened, so a new budget there would start the old plan.
-          if (!readOnly && onMinutes != null && minutes != null) ...[
-            const SizedBox(height: 8),
-            _MinutesChips(value: minutes!, onChanged: onMinutes!),
-          ],
-          const SizedBox(height: 4),
-          PlanList(
-            items: p.items,
-            onReorder: readOnly ? null : onReorder,
-            dark: true,
-            // Many or long lifts scroll inside the sheet instead of overflowing.
-            maxHeight: readOnly ? null : 300,
-          ),
-          for (final n in note)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(n, style: LitType.body(13, const Color(0xFFA5A9B1))),
+          // On the page, the middle scrolls when the sheet hits its cap and
+          // START stays pinned and visible. The peek modal scrolls as a whole
+          // (unbounded height there, so no Flexible).
+          if (readOnly)
+            ...middle
+          else
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: middle,
+                ),
+              ),
             ),
           const SizedBox(height: 12),
-          BigButton(
-            label: p.type == null
-                ? 'START'
-                : 'START ${p.type!.label.toUpperCase()}',
-            colour: _pickColour,
-            ink: _onPick,
-            onTap: readOnly ? onStartHere : onStart,
-          ),
+          start,
         ],
       ),
     );
