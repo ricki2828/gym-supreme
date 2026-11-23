@@ -349,4 +349,33 @@ void main() {
       reason: 'the sheet shows the 30-minute plan',
     );
   });
+
+  testWidgets('the picker passes a fixed seed: same list across taps', (
+    tester,
+  ) async {
+    engine.saveGym(engine.gymFromPreset('condo'));
+    await pumpRoot(tester);
+    await tapText(tester, 'LIGHT SOMETHING UP');
+    final chest = find.bySemanticsLabel(RegExp(r'^Chest, '));
+    await tester.tap(chest);
+    await tester.pumpAndSettle();
+    String sheet() => find
+        .byType(Text)
+        .evaluate()
+        .map((e) => (e.widget as Text).data ?? '')
+        .join('|');
+    final first = sheet();
+    await tester.tap(chest); // off
+    await tester.pumpAndSettle();
+    await tester.tap(chest); // on again
+    await tester.pumpAndSettle();
+    expect(sheet(), first);
+    final expected = engine.suggest(
+      gymId: engine.gyms().single.id,
+      muscleIds: const ['chest'],
+      minutes: 45,
+      seed: engine.counters().sessionsTotal + 1,
+    );
+    expect(find.text(expected.items.first.name), findsOneWidget);
+  });
 }

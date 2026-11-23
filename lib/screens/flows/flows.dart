@@ -543,6 +543,11 @@ class _PickerFlowState extends State<PickerFlow> {
   /// Time budget; starts at his default (settings), 45 unless changed.
   late int _minutes = _engine.settings().defaultMinutes;
 
+  /// Variety seed (t61, item 4): the stored workout count + 1, fixed while
+  /// this picker is open so the list never reshuffles on a tap. It only
+  /// breaks ties between lifts with no history and rotates one slot.
+  late final int _seed = _engine.counters().sessionsTotal + 1;
+
   eng.GymApi get _engine => widget.deps.engine;
 
   /// Session type of the pick, by picker rows: the engine's majority rule
@@ -558,6 +563,7 @@ class _PickerFlowState extends State<PickerFlow> {
       muscleIds: _picked,
       typeId: _typeId(),
       minutes: _minutes,
+      seed: _seed,
     );
     final order = _order;
     if (order == null) return p;

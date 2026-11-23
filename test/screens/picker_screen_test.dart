@@ -374,7 +374,7 @@ void main() {
     );
     expect(
       tester.getSemantics(find.bySemanticsLabel('45 minutes')),
-      containsSemantics(isSelected: true),
+      isSemantics(isSelected: true),
     );
     await tester.tap(find.byKey(const Key('picker.minutes.60')));
     await tester.tap(find.byKey(const Key('picker.minutes.30')));
