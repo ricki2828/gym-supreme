@@ -388,8 +388,11 @@ class _Today extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      'Notifications are off, so the rest timer cannot show '
-                      'on the lock screen. The buzz still works.',
+                      // t5v: the alert uses Vibrator + ToneGenerator directly,
+                      // not the channel; untested with notifications denied.
+                      'Notifications are off, so the rest timer won\'t show '
+                      'on the lock screen. You should still get the buzz '
+                      'and tone.',
                       style: LitType.body(14, Colors.white, FontWeight.w600),
                     ),
                   ),

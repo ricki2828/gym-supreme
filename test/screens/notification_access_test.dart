@@ -17,10 +17,15 @@ class FakeAccess implements NotificationAccess {
   bool asked;
   bool grant;
   Object? failRequest;
+  Object? failEnabled;
   final calls = <String>[];
 
   @override
-  Future<bool> enabled() async => on;
+  Future<bool> enabled() async {
+    if (failEnabled != null) throw failEnabled!;
+    return on;
+  }
+
   @override
   Future<bool> request() async {
     calls.add('request');
@@ -132,11 +137,13 @@ void main() {
       await startChest(tester);
       expect(access.calls, ['mark', 'request']);
       expect(find.byType(LiveScreen), findsOneWidget, reason: 'never blocks');
-      await tapText(tester, 'Pause');
-      // Second start (after resume/finish path): no second ask.
-      await tapText(tester, 'Resume');
-      await tapText(tester, 'Pause');
+      // Finish, then a second Start: no second ask.
+      await tapText(tester, 'Finish');
+      await tapText(tester, 'DONE'); // post-workout
+      await startChest(tester);
+      expect(find.byType(LiveScreen), findsOneWidget);
       expect(access.calls, ['mark', 'request']);
+      await tapText(tester, 'Pause');
       expect(find.byKey(const Key('today.notifications_off')), findsOneWidget);
     });
 
@@ -165,6 +172,27 @@ void main() {
         nowMs: () => now,
         tzOffsetMin: () => 480,
       );
+      await pumpRoot(tester);
+      expect(find.byKey(const Key('today.notifications_off')), findsNothing);
+      await startChest(tester);
+      expect(find.byType(LiveScreen), findsOneWidget);
+      await tapText(tester, 'Pause');
+    });
+
+    testWidgets('back from settings with them on: banner goes', (tester) async {
+      await pumpRoot(tester);
+      expect(find.byKey(const Key('today.notifications_off')), findsOneWidget);
+      access.on = true;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('today.notifications_off')), findsNothing);
+    });
+
+    testWidgets('enabled() throwing: no banner, start still works', (
+      tester,
+    ) async {
+      access.failEnabled = StateError('host');
       await pumpRoot(tester);
       expect(find.byKey(const Key('today.notifications_off')), findsNothing);
       await startChest(tester);
