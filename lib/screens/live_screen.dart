@@ -34,6 +34,7 @@ class LiveView {
     this.paused = false,
     this.allDone = false,
     this.timerBlock = false,
+    this.setId,
     this.blockTitle,
   });
 
@@ -77,6 +78,10 @@ class LiveView {
   /// controls come from the caller's setExtra (the timer panel), so the
   /// reps/load steppers, last-time line, DONE and the rest panel are hidden.
   final bool timerBlock;
+
+  /// The current set's id, so a typed value lands on the set the number pad
+  /// was opened on, never the next one.
+  final String? setId;
 
   /// The block's own name ("EMOM 20 × 1:00"); null when not a block or
   /// unreadable. Shown wherever a set would show "reps × load".
@@ -123,11 +128,12 @@ class LiveScreen extends StatelessWidget {
   /// +1 / -1 step along the gym's weight list.
   final ValueChanged<int>? onLoad;
 
-  /// A typed rep count (seconds on a timed set).
-  final ValueChanged<int>? onTypeReps;
+  /// A typed rep count (seconds on a timed set), with the set id it was
+  /// typed for.
+  final void Function(int value, String? setId)? onTypeReps;
 
   /// A typed load in grams (any value, on the gym's list or not).
-  final ValueChanged<int>? onTypeLoad;
+  final void Function(int grams, String? setId)? onTypeLoad;
   final VoidCallback? onDone;
   final VoidCallback? onSkipSet;
 
@@ -195,6 +201,7 @@ class LiveScreen extends StatelessWidget {
                           ? null
                           : () async {
                               final timed = view.unit == LoadUnit.timed;
+                              final forSet = view.setId;
                               final v = await askNumber(
                                 context,
                                 title: timed ? 'Seconds' : 'Reps',
@@ -202,7 +209,9 @@ class LiveScreen extends StatelessWidget {
                                 initial: view.reps,
                                 max: timed ? 3600 : 200,
                               );
-                              if (v != null && v >= 1) onTypeReps!(v.round());
+                              if (v != null && v >= 1) {
+                                onTypeReps!(v.round(), forSet);
+                              }
                             },
                     ),
                     if (view.unit == LoadUnit.kg ||
@@ -224,6 +233,7 @@ class LiveScreen extends StatelessWidget {
                         onEdit: onTypeLoad == null
                             ? null
                             : () async {
+                                final forSet = view.setId;
                                 final v = await askNumber(
                                   context,
                                   title: view.unit == LoadUnit.kgEach
@@ -235,7 +245,9 @@ class LiveScreen extends StatelessWidget {
                                       : view.loadG! / 1000,
                                   decimals: true,
                                 );
-                                if (v != null) onTypeLoad!((v * 1000).round());
+                                if (v != null) {
+                                  onTypeLoad!((v * 1000).round(), forSet);
+                                }
                               },
                       ),
                     ],
@@ -378,8 +390,10 @@ class _Stepper extends StatelessWidget {
       Expanded(
         child: Semantics(
           button: onEdit != null,
-          label: '$value $label${onEdit == null ? '' : '. Tap to type'}',
+          label: '$value $label',
+          onTapHint: onEdit == null ? null : 'type a value',
           excludeSemantics: true,
+          onTap: onEdit,
           child: InkWell(
             onTap: onEdit,
             borderRadius: BorderRadius.circular(16),
@@ -403,8 +417,9 @@ class _Stepper extends StatelessWidget {
   );
 }
 
-/// A 60 dp round +/- button. Hold it to repeat (P1-1): one step at once,
-/// then about 8 a second until released or the end of the range.
+/// A 60 dp round +/- button. Hold it to repeat (P1-1): after the long-press
+/// delay, one step and then about 8 a second until released or the end of
+/// the range.
 class _Round extends StatefulWidget {
   const _Round({
     required this.icon,
@@ -425,6 +440,7 @@ class _RoundState extends State<_Round> {
   Timer? _repeat;
 
   void _start() {
+    _stop(); // a second finger must not leave the first timer running
     final tap = widget.onTap;
     if (tap == null) return;
     tap();
@@ -455,6 +471,7 @@ class _RoundState extends State<_Round> {
     enabled: widget.onTap != null,
     label: widget.tip,
     excludeSemantics: true,
+    onTap: widget.onTap,
     child: GestureDetector(
       onLongPressStart: (_) => _start(),
       onLongPressEnd: (_) => _stop(),
@@ -492,7 +509,7 @@ Future<num?> askNumber(
   );
   num? parse() {
     final v = num.tryParse(text.text.trim().replaceAll(',', '.'));
-    if (v == null || v < 0 || v > max) return null;
+    if (v == null || !v.isFinite || v < 0 || v > max) return null;
     return decimals ? v : v.round();
   }
 
@@ -587,6 +604,7 @@ class _Pill extends StatelessWidget {
         ? '15 seconds more rest'
         : '15 seconds less rest',
     excludeSemantics: true,
+    onTap: onTap,
     child: InkWell(
       onTap: onTap,
       customBorder: const StadiumBorder(),

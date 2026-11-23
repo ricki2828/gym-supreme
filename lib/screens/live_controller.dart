@@ -83,35 +83,79 @@ class LiveController extends ChangeNotifier {
 
   // ---- intents from LiveScreen --------------------------------------------
 
-  Future<void> reps(int delta) => _onCurrent((s, set) {
-    final r = (set.targetReps ?? 0) + delta;
-    if (r < 1) return s;
-    return eng.Session.retarget(s, set.setId, reps: r);
-  });
+  // Held +/- (8 a second) add up here while one submit is in flight, so a
+  // long hold writes a few journal lines, not one per tick, and the steps
+  // never run on after he lets go (review of #36, P2).
+  int _pendingReps = 0;
+  int _pendingLoad = 0;
+  bool _stepQueued = false;
+
+  Future<void> reps(int delta) {
+    _pendingReps += delta;
+    return _flushSteps();
+  }
 
   /// Steps along the gym's real weight list (plan 5.6). A lift with no weight
-  /// yet (first time here) starts mid-list, not at the lightest pair: about
-  /// 12 kg on the dumbbell list instead of a dozen taps up from 2 kg (P1-1).
-  Future<void> load(int delta) => _onCurrent((s, set) {
+  /// yet (first time here) starts partway up the list, not at the lightest:
+  /// mid-list for dumbbells (about 12 kg, not a dozen taps from 2 kg; P1-1),
+  /// a third of the way for machine stacks (about 35 kg, not 50).
+  Future<void> load(int delta) {
+    _pendingLoad += delta;
+    return _flushSteps();
+  }
+
+  Future<void> _flushSteps() {
+    if (_stepQueued) return _queue;
+    _stepQueued = true;
+    return _onCurrent((s, set) {
+      _stepQueued = false;
+      final dr = _pendingReps;
+      final dl = _pendingLoad;
+      _pendingReps = 0;
+      _pendingLoad = 0;
+      var next = s;
+      if (dr != 0) {
+        final r = (set.targetReps ?? 0) + dr;
+        if (r >= 1) next = eng.Session.retarget(next, set.setId, reps: r);
+      }
+      if (dl != 0) {
+        final g = _stepLoad(s, set, dl);
+        if (g != null && g != set.targetLoadG) {
+          next = eng.Session.retarget(next, set.setId, loadG: g);
+        }
+      }
+      return next;
+    });
+  }
+
+  int? _stepLoad(eng.SessionSnapshot s, eng.SnapshotSet set, int delta) {
     final steps = _stepsFor(s);
-    if (steps == null || steps.loadsG.isEmpty) return s;
-    final int? next;
-    if (set.targetLoadG == null) {
-      next = steps.loadsG[(steps.loadsG.length - 1) ~/ 2];
-    } else {
-      next = delta > 0
-          ? steps.next(set.targetLoadG)
-          : steps.prev(set.targetLoadG);
+    if (steps == null || steps.loadsG.isEmpty) return null;
+    var g = set.targetLoadG;
+    var left = delta.abs();
+    if (g == null) {
+      final c = s.current;
+      final kind = c == null ? '' : s.exercises[c.exercise].loadKind;
+      final n = steps.loadsG.length;
+      g = steps.loadsG[kind == 'stack' ? (n - 1) ~/ 3 : (n - 1) ~/ 2];
+      left--;
     }
-    if (next == null) return s;
-    return eng.Session.retarget(s, set.setId, loadG: next);
-  });
+    for (; left > 0; left--) {
+      final n = delta > 0 ? steps.next(g) : steps.prev(g);
+      if (n == null) break;
+      g = n;
+    }
+    return g;
+  }
 
   /// Set ids whose value he typed; their Done is logged as `typed` (B4).
+  /// Kept in this controller only: after a restart and Resume a typed set
+  /// logs as `adjusted` (a known undercount until the snapshot carries it).
   final Set<String> _typed = {};
 
-  /// A typed rep count (or seconds on a timed set). Any value from 1 up.
-  Future<void> setReps(int reps) => _onCurrent((s, set) {
+  /// A typed rep count (or seconds on a timed set), for the set the number
+  /// pad was opened on ([setId]); dropped if that set is no longer pending.
+  Future<void> setReps(int reps, {String? setId}) => _onSet(setId, (s, set) {
     if (reps < 1 || reps == set.targetReps) return s;
     _typed.add(set.setId);
     return eng.Session.retarget(s, set.setId, reps: reps);
@@ -119,10 +163,30 @@ class LiveController extends ChangeNotifier {
 
   /// A typed load in grams. Any value, on the gym's list or not: he logs
   /// what he lifted (P1-2); the list only drives +/- and progression.
-  Future<void> setLoad(int grams) => _onCurrent((s, set) {
+  Future<void> setLoad(int grams, {String? setId}) => _onSet(setId, (s, set) {
     if (grams < 0 || grams == set.targetLoadG) return s;
     _typed.add(set.setId);
     return eng.Session.retarget(s, set.setId, loadG: grams);
+  });
+
+  /// Runs [f] on the set [setId] if it is still pending, else on the current
+  /// set when no id is given.
+  Future<void> _onSet(
+    String? setId,
+    eng.SessionSnapshot Function(eng.SessionSnapshot, eng.SnapshotSet) f,
+  ) => _transition((s) {
+    if (setId == null) {
+      final cur = s.currentSet;
+      return cur == null ? s : f(s, cur);
+    }
+    for (final e in s.exercises) {
+      for (final x in e.sets) {
+        if (x.setId == setId) {
+          return x.state == eng.SetState.pending ? f(s, x) : s;
+        }
+      }
+    }
+    return s;
   });
 
   /// `typed` when he typed this set's value, except a first-time set, which

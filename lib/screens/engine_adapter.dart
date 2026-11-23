@@ -168,6 +168,7 @@ LiveView? liveViewOf(
     paused: s.state == eng.SessionState.paused,
     // Only a cut-2 timer block carries a block; a plank (timed) does not.
     timerBlock: set.block != null,
+    setId: set.setId,
     blockTitle: c2.TimerSession.blockOf(s, set.setId)?.title,
   );
 }

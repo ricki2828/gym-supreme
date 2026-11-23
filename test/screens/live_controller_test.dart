@@ -364,4 +364,64 @@ void main() {
     expect(logged.completion, eng.Completion.typed);
     c2.dispose();
   });
+
+  test('held +/- coalesce: many steps, few submits, exact total', () async {
+    await startPush();
+    await c.load(1); // starts mid-list
+    final start = port.rev;
+    final r0 = c.view()!.reps;
+    final all = [for (var i = 0; i < 6; i++) c.reps(1)];
+    await Future.wait(all);
+    expect(c.view()!.reps, r0 + 6, reason: 'every tick counted once');
+    expect(
+      port.rev - start,
+      lessThan(6),
+      reason: 'coalesced into fewer submits',
+    );
+  });
+
+  test('typing the value already there sends nothing', () async {
+    await startPush();
+    await c.load(1);
+    final rev = port.rev;
+    await c.setLoad(c.view()!.loadG!);
+    await c.setReps(c.view()!.reps);
+    expect(port.rev, rev);
+  });
+
+  test(
+    'a typed value lands on the set it was typed for, not the next',
+    () async {
+      await startPush();
+      await c.load(1);
+      final first = c.snapshot!.currentSet!.setId;
+      await c.done(); // the number pad was open on set 1; set 1 got logged
+      await c.skipRest();
+      final rev = port.rev;
+      await c.setReps(3, setId: first); // set 1 is no longer pending
+      expect(port.rev, rev, reason: 'dropped, not moved to set 2');
+      final second = c.snapshot!.currentSet!.setId;
+      await c.setReps(3, setId: second);
+      expect(c.view()!.reps, 3);
+    },
+  );
+
+  test('a machine stack starts a third of the way up, not mid-list', () async {
+    final plan = engine.suggest(gymId: gymId, muscleIds: const ['triceps']);
+    final stackItem = plan.items.indexWhere((i) => i.unit == eng.LoadUnit.kg);
+    if (stackItem < 0) return; // no cable lift suggested for this kit today
+    await c.start(plan);
+    for (var i = 0; i < stackItem; i++) {
+      final ex = c.snapshot!.exercises[i];
+      for (final _ in ex.sets) {
+        await c.skipSet();
+      }
+    }
+    final steps = engine.loadSteps(
+      gymId: gymId,
+      exerciseId: c.snapshot!.exercises[stackItem].exerciseId,
+    );
+    await c.load(1);
+    expect(c.view()!.loadG, steps.loadsG[(steps.loadsG.length - 1) ~/ 3]);
+  });
 }

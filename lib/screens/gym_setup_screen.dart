@@ -237,6 +237,7 @@ class _GymCards extends StatelessWidget {
           button: true,
           label: 'Add a gym',
           excludeSemantics: true,
+          onTap: onAdd,
           child: InkWell(
             onTap: onAdd,
             borderRadius: BorderRadius.circular(24),
@@ -261,6 +262,7 @@ class _GymCards extends StatelessWidget {
       selected: on,
       label: '${g.name}, $n bits of kit',
       excludeSemantics: true,
+      onTap: onPick == null ? null : () => onPick!(g.id),
       child: Material(
         color: on ? Lit.ink : Colors.white,
         shape: RoundedRectangleBorder(
@@ -359,6 +361,7 @@ class _KitPill extends StatelessWidget {
       selected: outline ? null : on,
       label: outline ? 'Preset: $label' : '$label, ${on ? 'have' : 'not here'}',
       excludeSemantics: true,
+      onTap: onTap,
       child: Material(
         color: on ? Lit.ink : Colors.transparent,
         shape: StadiumBorder(side: BorderSide(color: border, width: 2)),
@@ -450,6 +453,7 @@ class _Step extends StatelessWidget {
     button: true,
     label: label,
     excludeSemantics: true,
+    onTap: onTap,
     child: Material(
       color: Lit.ink,
       shape: const CircleBorder(),

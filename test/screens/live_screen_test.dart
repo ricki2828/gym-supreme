@@ -306,8 +306,8 @@ void main() {
         LiveScreen(
           view: liveView(),
           onReps: reps.add,
-          onTypeReps: typedReps.add,
-          onTypeLoad: typedLoad.add,
+          onTypeReps: (v, _) => typedReps.add(v),
+          onTypeLoad: (g, _) => typedLoad.add(g),
         ),
       ),
     );
