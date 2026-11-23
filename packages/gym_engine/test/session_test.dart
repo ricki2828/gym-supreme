@@ -411,6 +411,24 @@ void main() {
     },
   );
 
+  test('replaceSet: maps one set, bumps rev, keeps id, block via copyWith', () {
+    final a = start();
+    final b = Session.replaceSet(
+      a,
+      'u:2',
+      (x) => x.copyWith(block: const {'type': 'emom', 'work_ms': 60000}),
+    );
+    expect(b.rev, a.rev + 1);
+    expect(b.exercises[1].sets[0].block, {'type': 'emom', 'work_ms': 60000});
+    expect(b.exercises[1].sets[0].targetReps, 12);
+    expect(identical(Session.replaceSet(a, 'nope', (x) => x), a), isTrue);
+    expect(identical(Session.replaceSet(a, 'u:0', (x) => x), a), isTrue);
+    expect(SessionSnapshot.decode(b.encode()).exercises[1].sets[0].block, {
+      'type': 'emom',
+      'work_ms': 60000,
+    });
+  });
+
   test('uuidV4 shape', () {
     expect(
       uuidV4(),

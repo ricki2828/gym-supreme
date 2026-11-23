@@ -188,6 +188,27 @@ class Session {
     );
   }
 
+  /// Generic hook for features layered on the session (cut-2 timers): maps
+  /// one set through [f] and bumps rev. No-op if finished, the set is
+  /// missing, or [f] returns the same object. [f] must keep `set_id`; the
+  /// result must still satisfy the contract (strict decode).
+  static SessionSnapshot replaceSet(
+    SessionSnapshot s,
+    String setId,
+    SnapshotSet Function(SnapshotSet) f,
+  ) {
+    if (s.finished) return s;
+    final at = _find(s, setId);
+    if (at == null) return s;
+    final old = s.exercises[at.e].sets[at.s];
+    final next = f(old);
+    if (identical(next, old)) return s;
+    if (next.setId != setId) {
+      throw ArgumentError('replaceSet must keep set_id $setId');
+    }
+    return _replaceSet(s, at.e, at.s, next).copyWith(rev: s.rev + 1);
+  }
+
   /// Marks a pending set skipped. Kept for history; no volume.
   static SessionSnapshot skip(
     SessionSnapshot s,
