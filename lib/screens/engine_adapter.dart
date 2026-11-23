@@ -88,8 +88,10 @@ LiveView? liveViewOf(
   final pausedNow = s.state == eng.SessionState.paused && s.pausedAtMs != null
       ? nowMs - s.pausedAtMs!
       : 0;
+  // A finished session's clock stops at its end.
+  final endMs = s.finished ? (s.endedAtMs ?? nowMs) : nowMs;
   final elapsedS =
-      ((nowMs - s.startedAtMs - s.pausedTotalMs - pausedNow) / 1000).floor();
+      ((endMs - s.startedAtMs - s.pausedTotalMs - pausedNow) / 1000).floor();
   final c = s.current;
   // Finished (even with sets left unlogged) or nothing left: only Finish.
   if (c == null || s.finished) {

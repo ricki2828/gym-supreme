@@ -84,8 +84,16 @@ class _GymRootState extends State<GymRoot> {
       switch (r.action) {
         case eng.RecoveryAction.deleteJournal:
         case eng.RecoveryAction.savedThenDelete:
+          // The workout is stored either way; a failed delete only leaves a
+          // journal that the next open deletes. Not a restore failure.
           final uuid = r.snapshot?.workoutUuid;
-          if (uuid != null) await port.deleteJournal(uuid);
+          if (uuid != null) {
+            try {
+              await port.deleteJournal(uuid);
+            } on Object {
+              // Retried on the next open.
+            }
+          }
         case eng.RecoveryAction.offerResume:
           pending = r.snapshot;
         case eng.RecoveryAction.none:
@@ -520,7 +528,15 @@ class _LiveFlowState extends State<LiveFlow> {
   }
 
   void _changed() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    // Completed elsewhere (cut 2: lock-screen Finish, picked up on resync):
+    // leave with the uuid so post-workout shows.
+    final done = c.finishedUuid;
+    if (done != null && !_leaving) {
+      _leaving = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _leave(done));
+    }
+    setState(() {});
   }
 
   /// One exit only: a second Back/Pause/Finish during the first one's await
@@ -655,6 +671,10 @@ class _GymFlowState extends State<GymFlow> {
   /// Max candidates when the gym has not told us its pairs: a 2.5 kg grid.
   static final List<int> _grid = [for (var g = 2500; g <= 50000; g += 2500) g];
 
+  /// His pairs as the screen opened, so stepping down then up gives them
+  /// back instead of grid values.
+  late final List<int> _own = [...?widget.gym?.kit['dumbbells']?.weightsG];
+
   @override
   void initState() {
     super.initState();
@@ -674,16 +694,21 @@ class _GymFlowState extends State<GymFlow> {
   /// top adds just that pair.
   void _stepDumbbells(int dir) => setState(() {
     final cur = _dbMax;
-    final candidates = ({..._grid, ..._dbWeights}.toList()..sort());
+    final own = {..._own, ..._dbWeights};
+    // Within his range, his own pairs; above his own top, a 2.5 kg grid.
+    final top = own.reduce((a, b) => a > b ? a : b);
+    final candidates = ({...own, ..._grid.where((g) => g > top)}.toList()
+      ..sort());
     final next = dir > 0
         ? candidates.where((g) => g > cur).firstOrNull
         : candidates.where((g) => g < cur).lastOrNull;
     if (next == null) return;
     final keep = [
-      for (final w in _dbWeights)
+      for (final w in own)
         if (w <= next) w,
-    ];
-    _gym = _gym.withWeights('dumbbells', [...keep, if (dir > 0) next]);
+      if (!own.contains(next)) next,
+    ]..sort();
+    _gym = _gym.withWeights('dumbbells', keep);
   });
 
   @override

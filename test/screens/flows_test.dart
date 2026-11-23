@@ -210,4 +210,30 @@ void main() {
       25000,
     ]);
   });
+
+  testWidgets('gym setup: down then up gives his own top pair back', (
+    tester,
+  ) async {
+    final own = [for (var kg = 2; kg <= 24; kg += 2) kg * 1000];
+    final g = engine.gymFromPreset('condo').withWeights('dumbbells', own);
+    engine.saveGym(g);
+    await pumpRoot(tester);
+    await tester.tap(find.text('Gyms'));
+    await tester.pumpAndSettle();
+    await tester.runAsync(
+      () => Scrollable.ensureVisible(
+        tester.element(find.text('Heaviest dumbbell pair')),
+        alignment: 0.5,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.remove).last);
+    await tester.pumpAndSettle();
+    expect(find.text('Dumbbells to 22 kg'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.add).last);
+    await tester.pumpAndSettle();
+    expect(find.text('Dumbbells to 24 kg'), findsOneWidget);
+    await tapText(tester, 'SAVE · 5 ON THE FLOOR');
+    expect(engine.gym(g.id)!.kit['dumbbells']!.weightsG, own);
+  });
 }

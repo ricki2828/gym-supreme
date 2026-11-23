@@ -118,7 +118,13 @@ class LiveController extends ChangeNotifier {
     var ok = false;
     await _enqueue(() async {
       final s = _s;
-      if (s == null || s.finished) return;
+      if (s == null) return;
+      if (s.finished) {
+        // The journal already holds the finished snapshot: leaving is safe,
+        // and the next open (or Resume) retries the save.
+        ok = true;
+        return;
+      }
       final next = eng.Session.pause(s, nowMs: nowMs());
       if (!identical(next, s) && !await _submit(next)) return;
       ok = true;
@@ -254,14 +260,13 @@ class LiveController extends ChangeNotifier {
         notifyListeners();
         return;
       }
-      if (head.finished) {
-        await _complete(head);
-      } else {
-        _set(head);
-      }
+      // Show the head first: if completing it fails, the view is "all
+      // done" (Finish retries) rather than the stale active base.
+      _set(head);
+      if (head.finished) await _complete(head);
     } on Object catch (e) {
       lastError = e;
-      _set(base);
+      notifyListeners();
     }
   }
 

@@ -273,8 +273,38 @@ void main() {
       eng.Session.skipRest(head, nowMs: now).encode(),
       head.rev,
     );
+    final before = c.snapshot!;
     port.failNext['readPendingJournal'] = WorkoutPortException('io');
     await c.restDelta(15);
-    expect(c.view(), isNotNull);
+    expect(c.lastError, isA<WorkoutPortException>());
+    expect(c.snapshot, same(before), reason: 'tap dropped, view unchanged');
+    expect(c.view()!.set, 2);
+  });
+
+  test(
+    'finish keeps failing: the user can still leave (pause is safe)',
+    () async {
+      await startPush();
+      await logOne();
+      port.failNext['deleteJournal'] = WorkoutPortException('io');
+      expect(await c.finish(), isNull);
+      expect(await c.pause(), isTrue, reason: 'journal already finished');
+    },
+  );
+
+  test('resync onto a finished head whose save fails shows all done', () async {
+    await startPush();
+    await logOne();
+    final head = eng.SessionSnapshot.decode((await port.readPendingJournal())!);
+    final fin = eng.Session.finish(head, nowMs: now += 1000);
+    await port.submitSnapshot(fin.encode(), head.rev);
+    port.failNext['deleteJournal'] = WorkoutPortException('io');
+    await c.skipRest();
+    expect(c.finishedUuid, isNull);
+    expect(c.view()!.allDone, isTrue, reason: 'not the stale active base');
+    final at = c.view()!.elapsedS;
+    now += 60000;
+    expect(c.view()!.elapsedS, at, reason: 'finished clock stops');
+    expect(await c.finish(), fin.workoutUuid);
   });
 }
