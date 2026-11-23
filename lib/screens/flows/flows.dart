@@ -112,7 +112,8 @@ class _GymRootState extends State<GymRoot> {
             try {
               c2.rotationAfterFinish(st, snap.typeId, workoutUuid: uuid);
             } on Object {
-              // Cosmetic pointer; next finish moves it.
+              // Cosmetic: the pointer stays one step behind; he can tap a row in
+              // the rotation editor to correct it.
             }
           }
           if (uuid != null) {
