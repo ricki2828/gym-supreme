@@ -232,7 +232,8 @@ class DiagnosticsPanel extends StatelessWidget {
   }
 }
 
-String _pct(double r) => '${(r * 100).round()}%';
+/// "89%"; a 0/0 rate before any sets is "–", not a crash.
+String _pct(double r) => r.isFinite ? '${(r * 100).round()}%' : '–';
 String _num(double v) =>
     v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 

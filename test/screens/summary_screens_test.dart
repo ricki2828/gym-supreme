@@ -151,7 +151,14 @@ void main() {
       await tester.pumpWidget(
         app(
           const BodyScreen(
-            muscles: [BodyMuscle(id: 'chest', name: 'Chest', days: null)],
+            muscles: [
+              BodyMuscle(
+                id: 'chest',
+                name: 'Chest',
+                days: null,
+                resting: false,
+              ),
+            ],
           ),
         ),
       );

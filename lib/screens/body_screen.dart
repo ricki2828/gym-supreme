@@ -11,6 +11,7 @@ class BodyMuscle {
     required this.id,
     required this.name,
     required this.days,
+    required this.resting,
     this.lastType,
   });
   final String id;
@@ -22,7 +23,8 @@ class BodyMuscle {
   /// The type of the session that last trained it, for its colour.
   final WorkoutType? lastType;
 
-  bool get resting => days != null && days! < 2;
+  /// The engine's flag (MuscleStatus.resting), same as the picker uses.
+  final bool resting;
 
   /// Filled on the map: trained in the last 4 days (plan 18).
   bool get filled => days != null && days! < 4 && !resting;

@@ -34,6 +34,11 @@ void main() {
     expect(daysLabel(null), 'new');
     expect(daysLabel(1), '1 day');
     expect(clock(90), '1:30');
+    expect(clock(4500), '1:15:00');
+    expect(clock(-5), '0:00');
+    expect(kg(1250), '1.25');
+    expect(kg(1005), '1.005');
+    expect(kg(125), '0.125');
     expect(prescription(pushPlan.items.first), '3 × 10 · 22 kg ea');
     expect(prescription(corePlan.items.last), '3 × 0:45');
   });

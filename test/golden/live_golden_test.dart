@@ -9,8 +9,13 @@ import '../screens/live_fixtures.dart';
 /// Live logging goldens against b-live.png (condo kit: dumbbells, no plate
 /// line; plate math is phase 2).
 void main() {
-  Future<void> shot(WidgetTester tester, String name, LiveView v) async {
-    phone(tester);
+  Future<void> shot(
+    WidgetTester tester,
+    String name,
+    LiveView v, {
+    double textScale = 1.0,
+  }) async {
+    phone(tester, textScale: textScale);
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -42,4 +47,8 @@ void main() {
   );
   testWidgets('rest', (t) => shot(t, 'rest', liveView(restLeftS: 75)));
   testWidgets('all done', (t) => shot(t, 'all_done', liveView(allDone: true)));
+  testWidgets(
+    'set at 1.3x text',
+    (t) => shot(t, 'set_large_font', liveView(), textScale: 1.3),
+  );
 }

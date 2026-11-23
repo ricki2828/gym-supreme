@@ -166,12 +166,16 @@ void main() {
     final grip = find.byType(Grip).first;
     final g = await tester.startGesture(tester.getCenter(grip));
     await tester.pump(kLongPressTimeout);
-    await g.moveBy(const Offset(0, 110));
+    // One row (49 dp) down in small steps: lands on index 1. Two rows
+    // (110) lands on 2, so `to` is the final index, already adjusted.
+    for (var i = 0; i < 10; i++) {
+      await g.moveBy(const Offset(0, 5));
+      await tester.pump();
+    }
     await tester.pump();
     await g.up();
     await tester.pumpAndSettle();
-    expect(moved?.$1, 0);
-    expect(moved!.$2, greaterThan(0));
+    expect(moved, (0, 1), reason: 'one row down: final index 1');
   });
 
   testWidgets('bodyweight-only plan is not called a first time', (
@@ -235,5 +239,120 @@ void main() {
       ),
     );
     expect(find.textContaining('Nearly everything'), findsNothing);
+  });
+
+  testWidgets('the map cannot pick a no-kit group either', (tester) async {
+    phone(tester);
+    final got = <String>[];
+    await tester.pumpWidget(
+      app(
+        PickerScreen(
+          gym: condo,
+          days: {...storyDays, 'chest': const MuscleDays(uncovered: true)},
+          selected: const {},
+          plan: null,
+          onToggleGroup: (g) => got.add(g.label),
+        ),
+      ),
+    );
+    final map = tester.getRect(find.byType(BodyMap));
+    final s = map.width / 250;
+    await tester.tapAt(map.topLeft + Offset(49 * s, 69 * s)); // chest
+    await tester.tapAt(map.topLeft + Offset(60 * s, 110 * s)); // abs
+    expect(got, ['Core']);
+  });
+
+  testWidgets('a picked group that lost its kit can still be dropped', (
+    tester,
+  ) async {
+    phone(tester);
+    final got = <String>[];
+    await tester.pumpWidget(
+      app(
+        PickerScreen(
+          gym: condo,
+          days: {...storyDays, 'chest': const MuscleDays(uncovered: true)},
+          selected: const {'chest'},
+          plan: null,
+          onToggleGroup: (g) => got.add(g.label),
+        ),
+      ),
+    );
+    await tester.tap(find.bySemanticsLabel(RegExp(r'^Chest, ')));
+    expect(got, ['Chest']);
+  });
+
+  testWidgets('most rested never names a no-kit group', (tester) async {
+    phone(tester);
+    await tester.pumpWidget(
+      app(
+        PickerScreen(
+          gym: condo,
+          days: {
+            ...storyDays,
+            'abs': const MuscleDays(days: 9, uncovered: true),
+            'obliques': const MuscleDays(days: 9, uncovered: true),
+          },
+          selected: const {},
+          plan: null,
+        ),
+      ),
+    );
+    expect(
+      find.textContaining('Most rested right now: chest, triceps'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('1.3x peek: the plan sheet is read-only; Start closes it', (
+    tester,
+  ) async {
+    phone(tester, textScale: 1.3);
+    var started = 0;
+    var reordered = 0;
+    await tester.pumpWidget(
+      app(
+        PickerScreen(
+          gym: condo,
+          days: storyDays,
+          selected: pushSelection,
+          plan: pushPlan,
+          onStart: () => started++,
+          onReorder: (_, _) => reordered++,
+        ),
+      ),
+    );
+    await tester.tap(find.text('Swipe up or tap to see them'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ReorderableListView), findsNothing);
+    expect(find.text('Reorder once you start.'), findsOneWidget);
+    await tester.ensureVisible(find.text('START PUSH'));
+    await tester.tap(find.text('START PUSH'));
+    await tester.pumpAndSettle();
+    expect(started, 1);
+    expect(find.text('Reorder once you start.'), findsNothing);
+    expect(reordered, 0);
+  });
+
+  testWidgets('a long plan scrolls inside the sheet', (tester) async {
+    phone(tester);
+    final many = SessionPlanView(
+      type: WorkoutType.push,
+      minutes: 90,
+      items: [...longNamesPlan.items, ...longNamesPlan.items],
+    );
+    await tester.pumpWidget(
+      app(
+        PickerScreen(
+          gym: condo,
+          days: storyDays,
+          selected: pushSelection,
+          plan: many,
+          onReorder: (_, _) {},
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('START PUSH'), findsOneWidget);
   });
 }

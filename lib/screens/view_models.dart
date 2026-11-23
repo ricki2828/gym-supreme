@@ -113,7 +113,7 @@ String kg(int grams) {
   final v = grams / 1000;
   if (v == v.roundToDouble()) return v.toStringAsFixed(0);
   return v
-      .toStringAsFixed(2)
+      .toStringAsFixed(3)
       .replaceFirst(RegExp(r'0+$'), '')
       .replaceFirst(RegExp(r'\.$'), '');
 }
@@ -141,7 +141,9 @@ String prescription(PlanItem p) {
 /// Seconds as m:ss.
 String clock(int seconds) {
   final s = seconds < 0 ? 0 : seconds;
-  return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
+  final ss = (s % 60).toString().padLeft(2, '0');
+  if (s < 3600) return '${s ~/ 60}:$ss';
+  return '${s ~/ 3600}:${(s % 3600 ~/ 60).toString().padLeft(2, '0')}:$ss';
 }
 
 /// "5 days", "1 day", "today", "new".

@@ -224,7 +224,8 @@ class _GymCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 120,
+    // Grows with large text so a two-line name and the kit line still fit.
+    height: MediaQuery.textScalerOf(context).scale(120).clamp(120.0, 190.0),
     child: ListView(
       scrollDirection: Axis.horizontal,
       children: [
@@ -243,7 +244,6 @@ class _GymCards extends StatelessWidget {
               painter: _DashedRRect(),
               child: const SizedBox(
                 width: 64,
-                height: 120,
                 child: Icon(Icons.add, color: Lit.ink, size: 30),
               ),
             ),

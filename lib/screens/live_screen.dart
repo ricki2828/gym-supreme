@@ -255,7 +255,9 @@ class LiveScreen extends StatelessWidget {
     final work = view.unit == LoadUnit.timed
         ? clock(view.reps)
         : '${view.reps}';
-    final what = load.isEmpty ? '$work reps' : '$work × $load';
+    final what = view.unit == LoadUnit.timed
+        ? work
+        : (load.isEmpty ? '$work reps' : '$work × $load');
     if (view.coldStart) {
       return view.loadG == null ? 'Set a weight first' : '$what, first time';
     }
@@ -542,7 +544,9 @@ class _RestScreen extends StatelessWidget {
     const ink = Lit.ink;
     final left = view.restLeftS!;
     final load = loadLabel(view.loadG, view.unit);
-    final next = load.isEmpty ? '${view.reps} reps' : '${view.reps} × $load';
+    final next = view.unit == LoadUnit.timed
+        ? clock(view.reps)
+        : (load.isEmpty ? '${view.reps} reps' : '${view.reps} × $load');
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(

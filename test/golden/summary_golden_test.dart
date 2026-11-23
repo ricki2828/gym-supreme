@@ -7,7 +7,7 @@ import 'package:gym_supreme/screens/post_workout_screen.dart';
 import 'package:gym_supreme/screens/view_models.dart';
 import 'package:supreme_ui/supreme_ui.dart';
 
-import '../screens/diagnostics_panel_test.dart' as diag;
+import '../screens/diagnostics_fixtures.dart' as diag;
 import '../screens/fixtures.dart';
 import '../screens/summary_fixtures.dart';
 

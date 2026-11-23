@@ -169,4 +169,49 @@ void main() {
     await tester.scrollUntilVisible(find.text('timer'), 300);
     expect(find.text('timer'), findsOneWidget);
   });
+
+  testWidgets('timed sets read as time, not reps', (tester) async {
+    phone(tester);
+    await tester.pumpWidget(
+      app(
+        LiveScreen(
+          view: liveView(
+            name: 'Plank',
+            unit: LoadUnit.timed,
+            reps: 45,
+            targetReps: 45,
+            loadG: null,
+            targetLoadG: null,
+          ),
+        ),
+      ),
+    );
+    expect(find.text('0:45, as planned'), findsOneWidget);
+    await tester.pumpWidget(
+      app(
+        LiveScreen(
+          view: liveView(
+            name: 'Plank',
+            unit: LoadUnit.timed,
+            reps: 45,
+            targetReps: 45,
+            loadG: null,
+            targetLoadG: null,
+            restLeftS: 30,
+          ),
+        ),
+      ),
+    );
+    expect(find.text('0:45'), findsOneWidget);
+    expect(find.textContaining('REPS'), findsNothing);
+  });
+
+  testWidgets('1.3x text: Done keeps its sub line, nothing overflows', (
+    tester,
+  ) async {
+    phone(tester, textScale: 1.3);
+    await tester.pumpWidget(app(LiveScreen(view: liveView())));
+    expect(tester.takeException(), isNull);
+    expect(find.text('10 × 22 kg ea, as planned'), findsOneWidget);
+  });
 }

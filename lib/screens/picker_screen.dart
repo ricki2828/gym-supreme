@@ -109,7 +109,9 @@ class PickerScreen extends StatelessWidget {
           ? null
           : (id) {
               final g = _groupOf(id);
-              if (g != null) onToggleGroup!(g);
+              // Same rule as the rows: no kit here, not pickable (unless
+              // already picked, so it can be dropped).
+              if (g != null && (_pickable(g) || _isOn(g))) onToggleGroup!(g);
             },
       semanticLabel: selected.isEmpty
           ? 'Body map. Nothing picked.'
@@ -189,13 +191,25 @@ class PickerScreen extends StatelessWidget {
     );
   }
 
-  String _restingNote() {
+  bool _pickable(MuscleGroup g) =>
+      !g.muscleIds.every((m) => days[m]?.uncovered ?? false);
+
+  bool _isOn(MuscleGroup g) => g.muscleIds.every(selected.contains);
+
+  /// Pickable groups, longest rested first (never trained counts as most).
+  List<MuscleGroup> _mostRested() {
     final ranked = [
       for (final g in MuscleGroup.picker)
-        (g, g.muscleIds.map((m) => days[m]?.days ?? 999).reduce(_min)),
+        if (_pickable(g))
+          (g, g.muscleIds.map((m) => days[m]?.days ?? 999).reduce(_min)),
     ]..sort((a, b) => b.$2.compareTo(a.$2));
-    return 'Nearly everything trained in the last 2 days. '
-        '${ranked.first.$1.label} is the most rested.';
+    return [for (final r in ranked) r.$1];
+  }
+
+  String _restingNote() {
+    final top = _mostRested();
+    return 'Nearly everything trained in the last 2 days.'
+        '${top.isEmpty ? '' : ' ${top.first.label} is the most rested.'}';
   }
 
   void _openPlan(BuildContext context) {
@@ -205,7 +219,17 @@ class PickerScreen extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => SingleChildScrollView(child: _sheet()),
+      // The modal captures this build's plan, so it is read-only: a reorder
+      // here would index a stale list. Reordering stays on the live screen.
+      builder: (modal) => SingleChildScrollView(
+        child: _sheet(
+          readOnly: true,
+          onStartHere: () {
+            Navigator.of(modal).pop();
+            onStart?.call();
+          },
+        ),
+      ),
     );
   }
 
@@ -272,13 +296,10 @@ class PickerScreen extends StatelessWidget {
     );
   }
 
-  Widget _sheet() {
+  Widget _sheet({bool readOnly = false, VoidCallback? onStartHere}) {
     final p = plan;
     if (p == null || p.items.isEmpty) {
-      final rested = [
-        for (final g in MuscleGroup.picker)
-          (g.label, g.muscleIds.map((m) => days[m]?.days ?? 999).reduce(_min)),
-      ]..sort((a, b) => b.$2.compareTo(a.$2));
+      final rested = _mostRested();
       return DarkSheet(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -289,7 +310,7 @@ class PickerScreen extends StatelessWidget {
             Text(
               'Pick one muscle or more and a session appears here. '
               'Most rested right now: '
-              '${rested.take(3).map((r) => r.$1.toLowerCase()).join(', ')}.',
+              '${rested.take(3).map((g) => g.label.toLowerCase()).join(', ')}.',
               style: LitType.body(14, const Color(0xFFA5A9B1)),
             ),
             const SizedBox(height: 14),
@@ -315,6 +336,7 @@ class PickerScreen extends StatelessWidget {
             'left out: nothing here can train '
             '${p.uncovered.length == 1 ? 'it' : 'them'}. Add kit in Gyms.',
       if (_allResting) 'Or tap any resting row to train it anyway.',
+      if (readOnly) 'Reorder once you start.',
     ];
     return DarkSheet(
       child: Column(
@@ -324,7 +346,13 @@ class PickerScreen extends StatelessWidget {
           ?sheetExtra,
           _sheetHead('${p.items.length} LIFTS · ${p.minutes} MIN'),
           const SizedBox(height: 4),
-          PlanList(items: p.items, onReorder: onReorder, dark: true),
+          PlanList(
+            items: p.items,
+            onReorder: readOnly ? null : onReorder,
+            dark: true,
+            // Many or long lifts scroll inside the sheet instead of overflowing.
+            maxHeight: readOnly ? null : 300,
+          ),
           for (final n in note)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -337,7 +365,7 @@ class PickerScreen extends StatelessWidget {
                 : 'START ${p.type!.label.toUpperCase()}',
             colour: _pickColour,
             ink: _onPick,
-            onTap: onStart,
+            onTap: onStartHere ?? onStart,
           ),
         ],
       ),
@@ -431,7 +459,7 @@ class _GroupRow extends StatelessWidget {
           side: BorderSide(color: border, width: 1.5),
         ),
         child: InkWell(
-          onTap: noKit ? null : onTap,
+          onTap: noKit && !on ? null : onTap,
           borderRadius: BorderRadius.circular(10),
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 48),

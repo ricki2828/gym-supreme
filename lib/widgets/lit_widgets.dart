@@ -103,19 +103,29 @@ class BigButton extends StatelessWidget {
         child: SizedBox(
           height: height,
           width: width ?? double.infinity,
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(label, style: LitType.display(fontSize, ink)),
-                if (sub != null) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    sub!,
-                    style: LitType.body(15, subColour ?? ink, FontWeight.w600),
-                  ),
+          // Scales down rather than clipping at large text (1.3x): the sub
+          // line ("as planned / changed") is what one-tap Done relies on.
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(label, style: LitType.display(fontSize, ink)),
+                  if (sub != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      sub!,
+                      style: LitType.body(
+                        15,
+                        subColour ?? ink,
+                        FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -137,25 +147,32 @@ class GymChip extends StatelessWidget {
       button: true,
       label: 'Gym: $name. Change gym',
       excludeSemantics: true,
+      // 48 dp tap target around a 32 dp chip.
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 32),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: dark ? const Color(0xFF5F646D) : Lit.ink,
-              width: 1.5,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Center(
+            widthFactor: 1,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 32),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: dark ? const Color(0xFF5F646D) : Lit.ink,
+                  width: 1.5,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(name, style: LitType.body(12, fg, FontWeight.w700)),
+                  Icon(Icons.arrow_drop_down, size: 16, color: fg),
+                ],
+              ),
             ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(name, style: LitType.body(12, fg, FontWeight.w700)),
-              Icon(Icons.arrow_drop_down, size: 16, color: fg),
-            ],
           ),
         ),
       ),
@@ -197,7 +214,11 @@ class PlanList extends StatelessWidget {
     this.onReorder,
     this.dark = false,
     this.ruleColour,
+    this.maxHeight,
   });
+
+  /// When set, the list scrolls inside this height instead of growing.
+  final double? maxHeight;
   final List<PlanItem> items;
   final void Function(int from, int to)? onReorder;
   final bool dark;
@@ -209,20 +230,32 @@ class PlanList extends StatelessWidget {
     final rule =
         ruleColour ??
         (dark ? const Color(0x1FFFFFFF) : const Color(0x33121417));
+    // Stable keys across reorders: the id, plus its occurrence if repeated.
+    final seen = <String, int>{};
+    final keys = [
+      for (final p in items)
+        '${p.exerciseId}~${seen.update(p.exerciseId, (n) => n + 1, ifAbsent: () => 0)}',
+    ];
     Widget row(int i) {
       final p = items[i];
-      final handle = Padding(
-        padding: const EdgeInsets.only(right: 12),
-        child: Grip(colour: dark ? const Color(0xFF8A8F98) : Lit.ink),
+      // A 48 x 48 drag target around the 18 dp bars (used mid-set).
+      final handle = SizedBox(
+        width: 44,
+        height: 48,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Grip(colour: dark ? const Color(0xFF8A8F98) : Lit.ink),
+        ),
       );
       return Container(
-        key: ValueKey('${p.exerciseId}#$i'),
+        key: ValueKey(keys[i]),
         constraints: const BoxConstraints(minHeight: 48),
         decoration: BoxDecoration(
           border: Border(top: BorderSide(color: rule)),
         ),
         child: Semantics(
           label: '${p.name}, ${prescription(p)}',
+          excludeSemantics: true,
           child: Row(
             children: [
               if (onReorder != null)
@@ -249,9 +282,9 @@ class PlanList extends StatelessWidget {
     if (onReorder == null) {
       return Column(children: [for (var i = 0; i < items.length; i++) row(i)]);
     }
-    return ReorderableListView(
+    final list = ReorderableListView(
       shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+      physics: maxHeight == null ? const NeverScrollableScrollPhysics() : null,
       buildDefaultDragHandles: false,
       onReorderItem: (from, to) => onReorder!(from, to),
       proxyDecorator: (child, _, _) => Material(
@@ -261,5 +294,11 @@ class PlanList extends StatelessWidget {
       ),
       children: [for (var i = 0; i < items.length; i++) row(i)],
     );
+    return maxHeight == null
+        ? list
+        : ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxHeight!),
+            child: list,
+          );
   }
 }
