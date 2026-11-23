@@ -24,10 +24,17 @@ class PickerScreen extends StatelessWidget {
     this.onClose,
     this.onGymTap,
     this.sheetExtra,
+    this.minutes,
+    this.onMinutes,
   });
 
   /// Cut-2 slot at the top of the session sheet (rotation "next up" chip).
   final Widget? sheetExtra;
+
+  /// The session's time budget (30, 45 or 60); the engine fills or trims to
+  /// it. Null hides the control.
+  final int? minutes;
+  final ValueChanged<int>? onMinutes;
 
   final GymView gym;
 
@@ -347,6 +354,10 @@ class PickerScreen extends StatelessWidget {
         children: [
           ?sheetExtra,
           _sheetHead('${p.items.length} LIFTS · ${p.minutes} MIN'),
+          if (onMinutes != null && minutes != null) ...[
+            const SizedBox(height: 8),
+            _MinutesChips(value: minutes!, onChanged: onMinutes!),
+          ],
           const SizedBox(height: 4),
           PlanList(
             items: p.items,
@@ -501,4 +512,55 @@ class _GroupRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 30 / 45 / 60 minutes (review P1-4, t61 item 4: suggest(minutes:)).
+class _MinutesChips extends StatelessWidget {
+  const _MinutesChips({required this.value, required this.onChanged});
+  final int value;
+  final ValueChanged<int> onChanged;
+  static const options = [30, 45, 60];
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Text(
+        'Time',
+        style: LitType.body(13, const Color(0xFFA5A9B1), FontWeight.w700),
+      ),
+      const SizedBox(width: 10),
+      for (final m in options) ...[
+        Semantics(
+          button: true,
+          selected: m == value,
+          label: '$m minutes',
+          excludeSemantics: true,
+          child: InkWell(
+            key: Key('picker.minutes.$m'),
+            onTap: () => onChanged(m),
+            customBorder: const StadiumBorder(),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 48, minWidth: 64),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: ShapeDecoration(
+                color: m == value ? Colors.white : Colors.transparent,
+                shape: StadiumBorder(
+                  side: BorderSide(
+                    color: m == value ? Colors.white : const Color(0xFF5F646D),
+                    width: 1.5,
+                  ),
+                ),
+              ),
+              child: Text(
+                '$m MIN',
+                style: LitType.display(20, m == value ? Lit.ink : Colors.white),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+      ],
+    ],
+  );
 }

@@ -540,6 +540,9 @@ class _PickerFlowState extends State<PickerFlow> {
   /// Exercise ids in the order he dragged them; null = engine order.
   List<String>? _order;
 
+  /// Time budget; starts at his default (settings), 45 unless changed.
+  late int _minutes = _engine.settings().defaultMinutes;
+
   eng.GymApi get _engine => widget.deps.engine;
 
   /// Session type of the pick, by picker rows: the engine's majority rule
@@ -554,6 +557,7 @@ class _PickerFlowState extends State<PickerFlow> {
       gymId: widget.gym.id,
       muscleIds: _picked,
       typeId: _typeId(),
+      minutes: _minutes,
     );
     final order = _order;
     if (order == null) return p;
@@ -619,6 +623,12 @@ class _PickerFlowState extends State<PickerFlow> {
           ? null
           : () => Navigator.of(context).pop(plan),
       onClose: () => Navigator.of(context).pop(),
+      minutes: _minutes,
+      // A new budget is a new plan: his drag order no longer applies.
+      onMinutes: (m) => setState(() {
+        _minutes = m;
+        _order = null;
+      }),
       sheetExtra: _rotationChip(),
     );
   }

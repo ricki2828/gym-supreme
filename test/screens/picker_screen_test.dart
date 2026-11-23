@@ -354,4 +354,41 @@ void main() {
     expect(tester.takeException(), isNull, reason: 'read-only path capped too');
     expect(find.text('START PUSH'), findsOneWidget);
   });
+
+  testWidgets('minutes chips: shown only with a callback, report the pick', (
+    tester,
+  ) async {
+    phone(tester);
+    final got = <int>[];
+    await tester.pumpWidget(
+      app(
+        PickerScreen(
+          gym: condo,
+          days: storyDays,
+          selected: pushSelection,
+          plan: pushPlan,
+          minutes: 45,
+          onMinutes: got.add,
+        ),
+      ),
+    );
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('45 minutes')),
+      containsSemantics(isSelected: true),
+    );
+    await tester.tap(find.byKey(const Key('picker.minutes.60')));
+    await tester.tap(find.byKey(const Key('picker.minutes.30')));
+    expect(got, [60, 30]);
+    await tester.pumpWidget(
+      app(
+        PickerScreen(
+          gym: condo,
+          days: storyDays,
+          selected: pushSelection,
+          plan: pushPlan,
+        ),
+      ),
+    );
+    expect(find.byKey(const Key('picker.minutes.60')), findsNothing);
+  });
 }

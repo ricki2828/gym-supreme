@@ -329,4 +329,24 @@ void main() {
     expect(g.has('kettlebells'), isTrue, reason: 'his own tick kept');
     expect(g.has('adjustable-bench'), isTrue, reason: 'preset pre-ticks');
   });
+
+  testWidgets('picker minutes feed the suggestion', (tester) async {
+    engine.saveGym(engine.gymFromPreset('condo'));
+    await pumpRoot(tester);
+    await tapText(tester, 'LIGHT SOMETHING UP');
+    await tester.tap(find.bySemanticsLabel(RegExp(r'^Chest, ')));
+    await tester.pumpAndSettle();
+    final at45 = engine.suggest(
+      gymId: engine.gyms().single.id,
+      muscleIds: const ['chest'],
+      minutes: 30,
+    );
+    await tester.tap(find.byKey(const Key('picker.minutes.30')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('${at45.items.length} LIFTS · ${at45.estimatedMinutes} MIN'),
+      findsOneWidget,
+      reason: 'the sheet shows the 30-minute plan',
+    );
+  });
 }
