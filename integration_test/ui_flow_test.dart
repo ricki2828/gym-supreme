@@ -14,6 +14,10 @@ import 'package:integration_test/integration_test.dart';
 /// covering the picker tap path and the post-workout screen that the
 /// headless driver (lib/app/e2e_driver.dart) does not touch.
 ///
+/// Steps that end on a platform call (journal read, service start, submit,
+/// finish + fsync + save + delete) schedule no frames while they run, so
+/// every such step waits for the widget it expects, not for "settled".
+///
 /// Each step prints `GymSupreme/ui-e2e {json}` for the CI log.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -26,67 +30,120 @@ void main() {
     tester,
   ) async {
     final services = await bootstrap();
+    expect(
+      services.restorePending,
+      isFalse,
+      reason: 'booted on a temporary store: nothing here would be kept',
+    );
     await tester.pumpWidget(GymSupremeApp(services: services));
-    await _settle(tester);
+
+    // Boot: recovery reads the journal over Pigeon before Today shows.
+    final today = find.text('GYM SUPREME');
+    final setup = find.text('WHERE ARE YOU TRAINING?');
+    await _waitFor(
+      tester,
+      'boot',
+      find.byWidgetPredicate(
+        (w) =>
+            w is Text &&
+            (w.data == 'GYM SUPREME' || w.data == 'WHERE ARE YOU TRAINING?'),
+      ),
+    );
     step('boot', {'gyms': services.engine.gyms().length});
 
     // Item 1, first run only (the headless e2e may have made its gym).
-    if (find.text('WHERE ARE YOU TRAINING?').evaluate().isNotEmpty) {
+    if (setup.evaluate().isNotEmpty) {
       await _tap(tester, find.textContaining('ON THE FLOOR'));
+      await _waitFor(tester, 'gym_saved', today);
       step('gym_saved');
     }
-    expect(find.text('GYM SUPREME'), findsOneWidget);
+    if (find.text('Resume').evaluate().isNotEmpty) {
+      fail('pending journal from a previous run: Start is disabled');
+    }
     final before = services.engine.history(limit: 1);
 
     // Items 2-3: the picker, by tapping a row.
     await _tap(tester, find.text('LIGHT SOMETHING UP'));
-    expect(find.byType(PickerScreen), findsOneWidget);
-    await _tap(tester, find.bySemanticsLabel(RegExp(r'^Chest, ')));
-    expect(find.textContaining('LIFTS ·'), findsOneWidget);
+    await _waitFor(tester, 'picker', find.byType(PickerScreen));
+    final chest = find.bySemanticsLabel(RegExp(r'^Chest, '));
+    expect(chest, findsOneWidget);
+    expect(
+      tester.getSemantics(chest).label.contains('no kit'),
+      isFalse,
+      reason: 'chest must be trainable at this gym',
+    );
+    await _tap(tester, chest);
+    await _waitFor(tester, 'plan', find.textContaining('LIFTS ·'));
     step('picked');
     await _tap(tester, find.text('START PUSH'));
 
     // Item 4: live logging through the real WorkoutService.
-    expect(find.byType(LiveScreen), findsOneWidget);
+    await _waitFor(tester, 'live', find.byType(LiveScreen));
     if (find.text('Set a weight first').evaluate().isNotEmpty) {
       await _tap(tester, find.bySemanticsLabel('More').last);
+      await _waitFor(tester, 'weight', find.textContaining('first time'));
     }
     await _tap(tester, find.text('DONE'));
-    expect(find.text('SKIP REST'), findsOneWidget, reason: 'auto rest');
+    await _waitFor(tester, 'rest', find.text('SKIP REST'));
     step('set_logged');
     await _tap(tester, find.text('SKIP REST'));
+    // Back on the set (DONE), or all sets logged (FINISH screen).
+    await _waitFor(
+      tester,
+      'after_rest',
+      find.byWidgetPredicate(
+        (w) => w is Text && (w.data == 'DONE' || w.data == 'FINISH'),
+      ),
+    );
 
     // Item 6: finish → post-workout (B1 order inside the controller).
-    await _tap(tester, find.text('Finish'));
-    expect(find.byType(PostWorkoutScreen), findsOneWidget);
+    final allDone = find.text('FINISH').evaluate().isNotEmpty;
+    await _tap(tester, find.text(allDone ? 'FINISH' : 'Finish'));
+    await _waitFor(tester, 'post', find.byType(PostWorkoutScreen));
     expect(find.text('PUSH, DONE'), findsOneWidget);
-    expect(
-      find.text('1 MUSCLE LIT').evaluate().isNotEmpty ||
-          find.textContaining('MUSCLES LIT').evaluate().isNotEmpty,
-      isTrue,
-    );
+
     final top = services.engine.history(limit: 1);
     final journal = await services.port.readPendingJournal();
+    expect(top, isNotEmpty);
+    final row = top.first;
+    final summary = services.engine.summary(row.uuid);
     step('post_workout', {
-      'uuid': top.isEmpty ? null : top.first.uuid,
-      'new_row':
-          top.isNotEmpty &&
-          (before.isEmpty || top.first.uuid != before.first.uuid),
+      'uuid': row.uuid,
+      'new_row': before.isEmpty || row.uuid != before.first.uuid,
+      'type': row.typeId,
+      'sets': row.setCount,
+      'lit': summary.musclesLit,
       'journal_gone': journal == null,
     });
     expect(journal, isNull, reason: 'journal deleted after the save');
-    expect(top, isNotEmpty);
-    if (before.isNotEmpty) expect(top.first.uuid, isNot(before.first.uuid));
+    if (before.isNotEmpty) expect(row.uuid, isNot(before.first.uuid));
+    expect(row.typeId, 'push');
+    expect(row.setCount, 1);
+    expect(summary.musclesLit, contains('chest'));
 
-    // Back on Today with the new row.
+    // Back on Today.
     await _tap(tester, find.text('DONE'));
-    expect(find.text('GYM SUPREME'), findsOneWidget);
-    expect(find.text('PUSH'), findsWidgets);
+    await _waitFor(tester, 'today', today);
     step('ok');
   });
 }
 
-/// Real time on a device: settle, but never hang on the 1 s session ticker.
+/// Pumps every 100 ms until [f] matches, or fails naming [stepName].
+Future<void> _waitFor(
+  WidgetTester tester,
+  String stepName,
+  Finder f, {
+  Duration timeout = const Duration(seconds: 20),
+}) async {
+  final end = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(end)) {
+    await tester.pump(const Duration(milliseconds: 100));
+    if (f.evaluate().isNotEmpty) return;
+  }
+  fail('ui-e2e: step $stepName did not show $f within ${timeout.inSeconds} s');
+}
+
+/// Real time on a device: settle animations, never hang on the 1 s ticker.
 Future<void> _settle(WidgetTester tester) async {
   try {
     await tester.pumpAndSettle(
@@ -95,7 +152,6 @@ Future<void> _settle(WidgetTester tester) async {
       const Duration(seconds: 15),
     );
   } on FlutterError {
-    // The live screen ticks every second; a bounded pump is enough there.
     await tester.pump(const Duration(milliseconds: 500));
   }
 }
