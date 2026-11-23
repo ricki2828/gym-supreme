@@ -46,11 +46,14 @@ class LiveSession private constructor(private val context: Context) {
         if (last == null) {
             if (store.file.exists() && store.file.length() > 0) {
                 val aside = store.quarantine()
+                if (aside == null) store.file.delete()
                 NativeCounters.add(context, NativeCounters.JOURNALS_LOST)
                 SpikeLog.write(context, SpikeLog.line("journal_lost").put("corrupt_lines", r.corruptLines).put("torn_tail", r.tornTail).put("moved_to", aside))
             }
             return r
         }
+        // A crash mid-write left half a line: cut it off so the next append starts a clean line.
+        if (r.tornTail) store.truncateTornTail()
         val key = "counted:${last.uuid}"
         val counted = prefs.getString(key, null)
         val sig = "${r.corruptLines}/${r.tornTail}"
@@ -66,7 +69,7 @@ class LiveSession private constructor(private val context: Context) {
         return r
     }
 
-    /** Start a workout: rev 1 on base 0. Refused while another workout's journal is still present. */
+    /** Start a workout: rev 0. Refused while any journal is still present (resume goes through [submit]). */
     fun start(json: String): Long {
         val cur = current()
         if (cur != null && cur.finished) throw Refused("finish_pending", "workout ${cur.uuid} is finished but not stored yet; store it, then deleteJournal")

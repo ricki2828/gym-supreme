@@ -54,5 +54,6 @@ class SnapshotViewTest {
         assertEquals("Bodyweight x 12", line("bodyweight", null, 12))
         assertEquals("Set starting weight in the app", line("dumbbell", null, 10))
         assertEquals("2.5 kg ea", line("dumbbell", 2500, null))
+        assertEquals("Bodyweight +10 kg x 8", line("bodyweight", 10000, 8))
     }
 }

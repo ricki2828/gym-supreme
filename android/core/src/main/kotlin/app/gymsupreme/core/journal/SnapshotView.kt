@@ -30,14 +30,17 @@ data class SnapshotView(
         val reps: Long?,
         val loadKind: String,
         val unilateral: Boolean,
+        val timed: Boolean = false,
     )
 
     /** "22.5 kg ea x 10", "Bodyweight x 12", "Starting weight?" (cold start). */
     fun doneLine(): String? {
         val c = current ?: return null
+        if (c.timed) return "Timed"
         val reps = c.reps?.let { " x $it" } ?: ""
         val load = when {
             c.loadKind == "bodyweight" && (c.loadG == null || c.loadG == 0L) -> "Bodyweight"
+            c.loadKind == "bodyweight" -> "Bodyweight +" + kg(c.loadG!!)
             c.loadG == null -> return "Set starting weight in the app"
             else -> kg(c.loadG) + (if (c.loadKind == "dumbbell" || c.unilateral) " ea" else "")
         }
@@ -67,6 +70,7 @@ data class SnapshotView(
                             reps = set.longOrNull("target_reps"),
                             loadKind = e.strOrNull("load_kind") ?: "",
                             unilateral = e["unilateral"] as? Boolean ?: false,
+                            timed = set.strOrNull("kind") == "timed",
                         )
                     }
                 }

@@ -4,6 +4,7 @@ import android.content.Context
 import app.gymsupreme.core.journal.Journal
 import java.io.File
 import java.io.FileOutputStream
+import java.io.RandomAccessFile
 
 /**
  * The journal file (plan 7): `files/journal/workout.jsonl`, one snapshot per line, written only
@@ -15,9 +16,32 @@ class JournalStore(context: Context) {
     val file = File(dir, FILE)
 
     fun append(line: String) {
+        // Belt and braces after a crash: never glue a new line onto a torn tail.
+        val glue = file.exists() && file.length() > 0 && !endsWithNewline()
         FileOutputStream(file, true).use { out ->
+            if (glue) out.write('\n'.code)
             out.write((line + "\n").toByteArray(Charsets.UTF_8))
             out.fd.sync()
+        }
+    }
+
+    private fun endsWithNewline(): Boolean = RandomAccessFile(file, "r").use { raf ->
+        raf.seek(raf.length() - 1)
+        raf.read() == '\n'.code
+    }
+
+    /** Cut the file back to the end of its last complete line, fsynced. */
+    fun truncateTornTail() {
+        if (!file.exists()) return
+        RandomAccessFile(file, "rw").use { raf ->
+            var pos = raf.length() - 1
+            while (pos >= 0) {
+                raf.seek(pos)
+                if (raf.read() == '\n'.code) break
+                pos--
+            }
+            raf.setLength(pos + 1)
+            raf.fd.sync()
         }
     }
 

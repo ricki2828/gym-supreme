@@ -66,6 +66,7 @@ class WorkoutService : Service() {
     private var tracker: RestTracker? = null
     private var sessionView: SnapshotView? = null
     private var restLock: PowerManager.WakeLock? = null
+    @Volatile
     private var restRunnable: Runnable? = null
     private var restArmedAt: Long? = null
 
@@ -368,7 +369,7 @@ class WorkoutService : Service() {
             is RestTracker.Action.Arm -> armRest(action.spec, action.atElapsedMs)
             is RestTracker.Action.FireNow -> {
                 cancelRest("replaced")
-                cues?.post { fireRest(action.spec, SystemClock.elapsedRealtime() - action.lateMs, "resume_grace") }
+                cues?.post { fireRest(action.spec, SystemClock.elapsedRealtime() - action.lateMs, "resume_grace", null) }
             }
             is RestTracker.Action.Missed -> {
                 NativeCounters.add(this, NativeCounters.REST_ALERTS_MISSED)
@@ -387,7 +388,8 @@ class WorkoutService : Service() {
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "gymsupreme:rest")
             .also { it.acquire(delay + REST_LOCK_MARGIN_MS) }
         restArmedAt = atElapsed
-        val run = Runnable { fireRest(spec, atElapsed, "timer") }
+        lateinit var run: Runnable
+        run = Runnable { fireRest(spec, atElapsed, "timer", run) }
         restRunnable = run
         h.postDelayed(run, delay)
         SpikeLog.write(this, SpikeLog.line("rest_armed").put("set_id", spec.key).put("duration_ms", spec.durationMs).put("fires_in_ms", delay).put("scheduled_elapsed_ms", atElapsed))
@@ -405,11 +407,16 @@ class WorkoutService : Service() {
         restLock = null
     }
 
-    /** Cue thread. A timer that wakes early re-posts itself; the alert fires once. */
-    private fun fireRest(spec: RestSpec, scheduled: Long, cause: String) {
+    /**
+     * Cue thread. [run] is the timer's own runnable (null for a resume-grace fire): if the rest was
+     * re-armed or cancelled meanwhile it is no longer current and this fire is dropped. A timer
+     * that wakes early re-posts itself; the alert fires once.
+     */
+    private fun fireRest(spec: RestSpec, scheduled: Long, cause: String, run: Runnable?) {
+        if (run != null && restRunnable !== run) return
         val now = SystemClock.elapsedRealtime()
-        if (cause == "timer" && now < scheduled) {
-            restRunnable?.let { cues?.postDelayed(it, scheduled - now) }
+        if (run != null && now < scheduled) {
+            cues?.postDelayed(run, scheduled - now)
             return
         }
         val late = now - scheduled
@@ -442,10 +449,13 @@ class WorkoutService : Service() {
         )
         main.post {
             tracker?.onFired(spec.key)
-            restRunnable = null
-            restArmedAt = null
-            restLock?.let { if (it.isHeld) it.release() }
-            restLock = null
+            // Only clear what this fire owned: a +15 s change may have armed a new rest meanwhile.
+            if (run == null || restRunnable === run) {
+                restRunnable = null
+                restArmedAt = null
+                restLock?.let { if (it.isHeld) it.release() }
+                restLock = null
+            }
             update { it.copy(lastCue = "rest ${spec.key}", lastLateMs = late) }
             refreshNotification()
         }
@@ -529,7 +539,7 @@ class WorkoutService : Service() {
             restEndWall != null -> "Rest · next ${c.exerciseName}"
             else -> c.exerciseName
         }
-        val text = if (c == null) "${v?.setsDone ?: 0} sets" else "Set ${c.setNumber} of ${c.setCount}  ·  ${v.doneLine() ?: ""}"
+        val text = if (c == null) "${v?.setsDone ?: 0} sets" else "Set ${c.setNumber} of ${c.setCount}  ·  ${v?.doneLine() ?: ""}"
         return WorkoutNotification.Content(title, text, restEndWall, stopAction = false)
     }
 
