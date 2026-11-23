@@ -94,8 +94,14 @@ class LiveSession private constructor(private val context: Context) {
         return r.head.rev
     }
 
-    /** Stops the service and its alerts; the journal stays for Resume. Dart submits the paused snapshot first. */
+    /**
+     * Stops the service and its alerts; the journal stays for Resume. Dart submits the paused
+     * snapshot first (which already stops the service), so this is idempotent while an unfinished
+     * journal exists; `not_running` only when there is none.
+     */
     fun pause() {
+        val cur = current()
+        if (cur == null || cur.finished) throw Refused("not_running", "no workout in progress")
         WorkoutService.instance?.endSession("pause")
         SpikeLog.write(context, SpikeLog.line("session_pause").put("uuid", head?.uuid))
     }
@@ -110,6 +116,7 @@ class LiveSession private constructor(private val context: Context) {
         val line = store.read().lastLine ?: throw Refused("not_running", "journal unreadable")
         if (cur.finished) {
             WorkoutService.instance?.endSession("finish")
+            onSnapshot?.invoke(line)
             return line
         }
         val out = JsonWriter.write(FinishStamp.stamp(Json.parseObject(line), System.currentTimeMillis()))

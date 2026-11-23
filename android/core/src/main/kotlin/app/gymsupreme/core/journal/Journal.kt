@@ -60,13 +60,13 @@ object Journal {
         if (h.schema !in SUPPORTED_SCHEMAS) return Submit.Rejected("bad_schema", "schema ${h.schema} not supported")
         if (isStart) {
             if (current != null && !current.finished) return Submit.Rejected("already_running", "workout ${current.uuid} is in progress")
-            if (baseRev != 0L || h.rev != 0L) return Submit.Rejected("stale_rev", "a start is rev 0")
+            if (h.rev != 0L) return Submit.Rejected("bad_snapshot", "a start snapshot carries rev 0")
         } else {
             if (current == null) return Submit.Rejected("not_running", "no workout in progress")
             if (h.uuid != current.uuid) return Submit.Rejected("wrong_workout", "snapshot is for ${h.uuid}, journal is ${current.uuid}")
             if (current.finished) return Submit.Rejected("finished", "workout already finished")
             if (baseRev != current.rev) return Submit.Rejected("stale_rev", "base rev $baseRev, journal is at ${current.rev}")
-            if (h.rev != baseRev + 1) return Submit.Rejected("stale_rev", "snapshot rev ${h.rev} must be base + 1")
+            if (h.rev != baseRev + 1) return Submit.Rejected("bad_snapshot", "snapshot rev ${h.rev} must be base + 1")
         }
         return Submit.Accepted(json, h, snap)
     }

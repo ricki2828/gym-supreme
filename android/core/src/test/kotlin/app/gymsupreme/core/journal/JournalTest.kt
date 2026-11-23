@@ -29,8 +29,8 @@ class JournalTest {
     fun `stale or skipped revs are refused so two writers never both win`() {
         val h = Journal.Head(u, 5, 1, false)
         assertEquals("stale_rev", code(Journal.submit(snap(5), 4, h, false)), "Dart behind the service")
-        assertEquals("stale_rev", code(Journal.submit(snap(7), 5, h, false)), "rev must be base + 1")
-        assertEquals("stale_rev", code(Journal.submit(snap(1), 0, null, true)), "a start is rev 0")
+        assertEquals("bad_snapshot", code(Journal.submit(snap(7), 5, h, false)), "rev must be base + 1 (a Dart bug, not a race)")
+        assertEquals("bad_snapshot", code(Journal.submit(snap(1), 0, null, true)), "a start is rev 0")
         accepted(Journal.submit(snap(6), 5, h, false))
     }
 
