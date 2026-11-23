@@ -99,7 +99,10 @@ void main() {
 
     // Finish: B1 order, then post-workout.
     now += 20 * 60000;
-    await tapText(tester, 'Finish');
+    await tester.tap(find.byKey(const Key('live.finish')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('finish.confirm')));
+    await tester.pumpAndSettle();
     expect(find.byType(PostWorkoutScreen), findsOneWidget);
     expect(find.text('PUSH, DONE'), findsOneWidget);
     expect(await port.readPendingJournal(), isNull);
@@ -427,5 +430,33 @@ void main() {
       find.bySemanticsLabel(RegExp(r'^Bench with overhead cable, \d')),
       findsNothing,
     );
+  });
+
+  testWidgets('swap from the live screen picks a same-muscle lift', (
+    tester,
+  ) async {
+    engine.saveGym(engine.gymFromPreset('condo'));
+    await pumpRoot(tester);
+    await tapText(tester, 'LIGHT SOMETHING UP');
+    await tester.tap(find.bySemanticsLabel(RegExp(r'^Chest, ')));
+    await tester.pumpAndSettle();
+    await tapText(tester, 'START PUSH');
+    final before = port.rev;
+    await tester.ensureVisible(find.byKey(const Key('live.swap')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('live.swap')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('SWAP '), findsOneWidget);
+    await tester.tap(find.byType(ListTile).first);
+    await tester.pumpAndSettle();
+    expect(port.rev, before + 1, reason: 'one submit for the swap');
+    // Pause is in the header, which scrolled up with the list.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('live.pause')),
+      -200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const Key('live.pause')));
+    await tester.pumpAndSettle();
   });
 }

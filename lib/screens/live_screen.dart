@@ -36,6 +36,10 @@ class LiveView {
     this.timerBlock = false,
     this.setId,
     this.blockTitle,
+    this.undoLabel,
+    this.canSwap = false,
+    this.doneSets = 0,
+    this.leftSets = 0,
   });
 
   final WorkoutType? type;
@@ -87,6 +91,17 @@ class LiveView {
   /// unreadable. Shown wherever a set would show "reps × load".
   final String? blockTitle;
 
+  /// The last logged set, e.g. "Dumbbell bench press 10 × 22 kg ea"; null
+  /// when nothing is logged yet (no Undo).
+  final String? undoLabel;
+
+  /// The current exercise has nothing logged yet, so it can be swapped.
+  final bool canSwap;
+
+  /// For the Finish confirm: sets logged, and sets still pending (dropped).
+  final int doneSets;
+  final int leftSets;
+
   bool get coldStart =>
       targetLoadG == null && (unit == LoadUnit.kg || unit == LoadUnit.kgEach);
 
@@ -110,6 +125,9 @@ class LiveScreen extends StatelessWidget {
     this.onReorder,
     this.onPause,
     this.onFinish,
+    this.onUndo,
+    this.onSwap,
+    this.onAddSet,
     this.setExtra,
     this.actions = const [],
   });
@@ -144,17 +162,90 @@ class LiveScreen extends StatelessWidget {
   /// Indexes within [LiveView.upNext].
   final void Function(int from, int to)? onReorder;
   final VoidCallback? onPause;
+
+  /// Called after he confirms (with sets left) or straight away (all done).
   final VoidCallback? onFinish;
+
+  /// Undo the last logged set (P1-6).
+  final VoidCallback? onUndo;
+
+  /// Swap the current exercise (only offered while nothing of it is logged).
+  final VoidCallback? onSwap;
+
+  /// One more set on the current exercise.
+  final VoidCallback? onAddSet;
+
+  /// Finish with sets still pending asks first (P1-6: Finish used to sit
+  /// beside Pause and end the workout in one tap).
+  Future<void> _confirmFinish(BuildContext context) async {
+    final f = onFinish;
+    if (f == null) return;
+    if (view.leftSets == 0) return f();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Finish this workout?'),
+        content: Text(
+          '${view.doneSets} ${view.doneSets == 1 ? 'set' : 'sets'} logged. '
+          '${view.leftSets} not done ${view.leftSets == 1 ? 'is' : 'are'} '
+          'dropped.',
+        ),
+        actions: [
+          TextButton(
+            key: const Key('finish.keep'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep going'),
+          ),
+          TextButton(
+            key: const Key('finish.confirm'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Finish'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) f();
+  }
+
+  /// Finish, pinned to the bottom of every live screen so it never needs a
+  /// scroll; Pause lives in the header, away from it.
+  Widget _finishBar(BuildContext context, Color ink, Color bg) => SafeArea(
+    top: false,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 10),
+      child: OutlinedButton(
+        key: const Key('live.finish'),
+        onPressed: onFinish == null ? null : () => _confirmFinish(context),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: ink,
+          backgroundColor: bg,
+          minimumSize: const Size.fromHeight(52),
+          side: BorderSide(color: ink, width: 2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: Text(
+          'Finish workout',
+          style: LitType.body(17, ink, FontWeight.w800),
+        ),
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
-    if (view.allDone) return _AllDone(view: view, onFinish: onFinish);
+    if (view.allDone) {
+      return _AllDone(view: view, onFinish: onFinish, onUndo: onUndo);
+    }
     if (view.restLeftS != null) {
       return _RestScreen(
         view: view,
         onRestDelta: onRestDelta,
         onSkipRest: onSkipRest,
         onReorder: onReorder,
+        onUndo: onUndo,
+        finishBar: _finishBar(context, Lit.ink, Lit.pull),
       );
     }
     final bg = view.type?.colour ?? Lit.ground;
@@ -164,7 +255,9 @@ class LiveScreen extends StatelessWidget {
     final blockUi = view.timerBlock && setExtra != null;
     return Scaffold(
       backgroundColor: bg,
+      bottomNavigationBar: _finishBar(context, ink, bg),
       body: SafeArea(
+        bottom: false,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -172,7 +265,7 @@ class LiveScreen extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 20, 16, 20),
                 children: [
-                  _Header(view: view, ink: ink),
+                  _Header(view: view, ink: ink, onPause: onPause),
                   const SizedBox(height: 6),
                   Text(
                     view.exerciseName.toUpperCase(),
@@ -283,18 +376,14 @@ class LiveScreen extends StatelessWidget {
                       onDelta: onRestDelta,
                     ),
                   ],
-                  if (onSkipSet != null)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: onSkipSet,
-                        style: TextButton.styleFrom(foregroundColor: ink),
-                        child: Text(
-                          'Skip this set',
-                          style: LitType.body(14, ink, FontWeight.w600),
-                        ),
-                      ),
-                    ),
+                  _SetLinks(
+                    ink: ink,
+                    undoLabel: view.undoLabel,
+                    onUndo: onUndo,
+                    onSwap: view.canSwap ? onSwap : null,
+                    onAddSet: onAddSet,
+                    onSkipSet: onSkipSet,
+                  ),
                   if (view.upNext.isNotEmpty) ...[
                     const SizedBox(height: 14),
                     Text(
@@ -310,7 +399,6 @@ class LiveScreen extends StatelessWidget {
                   ],
                   for (final a in actions) ...[const SizedBox(height: 12), a],
                   const SizedBox(height: 18),
-                  _PauseFinish(ink: ink, onPause: onPause, onFinish: onFinish),
                 ],
               ),
             ),
@@ -338,9 +426,10 @@ class LiveScreen extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.view, required this.ink});
+  const _Header({required this.view, required this.ink, this.onPause});
   final LiveView view;
   final Color ink;
+  final VoidCallback? onPause;
   @override
   Widget build(BuildContext context) => Row(
     children: [
@@ -355,6 +444,92 @@ class _Header extends StatelessWidget {
         style: LitType.cap(14, ink),
         semanticsLabel: '${view.elapsedS ~/ 60} minutes in',
       ),
+      if (onPause != null) ...[
+        const SizedBox(width: 4),
+        TextButton.icon(
+          key: const Key('live.pause'),
+          onPressed: onPause,
+          style: TextButton.styleFrom(
+            foregroundColor: ink,
+            minimumSize: const Size(48, 48),
+          ),
+          icon: const Icon(Icons.pause, size: 20),
+          label: Text('Pause', style: LitType.body(14, ink, FontWeight.w700)),
+        ),
+      ],
+    ],
+  );
+}
+
+/// The small actions under the set: Undo the last set, Swap this exercise,
+/// Add a set, Skip this set. Each 48 dp.
+class _SetLinks extends StatelessWidget {
+  const _SetLinks({
+    required this.ink,
+    this.undoLabel,
+    this.onUndo,
+    this.onSwap,
+    this.onAddSet,
+    this.onSkipSet,
+  });
+  final Color ink;
+  final String? undoLabel;
+  final VoidCallback? onUndo;
+  final VoidCallback? onSwap;
+  final VoidCallback? onAddSet;
+  final VoidCallback? onSkipSet;
+
+  Widget _link(
+    String text,
+    IconData icon,
+    VoidCallback onTap, {
+    Key? key,
+    String? semantic,
+  }) => Semantics(
+    button: true,
+    label: semantic ?? text,
+    excludeSemantics: true,
+    child: TextButton.icon(
+      key: key,
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        foregroundColor: ink,
+        minimumSize: const Size(48, 48),
+      ),
+      icon: Icon(icon, size: 18),
+      label: Text(text, style: LitType.body(14, ink, FontWeight.w700)),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    alignment: WrapAlignment.spaceBetween,
+    children: [
+      if (undoLabel != null && onUndo != null)
+        _link(
+          'Undo last set',
+          Icons.undo,
+          onUndo!,
+          key: const Key('live.undo'),
+          semantic: 'Undo last set: $undoLabel',
+        ),
+      if (onSwap != null)
+        _link(
+          'Swap',
+          Icons.swap_horiz,
+          onSwap!,
+          key: const Key('live.swap'),
+          semantic: 'Swap this exercise',
+        ),
+      if (onAddSet != null)
+        _link(
+          'Add a set',
+          Icons.add,
+          onAddSet!,
+          key: const Key('live.add_set'),
+        ),
+      if (onSkipSet != null)
+        _link('Skip this set', Icons.skip_next, onSkipSet!),
     ],
   );
 }
@@ -621,39 +796,6 @@ class _Pill extends StatelessWidget {
   );
 }
 
-class _PauseFinish extends StatelessWidget {
-  const _PauseFinish({required this.ink, this.onPause, this.onFinish});
-  final Color ink;
-  final VoidCallback? onPause;
-  final VoidCallback? onFinish;
-  @override
-  Widget build(BuildContext context) {
-    Widget b(String l, VoidCallback? t) => Expanded(
-      child: Material(
-        color: Lit.ink.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
-          onTap: t,
-          borderRadius: BorderRadius.circular(18),
-          child: SizedBox(
-            height: 56,
-            child: Center(
-              child: Text(l, style: LitType.body(17, ink, FontWeight.w700)),
-            ),
-          ),
-        ),
-      ),
-    );
-    return Row(
-      children: [
-        b('Pause', onPause),
-        const SizedBox(width: 12),
-        b('Finish', onFinish),
-      ],
-    );
-  }
-}
-
 /// The set strip on the right edge (b-live): last set on top.
 class _SetRail extends StatelessWidget {
   const _SetRail({required this.rail, required this.accent});
@@ -721,11 +863,15 @@ class _RestScreen extends StatelessWidget {
     this.onRestDelta,
     this.onSkipRest,
     this.onReorder,
+    this.onUndo,
+    this.finishBar,
   });
   final LiveView view;
   final ValueChanged<int>? onRestDelta;
   final VoidCallback? onSkipRest;
   final void Function(int from, int to)? onReorder;
+  final VoidCallback? onUndo;
+  final Widget? finishBar;
 
   @override
   Widget build(BuildContext context) {
@@ -740,7 +886,9 @@ class _RestScreen extends StatelessWidget {
             : (load.isEmpty ? '${view.reps} reps' : '${view.reps} × $load'));
     return Scaffold(
       backgroundColor: bg,
+      bottomNavigationBar: finishBar,
       body: SafeArea(
+        bottom: false,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
           children: [
@@ -801,6 +949,15 @@ class _RestScreen extends StatelessWidget {
                 ),
               ],
             ),
+            if (view.undoLabel != null && onUndo != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: _SetLinks(
+                  ink: ink,
+                  undoLabel: view.undoLabel,
+                  onUndo: onUndo,
+                ),
+              ),
             if (view.upNext.isNotEmpty) ...[
               const SizedBox(height: 24),
               Text('THEN · DRAG TO REORDER', style: LitType.cap(13, ink)),
@@ -819,9 +976,10 @@ class _RestScreen extends StatelessWidget {
 }
 
 class _AllDone extends StatelessWidget {
-  const _AllDone({required this.view, this.onFinish});
+  const _AllDone({required this.view, this.onFinish, this.onUndo});
   final LiveView view;
   final VoidCallback? onFinish;
+  final VoidCallback? onUndo;
   @override
   Widget build(BuildContext context) {
     final bg = view.type?.colour ?? Lit.ground;
@@ -852,6 +1010,8 @@ class _AllDone extends StatelessWidget {
                 radius: 28,
                 onTap: onFinish,
               ),
+              if (view.undoLabel != null && onUndo != null)
+                _SetLinks(ink: ink, undoLabel: view.undoLabel, onUndo: onUndo),
             ],
           ),
         ),

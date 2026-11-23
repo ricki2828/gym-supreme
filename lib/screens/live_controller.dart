@@ -234,6 +234,29 @@ class LiveController extends ChangeNotifier {
         : f;
   });
 
+  /// Undo the most recently logged set (P1-6): it goes back to pending with
+  /// its plan, and its rest is cleared. One path with timers (TimerSession).
+  Future<void> undoLast() => _transition((s) {
+    final last = lastDoneSet(s);
+    if (last == null) return s;
+    _typed.remove(last.setId);
+    return c2.TimerSession.undo(s, last.setId);
+  });
+
+  /// One more set on the current exercise, copying its last set's targets.
+  Future<void> addSet() => _transition((s) {
+    final c = s.current;
+    return c == null ? s : eng.Session.addSet(s, c.exercise);
+  });
+
+  /// Swap the current exercise for [item] (only before any set of it is
+  /// logged; the engine refuses otherwise). Counts toward the swaps metric.
+  Future<void> swapCurrent(eng.PlannedItem item) => _transition((s) {
+    final c = s.current;
+    if (c == null) return s;
+    return eng.Session.swap(s, c.exercise, item);
+  });
+
   /// One path for skip (and undo): the TimerSession versions stop or re-arm a
   /// timer block; for any other set they equal the Session versions.
   Future<void> skipSet() => _onCurrent(
@@ -556,4 +579,18 @@ class LiveController extends ChangeNotifier {
     _timer?.cancel();
     super.dispose();
   }
+}
+
+/// The most recently logged set of [s] (latest end time), or null.
+eng.SnapshotSet? lastDoneSet(eng.SessionSnapshot s) {
+  eng.SnapshotSet? best;
+  for (final e in s.exercises) {
+    for (final set in e.sets) {
+      if (set.state != eng.SetState.done) continue;
+      if (best == null || (set.endedAtMs ?? 0) >= (best.endedAtMs ?? 0)) {
+        best = set;
+      }
+    }
+  }
+  return best;
 }

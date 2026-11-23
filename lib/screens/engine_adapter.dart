@@ -4,6 +4,7 @@ import 'package:gym_engine/gym_engine.dart' as eng;
 import 'body_screen.dart';
 import 'diagnostics_panel.dart';
 import 'history_screen.dart';
+import 'live_controller.dart' show lastDoneSet;
 import 'live_screen.dart';
 import 'post_workout_screen.dart';
 import 'view_models.dart';
@@ -93,6 +94,25 @@ LiveView? liveViewOf(
   final endMs = s.finished ? (s.endedAtMs ?? nowMs) : nowMs;
   final elapsedS =
       ((endMs - s.startedAtMs - s.pausedTotalMs - pausedNow) / 1000).floor();
+  var doneSets = 0;
+  var leftSets = 0;
+  String? undoLabel;
+  for (final e in s.exercises) {
+    for (final x in e.sets) {
+      if (x.state == eng.SetState.done) doneSets++;
+      if (x.state == eng.SetState.pending) leftSets++;
+    }
+  }
+  final last = lastDoneSet(s);
+  if (last != null) {
+    final ex = s.exercises.firstWhere((e) => e.sets.contains(last));
+    final unit = unitOfKind(ex.loadKind);
+    final load = loadLabel(last.loadG, unit);
+    final work = unit == LoadUnit.timed
+        ? clock(last.reps ?? 0)
+        : '${last.reps ?? 0}';
+    undoLabel = load.isEmpty ? '${ex.name} $work' : '${ex.name} $work × $load';
+  }
   final c = s.current;
   // Finished (even with sets left unlogged) or nothing left: only Finish.
   if (c == null || s.finished) {
@@ -114,6 +134,8 @@ LiveView? liveViewOf(
       upNext: const [],
       elapsedS: elapsedS,
       allDone: true,
+      undoLabel: s.finished ? null : undoLabel,
+      doneSets: doneSets,
     );
   }
   final ex = s.exercises[c.exercise];
@@ -167,6 +189,10 @@ LiveView? liveViewOf(
     elapsedS: elapsedS < 0 ? 0 : elapsedS,
     paused: s.state == eng.SessionState.paused,
     // Only a cut-2 timer block carries a block; a plank (timed) does not.
+    undoLabel: undoLabel,
+    canSwap: !ex.anyLogged && set.block == null,
+    doneSets: doneSets,
+    leftSets: leftSets,
     timerBlock: set.block != null,
     setId: set.setId,
     blockTitle: c2.TimerSession.blockOf(s, set.setId)?.title,
@@ -287,3 +313,73 @@ GateView gateViewOf(
   medianSwapsPerSession: c.medianSwapsPerSession,
   appVersions: c.appVersions,
 );
+
+/// Exercises that could replace [current] at a gym with [kit]: they train
+/// one of its primary muscles, the kit allows them, and they are not in the
+/// session already. Closest first (same primary set), then by name; at most
+/// [limit].
+List<eng.Exercise> swapCandidates(
+  eng.Catalog catalog,
+  eng.SessionSnapshot s,
+  String currentId,
+  Set<String> kit, {
+  int limit = 8,
+}) {
+  final cur = catalog.exercises.where((e) => e.id == currentId).firstOrNull;
+  if (cur == null) return const [];
+  final inSession = {for (final e in s.exercises) e.exerciseId};
+  final out = [
+    for (final e in catalog.exercises)
+      if (!inSession.contains(e.id) &&
+          e.load != 'timed' &&
+          e.availableWith(kit) &&
+          e.primary.any(cur.primary.contains))
+        e,
+  ];
+  int closeness(eng.Exercise e) =>
+      e.primary.where(cur.primary.contains).length * 10 -
+      e.primary.where((m) => !cur.primary.contains(m)).length;
+  out.sort((a, b) {
+    final c = closeness(b).compareTo(closeness(a));
+    return c != 0 ? c : a.name.compareTo(b.name);
+  });
+  return out.take(limit).toList();
+}
+
+/// The planned item for a swap: same set count, reps and rest as the lift
+/// it replaces; load prefilled from last time at this gym, else none.
+eng.PlannedItem swapItem(
+  eng.Exercise e,
+  eng.SnapshotExercise replacing, {
+  eng.LastTime? last,
+}) {
+  final pending = replacing.sets.where((x) => x.state == eng.SetState.pending);
+  final reps = pending.isEmpty
+      ? (replacing.repLo ?? 10)
+      : (pending.first.targetReps ?? replacing.repLo ?? 10);
+  final load = last == null || last.sets.isEmpty ? null : last.sets.last.loadG;
+  final unit = switch (e.load) {
+    'dumbbell' => eng.LoadUnit.ea,
+    'bodyweight' => eng.LoadUnit.bodyweight,
+    'timed' || 'distance' => eng.LoadUnit.timed,
+    _ => eng.LoadUnit.kg,
+  };
+  final n = pending.isEmpty ? replacing.sets.length : pending.length;
+  return eng.PlannedItem(
+    exerciseId: e.id,
+    name: e.name,
+    unit: unit,
+    sets: [
+      for (var i = 0; i < n; i++)
+        eng.PlannedSet(
+          loadG: unit == eng.LoadUnit.bodyweight ? null : load,
+          reps: reps,
+        ),
+    ],
+    repLo: replacing.repLo ?? reps,
+    repHi: replacing.repHi ?? reps,
+    restS: replacing.restS,
+    reason: 'Swapped in for ${replacing.name}.',
+    primary: e.primary,
+  );
+}

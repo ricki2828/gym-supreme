@@ -145,12 +145,11 @@ void main() {
         ),
       ),
     );
-    await tester.scrollUntilVisible(find.text('Pause'), 300);
-    await tester.ensureVisible(find.text('Pause'));
+    // Both on screen with no scrolling: Pause in the header, Finish pinned.
+    await tester.tap(find.byKey(const Key('live.pause')));
+    await tester.tap(find.byKey(const Key('live.finish')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Pause'));
-    await tester.tap(find.text('Finish'));
-    expect(got, ['pause', 'finish']);
+    expect(got, ['pause', 'finish'], reason: 'no sets left: no confirm');
   });
 
   testWidgets('cut-2 slots render', (tester) async {
@@ -345,5 +344,140 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(typedReps, [7]);
+  });
+
+  LiveView withCounts(
+    LiveView b, {
+    int done = 2,
+    int left = 7,
+    String? undo,
+    bool canSwap = false,
+  }) => LiveView(
+    type: b.type,
+    exerciseName: b.exerciseName,
+    lift: b.lift,
+    lifts: b.lifts,
+    set: b.set,
+    sets: b.sets,
+    rail: b.rail,
+    reps: b.reps,
+    loadG: b.loadG,
+    unit: b.unit,
+    targetReps: b.targetReps,
+    targetLoadG: b.targetLoadG,
+    lastTime: b.lastTime,
+    restS: b.restS,
+    upNext: b.upNext,
+    elapsedS: b.elapsedS,
+    restLeftS: b.restLeftS,
+    doneSets: done,
+    leftSets: left,
+    undoLabel: undo,
+    canSwap: canSwap,
+  );
+
+  testWidgets('Finish with sets left asks first; Keep going does nothing', (
+    tester,
+  ) async {
+    phone(tester);
+    var finished = 0;
+    await tester.pumpWidget(
+      app(LiveScreen(view: withCounts(liveView()), onFinish: () => finished++)),
+    );
+    await tester.tap(find.byKey(const Key('live.finish')));
+    await tester.pumpAndSettle();
+    expect(find.text('2 sets logged. 7 not done are dropped.'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('finish.keep')));
+    await tester.pumpAndSettle();
+    expect(finished, 0);
+    await tester.tap(find.byKey(const Key('live.finish')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('finish.confirm')));
+    await tester.pumpAndSettle();
+    expect(finished, 1);
+  });
+
+  testWidgets('Finish is pinned: reachable on a long list and during rest', (
+    tester,
+  ) async {
+    phone(tester, textScale: 1.3);
+    await tester.pumpWidget(
+      app(LiveScreen(view: withCounts(liveView()), onFinish: () {})),
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('live.finish'))).bottom,
+      lessThanOrEqualTo(915),
+    );
+    await tester.pumpWidget(
+      app(
+        LiveScreen(view: withCounts(liveView(restLeftS: 60)), onFinish: () {}),
+      ),
+    );
+    expect(find.byKey(const Key('live.finish')), findsOneWidget);
+  });
+
+  testWidgets('undo, swap and add set; swap only while nothing is logged', (
+    tester,
+  ) async {
+    phone(tester);
+    final got = <String>[];
+    Widget screen(LiveView v) => app(
+      LiveScreen(
+        view: v,
+        onUndo: () => got.add('undo'),
+        onSwap: () => got.add('swap'),
+        onAddSet: () => got.add('add'),
+      ),
+    );
+    await tester.pumpWidget(
+      screen(
+        withCounts(
+          liveView(),
+          undo: 'Dumbbell bench press 10 × 22 kg ea',
+          canSwap: true,
+        ),
+      ),
+    );
+    await tester.ensureVisible(find.byKey(const Key('live.undo')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('live.undo')));
+    await tester.tap(find.byKey(const Key('live.swap')));
+    await tester.tap(find.byKey(const Key('live.add_set')));
+    expect(got, ['undo', 'swap', 'add']);
+    expect(
+      find.bySemanticsLabel(
+        'Undo last set: Dumbbell bench press 10 × 22 kg ea',
+      ),
+      findsOneWidget,
+    );
+    await tester.pumpWidget(screen(withCounts(liveView())));
+    expect(
+      find.byKey(const Key('live.undo')),
+      findsNothing,
+      reason: 'nothing logged',
+    );
+    expect(
+      find.byKey(const Key('live.swap')),
+      findsNothing,
+      reason: 'sets logged',
+    );
+  });
+
+  testWidgets('undo is on the rest screen too', (tester) async {
+    phone(tester);
+    var undone = 0;
+    await tester.pumpWidget(
+      app(
+        LiveScreen(
+          view: withCounts(
+            liveView(restLeftS: 60),
+            undo: 'Cable fly 12 × 15 kg',
+          ),
+          onUndo: () => undone++,
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const Key('live.undo')));
+    expect(undone, 1);
   });
 }

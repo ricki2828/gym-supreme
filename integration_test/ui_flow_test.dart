@@ -97,8 +97,20 @@ void main() {
     );
 
     // Item 6: finish → post-workout (B1 order inside the controller).
+    // Finish is pinned under the list (item 2); with sets left it asks.
     final allDone = find.text('FINISH').evaluate().isNotEmpty;
-    await _tap(tester, find.text(allDone ? 'FINISH' : 'Finish'));
+    await _tap(
+      tester,
+      allDone ? find.text('FINISH') : find.byKey(const Key('live.finish')),
+    );
+    if (!allDone) {
+      await _waitFor(
+        tester,
+        'confirm',
+        find.byKey(const Key('finish.confirm')),
+      );
+      await _tap(tester, find.byKey(const Key('finish.confirm')));
+    }
     await _waitFor(tester, 'post', find.byType(PostWorkoutScreen));
     expect(find.text('PUSH, DONE'), findsOneWidget);
 
