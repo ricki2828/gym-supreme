@@ -436,9 +436,10 @@ class Session {
 
 const Object _keep = Object();
 
-/// Block keys that define a timer (contract); everything else is run state
-/// or results.
-const _blockDefinitionKeys = {
+/// Block keys that define a timer: the "Definition" bullet of the `block`
+/// section in contracts/session_snapshot.md. Keep in step when the contract
+/// gains a definition key, or undo strips it (contract_fixtures_test checks).
+const Set<String> blockDefinitionKeys = {
   'type',
   'work_ms',
   'rest_ms',
@@ -452,7 +453,7 @@ Map<String, Object?>? _definitionOnly(Map<String, Object?>? block) {
   if (block == null) return null;
   return {
     for (final e in block.entries)
-      if (_blockDefinitionKeys.contains(e.key)) e.key: e.value,
+      if (blockDefinitionKeys.contains(e.key) || e.key == 'run') e.key: e.value,
     if (block.containsKey('started_at_wall_ms')) 'started_at_wall_ms': null,
     if (block.containsKey('elapsed_before_ms')) 'elapsed_before_ms': 0,
     if (block.containsKey('cues')) 'cues': const <Object?>[],

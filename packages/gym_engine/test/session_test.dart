@@ -437,6 +437,7 @@ void main() {
         block: const {
           'type': 'amrap',
           'cap_ms': 600000,
+          'run': 2,
           'started_at_wall_ms': 5,
           'elapsed_before_ms': 1000,
           'cues': [
@@ -452,6 +453,7 @@ void main() {
     expect(s.exercises[1].sets[0].block, {
       'type': 'amrap',
       'cap_ms': 600000,
+      'run': 2, // kept: cut 2 re-arms with run + 1
       'started_at_wall_ms': null,
       'elapsed_before_ms': 0,
       'cues': <Object?>[],

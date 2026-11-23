@@ -82,6 +82,18 @@ void main() {
     expect(checked, greaterThan(15));
   });
 
+  test('undo keeps exactly the contract block Definition keys', () {
+    final md = File('../../contracts/session_snapshot.md').readAsStringSync();
+    final line = md
+        .split('\n')
+        .firstWhere((l) => l.startsWith('- Definition:'));
+    final keys = RegExp(r'`([a-z_]+)`')
+        .allMatches(line)
+        .map((m) => m.group(1)!)
+        .toSet();
+    expect(keys, blockDefinitionKeys);
+  });
+
   test('torn journal: last whole line wins; half line is a torn tail', () {
     final r = readJournal(
       File('${dir.path}/journal_v1_torn_tail.jsonl').readAsStringSync(),

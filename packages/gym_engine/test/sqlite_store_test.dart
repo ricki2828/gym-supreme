@@ -266,7 +266,10 @@ void main() {
         RestoreResult.refused,
       );
       expect(File(snapPath).existsSync(), isFalse); // moved, not deleted
-      expect(File('$dbPath.refused-snapshot').existsSync(), isTrue);
+      expect(
+        dir.listSync().where((f) => f.path.contains('refused-snapshot-')),
+        hasLength(1),
+      );
       expect(File(dbPath).existsSync(), isFalse);
       expect(File('$dbPath.restore').existsSync(), isFalse);
 
@@ -314,6 +317,23 @@ void main() {
       expect(File(snapPath).existsSync(), isTrue);
       expect(File(dbPath).existsSync(), isFalse);
     });
+
+    test(
+      'writeSnapshot never replaces a snapshot with workouts by an empty db',
+      () {
+        final snapPath = '${dir.path}/snap.db';
+        final full = SqliteStore.open('${dir.path}/full.db');
+        full.upsertWorkout(workout('w1'));
+        expect(full.writeSnapshot(snapPath), isTrue);
+        full.close();
+        final empty = SqliteStore.open('${dir.path}/empty.db');
+        expect(empty.writeSnapshot(snapPath), isFalse);
+        empty.close();
+        final check = SqliteStore.open(snapPath);
+        expect(check.hasWorkout('w1'), isTrue);
+        check.close();
+      },
+    );
 
     test('directory fsync works on this platform', () {
       expect(fsyncDirectory(dir.path), Platform.isLinux || Platform.isAndroid);

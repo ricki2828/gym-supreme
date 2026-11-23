@@ -92,7 +92,7 @@ enum RestoreResult {
   restored,
 
   /// The snapshot is definitely bad (corrupt or from a newer build). It was
-  /// moved to `<dbPath>.refused-snapshot` (outside backup/, kept for a
+  /// moved to `<dbPath>.refused-snapshot-<ms>` (outside backup/, kept for a
   /// manual look). Open a fresh db and count `restore_failed`.
   refused,
 
@@ -166,7 +166,12 @@ class SqliteStore implements HistoryStore {
   /// `VACUUM INTO <path>.tmp`, fsync, then rename onto [path]. Auto Backup
   /// copies only this file, never the live db/WAL pair. Returns false if the
   /// database was busy (try again later); other errors throw.
+  ///
+  /// Guard: never replaces a snapshot that has workouts with a db that has
+  /// none (a caller that ignored [RestoreResult.retryLater] would otherwise
+  /// overwrite the only backup with an empty db). Returns false then too.
   bool writeSnapshot(String path) {
+    if (_workoutCount(db) == 0 && _snapshotWorkouts(path) > 0) return false;
     final tmp = File('$path.tmp'); // same dir: rename stays atomic
     tmp.parent.createSync(recursive: true);
     if (tmp.existsSync()) tmp.deleteSync();
@@ -190,6 +195,24 @@ class SqliteStore implements HistoryStore {
     return true;
   }
 
+  static int _workoutCount(Database d) =>
+      d.select('SELECT count(*) AS n FROM workout').first['n'] as int;
+
+  /// Workouts in an existing snapshot; 0 if none or unreadable.
+  static int _snapshotWorkouts(String path) {
+    if (!File(path).existsSync()) return 0;
+    try {
+      final d = sqlite3.open(path, mode: OpenMode.readOnly);
+      try {
+        return _workoutCount(d);
+      } finally {
+        d.close();
+      }
+    } on SqliteException {
+      return 0;
+    }
+  }
+
   /// Before [SqliteStore.open]: if [dbPath] is missing and [snapshotPath]
   /// exists (a fresh install restored by Auto Backup), put the snapshot in
   /// place, but only after `PRAGMA integrity_check` says ok and its schema
@@ -200,8 +223,8 @@ class SqliteStore implements HistoryStore {
   /// The snapshot may be the user's only copy, so it is never deleted:
   /// definite corruption (check failed, SQLITE_CORRUPT/NOTADB, or a newer
   /// schema) moves it to `<dbPath>.refused-snapshot` and returns
-  /// [RestoreResult.refused]; any other error keeps it and returns
-  /// [RestoreResult.retryLater].
+  /// [RestoreResult.refused]; any other error (SQLite or file system, at any
+  /// step) keeps it untouched and returns [RestoreResult.retryLater].
   static RestoreResult restoreSnapshotIfMissing(
     String dbPath,
     String snapshotPath,
@@ -209,50 +232,61 @@ class SqliteStore implements HistoryStore {
     if (File(dbPath).existsSync()) return RestoreResult.notNeeded;
     final snap = File(snapshotPath);
     if (!snap.existsSync()) return RestoreResult.notNeeded;
-    for (final suffix in ['-wal', '-shm', '-journal']) {
-      final f = File('$dbPath$suffix');
-      if (f.existsSync()) f.deleteSync();
-    }
     final tmp = File('$dbPath.restore');
-    if (tmp.existsSync()) tmp.deleteSync();
     try {
+      for (final suffix in ['-wal', '-shm', '-journal']) {
+        final f = File('$dbPath$suffix');
+        if (f.existsSync()) f.deleteSync();
+      }
+      if (tmp.existsSync()) tmp.deleteSync();
       snap.copySync(tmp.path);
+      bool? ok; // null = could not tell
+      try {
+        final check = sqlite3.open(tmp.path, mode: OpenMode.readOnly);
+        try {
+          final r = check.select('PRAGMA integrity_check');
+          final v =
+              check.select('PRAGMA user_version').first.columnAt(0) as int;
+          ok =
+              r.length == 1 &&
+              r.first.columnAt(0) == 'ok' &&
+              v >= 1 &&
+              v <= latestSchemaVersion;
+        } finally {
+          check.close();
+        }
+      } on SqliteException catch (e) {
+        final code = e.resultCode & 0xff;
+        ok = (code == 11 || code == 26) ? false : null; // CORRUPT, NOTADB
+      }
+      if (ok != true) {
+        tmp.deleteSync();
+        if (ok == null) return RestoreResult.retryLater;
+        // Keep every refused copy: never overwrite an earlier one.
+        snap.renameSync(
+          '$dbPath.refused-snapshot-${DateTime.now().millisecondsSinceEpoch}',
+        );
+        return RestoreResult.refused;
+      }
+      final raf = tmp.openSync(mode: FileMode.append);
+      try {
+        raf.flushSync();
+      } finally {
+        raf.closeSync();
+      }
+      tmp.renameSync(dbPath);
+      fsyncDirectory(tmp.parent.path);
+      return RestoreResult.restored;
     } on FileSystemException {
+      // Any I/O failure: the snapshot is never touched here. Best-effort
+      // cleanup of our own tmp only.
+      try {
+        if (tmp.existsSync()) tmp.deleteSync();
+      } on FileSystemException {
+        // ignore
+      }
       return RestoreResult.retryLater;
     }
-    bool? ok; // null = could not tell
-    try {
-      final check = sqlite3.open(tmp.path, mode: OpenMode.readOnly);
-      try {
-        final r = check.select('PRAGMA integrity_check');
-        final v = check.select('PRAGMA user_version').first.columnAt(0) as int;
-        ok =
-            r.length == 1 &&
-            r.first.columnAt(0) == 'ok' &&
-            v >= 1 &&
-            v <= latestSchemaVersion;
-      } finally {
-        check.close();
-      }
-    } on SqliteException catch (e) {
-      final code = e.resultCode & 0xff;
-      ok = (code == 11 || code == 26) ? false : null; // CORRUPT, NOTADB
-    }
-    if (ok != true) {
-      tmp.deleteSync();
-      if (ok == null) return RestoreResult.retryLater;
-      snap.renameSync('$dbPath.refused-snapshot');
-      return RestoreResult.refused;
-    }
-    final raf = tmp.openSync(mode: FileMode.append);
-    try {
-      raf.flushSync();
-    } finally {
-      raf.closeSync();
-    }
-    tmp.renameSync(dbPath);
-    fsyncDirectory(tmp.parent.path);
-    return RestoreResult.restored;
   }
 
   @override
