@@ -20,6 +20,7 @@ import 'services.dart';
 /// - `resume`: the pending journal from start_only is resumed, finished and
 ///   stored (crash-safe resume, item 5).
 /// - `ask`: the one-time notification ask (0.1.1).
+/// - `history`: list stored workouts (restore drill, 0.2).
 class E2eDriver {
   E2eDriver(this.s, {void Function(String line)? out}) : _out = out ?? print;
 
@@ -65,6 +66,8 @@ class E2eDriver {
           await _resume();
         case 'ask':
           await _ask();
+        case 'history':
+          _history();
         default:
           _log('unknown', {'command': name});
       }
@@ -143,6 +146,18 @@ class E2eDriver {
     await Future<void>.delayed(const Duration(milliseconds: 500));
     final allowed = await askNotificationsOnce(n);
     _log('ask', {'allowed': allowed});
+    _log('ok');
+  }
+
+  /// Lists stored workouts (restore drill: the backup came back intact).
+  void _history() {
+    final rows = s.engine.history(limit: 20);
+    _log('history', {
+      'count': rows.length,
+      'uuids': [for (final r in rows) r.uuid],
+      'restore_failed': s.restoreFailed,
+      'restore_pending': s.restorePending,
+    });
     _log('ok');
   }
 

@@ -188,4 +188,39 @@ if [ "$sdk" -ge 33 ]; then
   adb shell dumpsys package "$PKG" | tr -d '\r' | grep -q 'POST_NOTIFICATIONS: granted=false' || { echo "::error::API $sdk: permission was not actually denied during the check" >&2; exit 1; }
   fatal_check "$PKG" "rest alert, notifications denied"
 fi
+# Restore drill (0.2 item 5b, review P1-7), API 34 only: Android Auto Backup through the local
+# transport, uninstall (wipes app data), reinstall, restore, then the workouts logged above must
+# come back through files/backup/gym-snapshot.db (the only file the rules back up).
+if [ "$sdk" -eq 34 ]; then
+  uuids_of() { sed -n 's/.*"uuids":\(\[[^]]*\]\).*/\1/p' | head -1; }
+  adb logcat -c || true
+  e2e_cmd history
+  e2e_wait ok 30
+  before="$(e2e_lines | grep '"step":"history"' | uuids_of)"
+  echo "restore drill: before $before"
+  [ -n "$before" ] && [ "$before" != "[]" ] || { echo "::error::restore drill: no workouts to back up" >&2; exit 1; }
+  adb shell input keyevent KEYCODE_HOME   # onHide: checkpoint + snapshot
+  sleep 5
+  adb shell bmgr enable true
+  adb shell bmgr list transports
+  adb shell bmgr transport com.android.localtransport/.LocalTransport || true
+  bk="$(adb shell bmgr backupnow "$PKG" 2>&1 | tr -d '\r')"
+  echo "$bk"
+  grep -q "$PKG.*Success\|Backup finished with result: Success" <<< "$bk" || { echo "::error::restore drill: backup did not succeed" >&2; exit 1; }
+  adb uninstall "$PKG"
+  adb install "$APK"
+  rs="$(adb shell bmgr restore "$PKG" 2>&1 | tr -d '\r')"
+  echo "$rs"
+  grep -qiE "restoreFinished: 0|done" <<< "$rs" || echo "::warning::restore drill: bmgr restore output unrecognised (checking data anyway)"
+  launch "$PKG" || { echo "::error::restore drill: app did not start after restore" >&2; exit 1; }
+  adb logcat -c || true
+  e2e_cmd history
+  e2e_wait ok 30
+  h="$(e2e_lines | grep '"step":"history"')"
+  after="$(uuids_of <<< "$h")"
+  echo "restore drill: after $after"
+  [ "$after" = "$before" ] || { echo "::error::restore drill: workouts did not come back ($before -> $after)" >&2; exit 1; }
+  grep -q '"restore_failed":0' <<< "$h" && grep -q '"restore_pending":false' <<< "$h" || { echo "::error::restore drill: restore flagged failure/pending: $h" >&2; exit 1; }
+  fatal_check "$PKG" "restore drill"
+fi
 echo "smoke ok on API $sdk"
