@@ -18,6 +18,8 @@ dependencies:
   # SQLite is the source of truth (plan 7). 3.x bundles the native library through build
   # hooks (sqlite3_flutter_libs is EOL); CI proves it loads on every emulator API level.
   sqlite3: ^3.9.2
+  # files/ directory for gym.db (getApplicationSupportDirectory). No permissions.
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:

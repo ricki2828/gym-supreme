@@ -37,7 +37,8 @@ abstract class WorkoutPort {
 
 /// A refusal from the service, by code (pigeons/platform_api.dart lists
 /// them): stale_rev, wrong_workout, finished, not_running, already_running,
-/// finish_pending, still_running, bad_snapshot, bad_schema, bad_file_name.
+/// finish_pending, still_running, bad_snapshot, bad_schema, bad_file_name,
+/// io_error.
 class WorkoutPortException implements Exception {
   WorkoutPortException(this.code, [this.message]);
   final String code;
