@@ -229,12 +229,17 @@ jobs:
           if [ -z "$KS_B64" ]; then echo "::error::GYM_DOGFOOD_KEYSTORE_BASE64 secret missing" >&2; exit 1; fi
           echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/dogfood.jks"
           echo "GYM_DOGFOOD_KEYSTORE=$RUNNER_TEMP/dogfood.jks" >> "$GITHUB_ENV"
-      - name: Stamp version 0.1.0+<run_number*10 + run_attempt> (rises every build, re-runs included)
-        # run_number resets if this workflow is renamed or recreated: then raise the base offset
-        # above the phone's installed versionCode, or the update is refused.
+      - name: Stamp build number <run_number*10 + run_attempt> (rises every build, re-runs included)
+        # versionName = the label in pubspec.yaml (bump it per dogfood release: 0.1.1, 0.2.0, ...);
+        # only the +build part is stamped. run_number resets if this workflow is renamed or
+        # recreated: then raise the base offset above the phone's installed versionCode, or the
+        # update is refused.
         run: |
-          sed -i "s/^version: .*/version: 0.1.0+$(( ${{ github.run_number }} * 10 + ${{ github.run_attempt }} ))/" pubspec.yaml
+          code=$(( ${{ github.run_number }} * 10 + ${{ github.run_attempt }} ))
+          grep -qE '^version: [0-9]+\.[0-9]+\.[0-9]+\+[0-9]+$' pubspec.yaml || { echo "::error::pubspec version must be X.Y.Z+N"; exit 1; }
+          sed -i -E "s/^(version: [0-9]+\.[0-9]+\.[0-9]+)\+[0-9]+$/\1+$code/" pubspec.yaml
           grep -n '^version:' pubspec.yaml
+          echo "### Dogfood version: $(sed -n 's/^version: //p' pubspec.yaml)" >> "$GITHUB_STEP_SUMMARY"
       - name: Build dogfood APKs (arm64 for the phone, x86_64 for the emulators)
         env:
           GYM_DOGFOOD_STORE_PASSWORD: ${{ secrets.GYM_DOGFOOD_STORE_PASSWORD }}
@@ -245,7 +250,8 @@ jobs:
             --target-platform android-arm64,android-x64 \
             --obfuscate --split-debug-info=build/symbols-dogfood \
             --dart-define=BUILD_SHA=${{ github.event.pull_request.head.sha || github.sha }} \
-            --dart-define=GS_FEATURES="$GS_FEATURES"
+            --dart-define=GS_FEATURES="$GS_FEATURES" \
+            --dart-define=APP_VERSION="$(sed -n 's/^version: //p' pubspec.yaml)"
           echo "### Dogfood features: '${GS_FEATURES:-none (all off)}'" >> "$GITHUB_STEP_SUMMARY"
           ls -la build/app/outputs/flutter-apk/
       - name: Verify signer, application id, permissions, 16 KB alignment
@@ -258,6 +264,8 @@ jobs:
             grep -q "CN=Gym Supreme dogfood" "$RUNNER_TEMP/signer.txt" || { echo "::error::$abi APK is not signed with the dogfood key"; exit 1; }
             "$BT/aapt" dump badging "$APK" | grep -E "^package:" | tee "$RUNNER_TEMP/pkg.txt"
             grep -q "name='$DOGFOOD_PKG'" "$RUNNER_TEMP/pkg.txt" || { echo "::error::unexpected applicationId"; exit 1; }
+            label="$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' pubspec.yaml)"
+            grep -q "versionName='$label-dogfood'" "$RUNNER_TEMP/pkg.txt" || { echo "::error::versionName is not $label-dogfood"; exit 1; }
             tools/check_manifest_permissions.sh "$APK" "$BT" "$DOGFOOD_PKG"
             tools/check_16kb_alignment.sh "$APK" "$BT/zipalign"
           done

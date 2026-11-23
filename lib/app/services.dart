@@ -203,7 +203,9 @@ Future<AppServices> bootstrap() async {
     store: store,
     engine: eng.GymEngine(catalog: catalog, store: store),
     port: PigeonWorkoutPort(),
-    appVersion: '0.1.0+$versionCode $flavor $buildLabel',
+    appVersion:
+        '${kAppVersion.isEmpty ? 'local+$versionCode' : kAppVersion} '
+        '$flavor $buildLabel',
     snapshotPath: pending ? null : snapshotPath(dir),
     restoreFailed: restoreFailed,
     restorePending: pending,
