@@ -1,16 +1,17 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_engine/gym_engine.dart' as eng;
-import 'package:gym_supreme/app/workout_port.dart';
 import 'package:gym_supreme/screens/flows/flows.dart';
 import 'package:gym_supreme/screens/live_screen.dart';
 import 'package:gym_supreme/screens/picker_screen.dart';
 import 'package:gym_supreme/screens/post_workout_screen.dart';
 
 import 'fixtures.dart';
+import 'flaky_port.dart';
 
 /// The cut-1 loop end to end in widgets: real engine (MemoryStore), t5t's
 /// stub port. Items 1-6: setup, pick, suggest, log, resume, post-workout.
@@ -21,7 +22,7 @@ void main() {
   );
   late int now;
   late eng.GymEngine engine;
-  late StubWorkoutPort port;
+  late FlakyPort port;
   late GymDeps deps;
 
   setUp(() {
@@ -33,7 +34,7 @@ void main() {
       tzOffsetMin: () => 480,
       random: Random(5),
     );
-    port = StubWorkoutPort();
+    port = FlakyPort();
     deps = GymDeps(
       engine: engine,
       port: port,
@@ -144,5 +145,69 @@ void main() {
     expect(engine.isStored(s.workoutUuid), isTrue);
     expect(await port.readPendingJournal(), isNull);
     expect(find.textContaining('Paused'), findsNothing);
+  });
+
+  Future<void> startChest(WidgetTester tester) async {
+    await tapText(tester, 'LIGHT SOMETHING UP');
+    await tester.tap(find.bySemanticsLabel(RegExp(r'^Chest, ')));
+    await tester.pumpAndSettle();
+    await tapText(tester, 'START PUSH');
+  }
+
+  testWidgets('double back from the live screen never pops the home route', (
+    tester,
+  ) async {
+    engine.saveGym(engine.gymFromPreset('condo'));
+    await pumpRoot(tester);
+    await startChest(tester);
+    final nav = tester.state<NavigatorState>(find.byType(Navigator));
+    unawaited(nav.maybePop());
+    unawaited(nav.maybePop());
+    await tester.pumpAndSettle();
+    unawaited(nav.maybePop());
+    await tester.pumpAndSettle();
+    expect(find.byType(GymRoot), findsOneWidget);
+    expect(find.text('GYM SUPREME'), findsOneWidget);
+    expect(find.textContaining('Paused'), findsOneWidget);
+  });
+
+  testWidgets('a recovery that throws still opens the app, journal kept', (
+    tester,
+  ) async {
+    engine.saveGym(engine.gymFromPreset('condo'));
+    port.failNext['readPendingJournal'] = StateError('disk');
+    await pumpRoot(tester);
+    expect(find.text('GYM SUPREME'), findsOneWidget);
+    expect(find.textContaining('could not be restored'), findsOneWidget);
+  });
+
+  testWidgets('gym setup: heavier dumbbells add one pair, keep his own', (
+    tester,
+  ) async {
+    final g = engine.gymFromPreset('condo').withWeights('dumbbells', [
+      for (var kg = 2; kg <= 24; kg += 2) kg * 1000,
+    ]);
+    engine.saveGym(g);
+    await pumpRoot(tester);
+    await tester.tap(find.text('Gyms'));
+    await tester.pumpAndSettle();
+    expect(find.text('Dumbbells to 24 kg'), findsOneWidget);
+    // Centre the dumbbell row, clear of the Save bar pinned under the list.
+    // The Heavier step is the last + (the first is Add gym).
+    await tester.runAsync(
+      () => Scrollable.ensureVisible(
+        tester.element(find.text('Heaviest dumbbell pair')),
+        alignment: 0.5,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.add).last);
+    await tester.pumpAndSettle();
+    expect(find.text('Dumbbells to 25 kg'), findsOneWidget);
+    await tapText(tester, 'SAVE · 5 ON THE FLOOR');
+    expect(engine.gym(g.id)!.kit['dumbbells']!.weightsG, [
+      for (var kg = 2; kg <= 24; kg += 2) kg * 1000,
+      25000,
+    ]);
   });
 }

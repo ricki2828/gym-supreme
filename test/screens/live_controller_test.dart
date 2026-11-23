@@ -7,6 +7,8 @@ import 'package:gym_supreme/app/workout_port.dart';
 import 'package:gym_supreme/screens/live_controller.dart';
 import 'package:gym_supreme/screens/live_screen.dart';
 
+import 'flaky_port.dart';
+
 /// The controller over the real engine (MemoryStore) and t5t's stub port:
 /// transitions in Dart, rev owned by the port, finish order B1.
 void main() {
@@ -16,7 +18,7 @@ void main() {
   );
   late int now;
   late eng.GymEngine engine;
-  late StubWorkoutPort port;
+  late FlakyPort port;
   late LiveController c;
   late String gymId;
 
@@ -34,7 +36,7 @@ void main() {
     ]);
     engine.saveGym(g);
     gymId = g.id;
-    port = StubWorkoutPort();
+    port = FlakyPort();
     c = LiveController(
       engine: engine,
       port: port,
@@ -117,7 +119,7 @@ void main() {
   test('reorder moves up-next items only', () async {
     await startPush();
     final before = c.view()!.upNext.map((p) => p.exerciseId).toList();
-    if (before.length < 2) return; // condo push should give 2+
+    expect(before.length, greaterThanOrEqualTo(2), reason: 'condo push');
     await c.reorderUpNext(0, 1);
     final after = c.view()!.upNext.map((p) => p.exerciseId).toList();
     expect(after, [before[1], before[0], ...before.skip(2)]);
@@ -184,5 +186,95 @@ void main() {
     expect(c2.view()!.paused, isFalse);
     expect(c2.view()!.elapsedS, at);
     c2.dispose();
+  });
+
+  Future<void> logOne() async {
+    await c.load(1);
+    await c.done();
+  }
+
+  test(
+    'finish failing at delete keeps the workout stored and retryable',
+    () async {
+      await startPush();
+      await logOne();
+      port.failNext['deleteJournal'] = WorkoutPortException('io');
+      expect(await c.finish(), isNull);
+      expect(c.lastError, isA<WorkoutPortException>());
+      final uuid = c.snapshot!.workoutUuid;
+      expect(engine.isStored(uuid), isTrue, reason: 'saved before delete');
+      expect(await port.readPendingJournal(), isNotNull, reason: 'kept');
+      expect(c.view()!.allDone, isTrue, reason: 'Finish can be tapped again');
+      expect(await c.finish(), uuid);
+      expect(await port.readPendingJournal(), isNull);
+      expect(engine.history(), hasLength(1), reason: 'upsert, not a duplicate');
+    },
+  );
+
+  test(
+    'finish failing at the service: nothing stored, nothing deleted',
+    () async {
+      await startPush();
+      await logOne();
+      port.failNext['finishSession'] = WorkoutPortException('not_running');
+      expect(await c.finish(), isNull);
+      expect(engine.history(), isEmpty);
+      expect(await port.readPendingJournal(), isNotNull);
+      expect(await c.finish(), isNotNull);
+      expect(engine.history(), hasLength(1));
+    },
+  );
+
+  test('a second finish after success does nothing', () async {
+    await startPush();
+    await logOne();
+    final uuid = await c.finish();
+    expect(await c.finish(), uuid);
+    expect(c.lastError, isNull);
+  });
+
+  test('pause: a refused paused snapshot keeps the service running', () async {
+    await startPush();
+    port.failNext['submitSnapshot'] = WorkoutPortException('io');
+    expect(await c.pause(), isFalse);
+    expect(port.running, isTrue);
+    expect(c.view()!.paused, isFalse);
+    expect(await c.pause(), isTrue);
+    expect(port.running, isFalse);
+  });
+
+  test(
+    'pause: a failing pauseSession after the paused snapshot is still safe',
+    () async {
+      await startPush();
+      port.failNext['pauseSession'] = WorkoutPortException('io');
+      expect(await c.pause(), isTrue);
+      expect(c.lastError, isA<WorkoutPortException>());
+    },
+  );
+
+  test('stale rev onto a head finished elsewhere completes B1 here', () async {
+    await startPush();
+    await logOne();
+    final head = eng.SessionSnapshot.decode((await port.readPendingJournal())!);
+    final fin = eng.Session.finish(head, nowMs: now += 1000);
+    await port.submitSnapshot(fin.encode(), head.rev);
+    await c.skipRest(); // our base is now stale
+    expect(c.finishedUuid, fin.workoutUuid);
+    expect(engine.isStored(fin.workoutUuid), isTrue);
+    expect(await port.readPendingJournal(), isNull);
+  });
+
+  test('stale rev with an unreadable journal keeps the old view', () async {
+    await startPush();
+    await logOne();
+    final head = eng.SessionSnapshot.decode((await port.readPendingJournal())!);
+    await port.submitSnapshot(
+      eng.Session.skipRest(head, nowMs: now).encode(),
+      head.rev,
+    );
+    port.failNext['readPendingJournal'] = WorkoutPortException('io');
+    await c.restDelta(15);
+    expect(c.view(), isNotNull);
   });
 }

@@ -91,7 +91,8 @@ LiveView? liveViewOf(
   final elapsedS =
       ((nowMs - s.startedAtMs - s.pausedTotalMs - pausedNow) / 1000).floor();
   final c = s.current;
-  if (c == null) {
+  // Finished (even with sets left unlogged) or nothing left: only Finish.
+  if (c == null || s.finished) {
     final last = s.exercises.isEmpty ? null : s.exercises.last;
     return LiveView(
       type: type,
@@ -251,15 +252,26 @@ List<BodyMuscle> bodyMusclesOf(
     ),
 ];
 
-/// Day N of the 14-day window from the first session; null before it.
-int? dayOfWindow(int? firstSessionAtMs, int nowMs) => firstSessionAtMs == null
-    ? null
-    : ((nowMs - firstSessionAtMs) ~/ 86400000) + 1;
+/// Day N of the 14-day window from the first session, in local calendar
+/// days (the day of the first session is day 1); null before it.
+int? dayOfWindow(int? firstSessionAtMs, int nowMs, {int tzOffsetMin = 0}) {
+  if (firstSessionAtMs == null) return null;
+  DateTime day(int ms) {
+    final d = localOf(ms, tzOffsetMin);
+    return DateTime.utc(d.year, d.month, d.day);
+  }
 
-GateView gateViewOf(eng.Counters c, {required int nowMs}) => GateView(
+  return day(nowMs).difference(day(firstSessionAtMs)).inDays + 1;
+}
+
+GateView gateViewOf(
+  eng.Counters c, {
+  required int nowMs,
+  int tzOffsetMin = 0,
+}) => GateView(
   sessionsTotal: c.sessionsTotal,
   sessionsLast14Days: c.sessionsLast14Days,
-  dayOfWindow: dayOfWindow(c.firstSessionAtMs, nowMs),
+  dayOfWindow: dayOfWindow(c.firstSessionAtMs, nowMs, tzOffsetMin: tzOffsetMin),
   doneSets: c.doneSets,
   tapUnchangedSets: c.tapUnchangedSets,
   coldStartSets: c.coldStartSets,

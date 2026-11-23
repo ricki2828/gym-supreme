@@ -37,8 +37,14 @@ class LiveController extends ChangeNotifier {
   Future<void> _queue = Future.value();
   final Map<String, eng.LoadSteps> _steps = {};
 
-  /// The last error from the port, for a banner; cleared by the next success.
-  WorkoutPortException? lastError;
+  /// The last error (port refusal, storage), for a banner; cleared by the
+  /// next success.
+  Object? lastError;
+
+  /// Set once the workout is stored and its journal deleted.
+  String? finishedUuid;
+
+  final Map<String, eng.LastTime?> _last = {};
 
   eng.SessionSnapshot? get snapshot => _s;
   bool get active => _s != null && !_s!.finished;
@@ -106,44 +112,79 @@ class LiveController extends ChangeNotifier {
     return eng.Session.reorder(s, base + from, base + to);
   });
 
-  Future<void> pause() => _enqueue(() async {
-    final s = _s;
-    if (s == null) return;
-    await _submit(eng.Session.pause(s, nowMs: nowMs()));
-    await port.pauseSession();
-  });
+  /// True when the journal holds the paused snapshot (safe to leave). The
+  /// service is told to stop only after that snapshot was accepted.
+  Future<bool> pause() async {
+    var ok = false;
+    await _enqueue(() async {
+      final s = _s;
+      if (s == null || s.finished) return;
+      final next = eng.Session.pause(s, nowMs: nowMs());
+      if (!identical(next, s) && !await _submit(next)) return;
+      ok = true;
+      try {
+        await port.pauseSession();
+      } on Object catch (e) {
+        // The accepted paused snapshot already stops the service; the
+        // journal is the truth, so leaving is still safe.
+        lastError = e;
+      }
+    });
+    return ok;
+  }
 
   /// Finish order (plan 7, B1): the finished snapshot goes to the service
   /// and is fsync'd, Dart upserts it into SQLite, and only then is the
   /// journal deleted. Returns the workout uuid for the summary.
+  ///
+  /// Safe to call again after a failure: each step is idempotent (the
+  /// service returns an already-finished journal unchanged; the upsert is by
+  /// uuid). Returns null, with [lastError] set, if a step failed.
   Future<String?> finish() async {
-    String? uuid;
     await _enqueue(() async {
       final s = _s;
-      if (s == null) return;
-      await _submit(eng.Session.finish(s, nowMs: nowMs()));
-      final finalJson = await port.finishSession();
-      final done = eng.SessionSnapshot.decode(finalJson);
-      engine.saveFinished(done);
-      await port.deleteJournal(done.workoutUuid);
-      uuid = done.workoutUuid;
-      _set(done);
+      if (s == null || finishedUuid != null) return;
+      if (!s.finished &&
+          !await _submit(eng.Session.finish(s, nowMs: nowMs()))) {
+        return;
+      }
+      try {
+        final done = eng.SessionSnapshot.decode(await port.finishSession());
+        await _complete(done);
+      } on Object catch (e) {
+        lastError = e;
+        notifyListeners();
+      }
     });
-    return uuid;
+    return finishedUuid;
+  }
+
+  /// Store, then delete the journal (B1). Never deletes before the save.
+  Future<void> _complete(eng.SessionSnapshot done) async {
+    engine.saveFinished(done);
+    await port.deleteJournal(done.workoutUuid);
+    finishedUuid = done.workoutUuid;
+    lastError = null;
+    _set(done);
   }
 
   // ---- view ----------------------------------------------------------------
 
-  /// Null when no session is running.
+  /// Null before start and once the workout is stored. A finished snapshot
+  /// that is not stored yet (a failed finish) shows as all done, so Finish
+  /// can be tapped again.
   LiveView? view() {
     final s = _s;
-    if (s == null || s.finished) return null;
+    if (s == null || finishedUuid != null) return null;
     return liveViewOf(
       s,
       nowMs: nowMs(),
       steps: _stepsFor(s),
-      lastTime: (exerciseId) =>
-          engine.lastTime(gymId: s.gymId, exerciseId: exerciseId),
+      // Cached per exercise: the view rebuilds every second.
+      lastTime: (exerciseId) => _last.putIfAbsent(
+        exerciseId,
+        () => engine.lastTime(gymId: s.gymId, exerciseId: exerciseId),
+      ),
     );
   }
 
@@ -176,23 +217,51 @@ class LiveController extends ChangeNotifier {
     await _submit(next);
   });
 
-  Future<void> _submit(eng.SessionSnapshot next) async {
+  /// True when the service accepted [next].
+  Future<bool> _submit(eng.SessionSnapshot next) async {
     final base = _s!;
-    if (identical(next, base)) return;
+    if (identical(next, base)) return true;
     try {
       await port.submitSnapshot(next.encode(), base.rev);
       lastError = null;
       _set(next);
-    } on StaleRevException catch (e) {
-      // Another writer moved the journal (cut 2: lock-screen Done). Take the
-      // service's head; the tap is dropped rather than applied twice.
-      lastError = e;
-      final head = await port.readPendingJournal();
-      final rec = head == null ? null : engine.recover(head).snapshot;
-      _set(rec ?? base);
+      return true;
     } on WorkoutPortException catch (e) {
       lastError = e;
+      if (e is StaleRevException || e.code == 'finished') {
+        // Another writer moved the journal (cut 2: lock-screen Done or
+        // Finish). Take the service's head; the tap is dropped rather than
+        // applied twice.
+        await _resync(base);
+      } else {
+        notifyListeners();
+      }
+      return false;
+    } on Object catch (e) {
+      lastError = e;
       notifyListeners();
+      return false;
+    }
+  }
+
+  /// Parse the journal head without side effects. A head finished elsewhere
+  /// (lock screen) completes here with the same save-then-delete order.
+  Future<void> _resync(eng.SessionSnapshot base) async {
+    try {
+      final text = await port.readPendingJournal();
+      final head = text == null ? null : eng.readJournal(text).last;
+      if (head == null) {
+        notifyListeners();
+        return;
+      }
+      if (head.finished) {
+        await _complete(head);
+      } else {
+        _set(head);
+      }
+    } on Object catch (e) {
+      lastError = e;
+      _set(base);
     }
   }
 

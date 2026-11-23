@@ -129,9 +129,13 @@ void main() {
     });
   });
 
-  test('day of window', () {
+  test('day of window counts local calendar days', () {
     expect(dayOfWindow(null, 5), isNull);
-    expect(dayOfWindow(0, 0), 1);
-    expect(dayOfWindow(0, 13 * 86400000 + 1), 14);
+    // Mon 23:30 +08:00 first session; Tue 00:10 is day 2, not day 1.
+    final first = DateTime.utc(2026, 11, 23, 15, 30).millisecondsSinceEpoch;
+    final tue = DateTime.utc(2026, 11, 23, 16, 10).millisecondsSinceEpoch;
+    expect(dayOfWindow(first, first, tzOffsetMin: 480), 1);
+    expect(dayOfWindow(first, tue, tzOffsetMin: 480), 2);
+    expect(dayOfWindow(first, first + 13 * 86400000, tzOffsetMin: 480), 14);
   });
 }
