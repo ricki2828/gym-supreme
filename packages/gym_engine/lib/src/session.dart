@@ -41,7 +41,7 @@ class Session {
   }) {
     final uuid = workoutUuid ?? uuidV4(random);
     var n = 0;
-    return SessionSnapshot(
+    final snap = SessionSnapshot(
       workoutUuid: uuid,
       rev: 0,
       appVersion: appVersion,
@@ -50,6 +50,7 @@ class Session {
       muscles: plan.muscles,
       startedAtMs: nowMs,
       tzOffsetMin: tzOffsetMin,
+      setReadyAtMs: nowMs,
       exercises: [
         for (final item in plan.items)
           SnapshotExercise(
@@ -76,6 +77,7 @@ class Session {
           ),
       ],
     );
+    return snap.copyWith(nextSetN: n);
   }
 
   /// Logs a set. Values default to the targets. Starts the exercise's rest
@@ -131,6 +133,7 @@ class Session {
       rest: more && restMs > 0
           ? Rest(setId: setId, endsAtWallMs: nowMs + restMs, durationMs: restMs)
           : null,
+      setReadyAtMs: nowMs + (more ? restMs : 0),
     );
     return next;
   }
@@ -224,7 +227,7 @@ class Session {
       s,
       exerciseIndex,
       ex.withSets([...ex.sets, added]),
-    ).copyWith(rev: s.rev + 1);
+    ).copyWith(rev: s.rev + 1, nextSetN: _nextSetNumber(s) + 1);
   }
 
   /// Removes a pending set; ordinals of later sets close up.
@@ -290,7 +293,7 @@ class Session {
     );
     final list = [...s.exercises];
     list.insert((at ?? list.length).clamp(0, list.length), ex);
-    return s.copyWith(rev: s.rev + 1, exercises: list);
+    return s.copyWith(rev: s.rev + 1, exercises: list, nextSetN: n);
   }
 
   /// Swaps an exercise that has nothing logged yet for another.
@@ -304,7 +307,7 @@ class Session {
     if (s.exercises[index].anyLogged) return s;
     final removed = [...s.exercises]..removeAt(index);
     return addExercise(
-      s.copyWith(exercises: removed),
+      s.copyWith(exercises: removed, swaps: s.swaps + 1),
       item,
       at: index,
       loadKind: loadKind,
@@ -321,10 +324,10 @@ class Session {
     );
   }
 
-  static SessionSnapshot skipRest(SessionSnapshot s) =>
+  static SessionSnapshot skipRest(SessionSnapshot s, {required int nowMs}) =>
       (s.finished || s.rest == null)
       ? s
-      : s.copyWith(rev: s.rev + 1, rest: null);
+      : s.copyWith(rev: s.rev + 1, rest: null, setReadyAtMs: nowMs);
 
   /// Changes the running rest's end, e.g. +30 s (min: now).
   static SessionSnapshot extendRest(
@@ -342,6 +345,7 @@ class Session {
         endsAtWallMs: end,
         durationMs: max(0, r.durationMs + (end - r.endsAtWallMs)),
       ),
+      setReadyAtMs: end,
     );
   }
 
@@ -390,22 +394,27 @@ SessionSnapshot _resumed(SessionSnapshot s, int nowMs) {
     state: SessionState.active,
     pausedAtMs: null,
     pausedTotalMs: s.pausedTotalMs + max(0, nowMs - at),
+    setReadyAtMs: nowMs,
   );
 }
 
-/// A set starts when the previous logged set's rest ended (or at that set's
-/// end plus its rest), capped at now; the first set starts with the session.
+/// A set starts when it became ready (session start, rest end, skipped
+/// rest, resume), capped at now. Lines without `set_ready_at_ms` fall back to
+/// the latest done set's end.
 int _setStart(SessionSnapshot s, int nowMs) {
-  final rest = s.rest;
-  if (rest != null) return min(rest.endsAtWallMs, nowMs);
-  var last = s.startedAtMs + s.pausedTotalMs;
-  for (final e in s.exercises) {
-    for (final x in e.sets) {
-      final end = x.endedAtMs;
-      if (x.state == SetState.done && end != null && end > last) last = end;
+  var ready = s.setReadyAtMs;
+  if (ready == null) {
+    ready = s.startedAtMs;
+    for (final e in s.exercises) {
+      for (final x in e.sets) {
+        final end = x.endedAtMs;
+        if (x.state == SetState.done && end != null && end > ready!) {
+          ready = end;
+        }
+      }
     }
   }
-  return min(last, nowMs);
+  return min(ready!, nowMs);
 }
 
 ({int e, int s})? _find(SessionSnapshot snap, String setId) {
@@ -419,6 +428,7 @@ int _setStart(SessionSnapshot s, int nowMs) {
 }
 
 int _nextSetNumber(SessionSnapshot s) {
+  if (s.nextSetN != null) return s.nextSetN!;
   var n = 0;
   final prefix = '${s.workoutUuid}:';
   for (final e in s.exercises) {

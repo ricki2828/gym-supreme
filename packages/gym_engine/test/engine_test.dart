@@ -221,6 +221,50 @@ void main() {
     expect(item.reason, contains('Top weight'));
   });
 
+  test('suggested load is always one this gym has (review P2)', () {
+    final r = Rig();
+    final first = r.engine.suggest(
+      gymId: r.gymId,
+      muscleIds: ['chest'],
+      minutes: 20,
+    );
+    final id = first.items.first.exerciseId;
+    r.run(first, reps: 9, coldLoadG: 23000); // typed a weight the gym lacks
+    r.now += 3 * day;
+    final item = r.engine
+        .suggest(gymId: r.gymId, muscleIds: ['chest'], minutes: 20)
+        .items
+        .firstWhere((i) => i.exerciseId == id);
+    expect(item.sets.first.loadG, 22000);
+    expect(item.reason, contains('Nearest weight'));
+  });
+
+  test('bodyweight at the top of the range: one more rep (B7)', () {
+    final r = Rig();
+    final p = r.engine.suggest(gymId: r.gymId, muscleIds: ['abs'], minutes: 15);
+    final bw = p.items.firstWhere((i) => i.unit == LoadUnit.bodyweight);
+    r.run(p, reps: bw.repHi);
+    r.now += 3 * day;
+    final item = r.engine
+        .suggest(gymId: r.gymId, muscleIds: ['abs'], minutes: 15)
+        .items
+        .firstWhere((i) => i.exerciseId == bw.exerciseId);
+    expect(item.sets.first.loadG, isNull);
+    expect(item.sets.first.reps, bw.repHi + 1);
+    expect(item.reason, contains('Top of the range'));
+  });
+
+  test('one-tap rate leaves out cold starts (plan 3)', () {
+    final r = Rig();
+    r.run(r.engine.suggest(gymId: r.gymId, muscleIds: ['chest'], minutes: 20));
+    var c = r.engine.counters();
+    expect(c.coldStartSets, greaterThan(0));
+    r.now += 3 * day;
+    r.run(r.engine.suggest(gymId: r.gymId, muscleIds: ['chest'], minutes: 20));
+    c = r.engine.counters();
+    expect(c.oneTapRate, greaterThan(c.oneTapRateInclCold));
+  });
+
   test('load steps: gym list, next/prev, bodyweight empty', () {
     final r = Rig();
     final s = r.engine.loadSteps(

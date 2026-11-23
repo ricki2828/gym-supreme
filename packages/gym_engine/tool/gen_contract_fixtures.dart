@@ -67,7 +67,7 @@ Map<String, SessionSnapshot> cases() {
     source: SetSource.lockscreen,
   );
   final midSet = Session.retarget(
-    Session.skipRest(resting),
+    Session.skipRest(resting, nowMs: t0 + 300000),
     '$uuid:2',
     loadG: 20000,
   );

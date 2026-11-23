@@ -238,7 +238,9 @@ class Counters {
     required this.firstSessionAtMs,
     required this.doneSets,
     required this.tapUnchangedSets,
+    required this.coldStartSets,
     required this.appVersions,
+    this.medianSwapsPerSession = 0,
   });
 
   final int sessionsTotal;
@@ -246,11 +248,23 @@ class Counters {
   final int? firstSessionAtMs;
   final int doneSets;
   final int tapUnchangedSets;
+  final int coldStartSets;
 
   /// Sessions per app version.
   final Map<String, int> appVersions;
 
-  double get oneTapRate => doneSets == 0 ? 0 : tapUnchangedSets / doneSets;
+  /// Gate: median swaps per session (plan 3).
+  final double medianSwapsPerSession;
+
+  /// Plan 3: tap_unchanged over all reps sets except cold_start.
+  double get oneTapRate {
+    final n = doneSets - coldStartSets;
+    return n <= 0 ? 0 : tapUnchangedSets / n;
+  }
+
+  /// Shown beside it: the same over every reps set.
+  double get oneTapRateInclCold =>
+      doneSets == 0 ? 0 : tapUnchangedSets / doneSets;
 }
 
 class ExportFiles {

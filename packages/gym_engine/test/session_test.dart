@@ -231,6 +231,43 @@ void main() {
     expect(r.durationMs, 3000);
   });
 
+  test('set ids are never reused after remove + add, or swap (review P1)', () {
+    var s = Session.removeSet(start(), 'u:2');
+    s = Session.addSet(s, 1);
+    expect(s.exercises[1].sets.last.setId, 'u:3');
+    const item = PlannedItem(
+      exerciseId: 'c',
+      name: 'C',
+      unit: LoadUnit.kg,
+      sets: [PlannedSet(loadG: 1000, reps: 10)],
+      repLo: 10,
+      repHi: 15,
+      restS: 60,
+      reason: '',
+      primary: ['chest'],
+    );
+    s = Session.swap(s, 1, item);
+    expect(s.exercises[1].sets.single.setId, 'u:4');
+    expect(s.swaps, 1);
+    expect(Session.finish(s, nowMs: t0 + 9).toRecord().swaps, 1);
+    expect(s.nextSetN, 5);
+  });
+
+  test('set start after a pause is the resume time (review P2)', () {
+    var s = Session.done(start(), 'u:0', nowMs: t0 + 60000);
+    s = Session.pause(s, nowMs: t0 + 70000);
+    s = Session.resume(s, nowMs: t0 + 670000);
+    s = Session.done(s, 'u:1', nowMs: t0 + 700000);
+    expect(s.exercises[0].sets[1].startedAtMs, t0 + 670000);
+  });
+
+  test('skipped rest: the next set starts at the skip', () {
+    var s = Session.done(start(), 'u:0', nowMs: t0 + 60000);
+    s = Session.skipRest(s, nowMs: t0 + 80000);
+    s = Session.done(s, 'u:1', nowMs: t0 + 120000);
+    expect(s.exercises[0].sets[1].startedAtMs, t0 + 80000);
+  });
+
   test('uuidV4 shape', () {
     expect(
       uuidV4(),
@@ -247,5 +284,15 @@ void main() {
     expect(() => SessionSnapshot.decode('[1]'), throwsFormatException);
     expect(() => SessionSnapshot.decode('{"schema":1}'), throwsFormatException);
     expect(() => SessionSnapshot.decode('{"sch'), throwsFormatException);
+    final paused = Session.pause(start(), nowMs: t0 + 1).encode();
+    expect(
+      () => SessionSnapshot.decode(
+        paused.replaceFirst(
+          RegExp(r'"paused_at_ms":\d+'),
+          '"paused_at_ms":null',
+        ),
+      ),
+      throwsFormatException,
+    );
   });
 }

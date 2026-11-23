@@ -23,12 +23,15 @@ One JSON object, used three ways: the Pigeon event payload, one journal line (fs
 | muscles | string[] | picked muscle ids |
 | started_at_ms | int | UTC wall ms |
 | tz_offset_min | int | local offset at start |
-| state | "active"\|"paused" | |
+| state | "active"\|"paused" | `paused` requires an int `paused_at_ms` (decode refuses otherwise) |
 | paused_at_ms | int\|null | set while paused |
 | paused_total_ms | int | folded in on resume, on Done while paused, and on finish while paused |
 | rest | object\|null | see below |
 | finished | bool | |
 | ended_at_ms | int\|null | set on finish |
+| set_ready_at_ms | int\|null | when the current set became ready: start, rest end (set at Done), skipped rest, extended rest end, resume |
+| next_set_n | int\|null | next set id number; ids are never reused. Null only in lines written before this field: derive from the highest id |
+| swaps | int | exercises swapped out this session (plan 3 gate); 0 at start |
 | exercises | object[] | in current order (drag reorder changes it) |
 
 ## rest
@@ -46,8 +49,18 @@ One JSON object, used three ways: the Pigeon event payload, one journal line (fs
 - completion (done only): `tap_unchanged | adjusted | typed | cold_start`; null for pending/skipped. Judged against plan_*, not target_*: `cold_start` if a loaded kind (dumbbell/stack/barbell) had `plan_load_g` null; `tap_unchanged` if logged == plan or source is lockscreen; else `adjusted` (`typed` only when the UI says so).
 - source (done only): `app | lockscreen`. A lock-screen Done is `tap_unchanged`.
 - `offset_ms` = ended_at − started_at_ms(workout) − paused_total_ms (R6 ghost key).
-- `started_at_ms` of a set = the running rest's end if any (capped at now), else the latest done set's end (or workout start + pauses).
-- `block`: object|null, timer blocks (R4, cut 2). Opaque to Kotlin's journal path in cut 1. Reserved keys (t61): `type` (emom|amrap|interval), `work_ms`, `rest_ms`, `rounds`, `cap_ms`, `round_marks_ms` (int[], offsets from block start), `amrap_rounds` (int|null, entered at the end). Stored as `set_row.block_json`.
+- `started_at_ms` of a set = `set_ready_at_ms` capped at now (so rest, skipped rest and paused time are not set time; R2 joins HR by these times).
+- `block`: object|null, timer blocks (R4). Stored as `set_row.block_json`. Keys below.
+
+### `block` — cut-2 additive keys (t61 + t5v, 23-Nov; producer gym_engine/lib/src/cut2/timers.dart)
+All optional; absent = cut-1 behaviour. Canonical bytes: Kotlin keeps `block` keys in the order Dart wrote them (pass-through, no re-sort). Kotlin plays any unknown cue `kind` as the default cue.
+- Definition: `type` (emom|amrap|interval), `work_ms` (EMOM period / interval work), `rest_ms`, `rounds`, `cap_ms` (AMRAP), `lead_in_ms` (get-ready before the block), `warn_ms` (AMRAP warning before cap).
+- Run: `started_at_wall_ms` (int|null; null until Start; the lead-in start), `elapsed_before_ms` (block time already run before this anchor; 0 fresh).
+- `cues`: [{`index`, `at_ms`, `kind`, `label`}] sorted by at_ms. `at_ms` = offset from `started_at_wall_ms`. `index` is stable for the block's lifetime: a resume snapshot drops cues already behind (at_ms ≤ elapsed_before_ms, except a fresh at_ms 0) and rebases the rest, keeping index. Kotlin fires each (set_id, index) at most once. Kinds: go, emom_minute, interval_work, interval_rest, amrap_warn, block_end.
+- Pause: Kotlin clears the block timer; Dart's resume snapshot carries the new anchor + remaining cues.
+- Result (written by Dart when the set is Done): `round_marks_ms` (int[], offsets from block start, lead-in excluded, ascending), `amrap_rounds` (int|null), `amrap_extra_reps` (int|null), `stopped_at_ms` (int|null, early stop, offset from block start).
+- Timed rows stay out of load volume and the one-tap rate; they still light their muscles (R4).
+
 
 ## Current set
 The first `pending` set in exercise order. The notification shows its exercise, `set_ordinal` of the exercise's set count, and target load × reps.

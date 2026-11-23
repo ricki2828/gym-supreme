@@ -291,6 +291,7 @@ class WorkoutRecord {
     this.muscles = const [],
     this.pausedMs = 0,
     this.appVersion = '',
+    this.swaps = 0,
   });
 
   final String uuid;
@@ -304,6 +305,9 @@ class WorkoutRecord {
   final int endedAtMs;
   final int pausedMs;
   final String appVersion;
+
+  /// Exercises swapped out during the session (plan 3 gate).
+  final int swaps;
   final List<SetRecord> sets;
 
   int get durationMs => endedAtMs - startedAtMs - pausedMs;

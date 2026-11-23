@@ -368,11 +368,21 @@ class GymEngine implements GymApi {
         if ((s.loadG ?? 0) == top) s,
     ];
     final allAtTop = topSets.every((s) => s.reps >= hi);
-    final lastLoad = top == 0 && last.sets.every((s) => s.loadG == null)
+    final logged = top == 0 && last.sets.every((s) => s.loadG == null)
         ? null
         : top;
-    if (allAtTop && lastLoad != null) {
-      final up = steps.next(lastLoad);
+    // The suggested load must exist at this gym: snap a typed or since-
+    // removed weight down to the nearest one the gym has.
+    final lastLoad = logged == null || steps.loadsG.isEmpty
+        ? logged
+        : steps.loadsG.lastWhere(
+            (l) => l <= logged,
+            orElse: () => steps.loadsG.first,
+          );
+    final harder = catalog.exercises.where((x) => x.harderThan == e.id);
+    final harderNote = harder.isEmpty ? '' : ', or try ${harder.first.name}';
+    if (allAtTop) {
+      final up = lastLoad == null ? null : steps.next(lastLoad);
       if (up != null) {
         return (
           loadG: up,
@@ -380,19 +390,21 @@ class GymEngine implements GymApi {
           note: 'Up to ${_kg(up, unitFor(e))}.',
         );
       }
-      final harder = catalog.exercises.where((x) => x.harderThan == e.id);
+      // Top weight here, or bodyweight at the top of the range (B7).
       return (
         loadG: lastLoad,
         reps: [for (final s in topSets) s.reps + 1],
-        note: harder.isEmpty
-            ? 'Top weight here: go for more reps.'
-            : 'Top weight here: more reps, or try ${harder.first.name}.',
+        note: lastLoad == null
+            ? 'Top of the range: one more rep$harderNote.'
+            : 'Top weight here: more reps$harderNote.',
       );
     }
     return (
       loadG: lastLoad,
       reps: [for (final s in topSets) s.reps >= hi ? hi : s.reps + 1],
-      note: 'Aim for one more rep.',
+      note: lastLoad != logged
+          ? 'Nearest weight here is ${_kg(lastLoad!, unitFor(e))}.'
+          : 'Aim for one more rep.',
     );
   }
 
@@ -671,6 +683,7 @@ class GymEngine implements GymApi {
     final now = _now();
     var done = 0;
     var tap = 0;
+    var cold = 0;
     final versions = <String, int>{};
     for (final w in all) {
       versions[w.appVersion] = (versions[w.appVersion] ?? 0) + 1;
@@ -678,6 +691,7 @@ class GymEngine implements GymApi {
         if (s.kind != SetKind.reps) continue; // R4: timed blocks left out
         done++;
         if (s.completion == Completion.tapUnchanged) tap++;
+        if (s.completion == Completion.coldStart) cold++;
       }
     }
     return Counters(
@@ -688,7 +702,9 @@ class GymEngine implements GymApi {
       firstSessionAtMs: all.isEmpty ? null : all.first.startedAtMs,
       doneSets: done,
       tapUnchangedSets: tap,
+      coldStartSets: cold,
       appVersions: versions,
+      medianSwapsPerSession: _median([for (final w in all) w.swaps]),
     );
   }
 
@@ -714,6 +730,10 @@ class GymEngine implements GymApi {
         'first_session_at_ms': c.firstSessionAtMs,
         'done_sets': c.doneSets,
         'tap_unchanged_sets': c.tapUnchangedSets,
+        'cold_start_sets': c.coldStartSets,
+        'median_swaps_per_session': c.medianSwapsPerSession,
+        'one_tap_rate': c.oneTapRate,
+        'one_tap_rate_incl_cold': c.oneTapRateInclCold,
         'app_versions': c.appVersions,
         'native': native,
       },
@@ -744,6 +764,7 @@ class GymEngine implements GymApi {
     'ended_at_ms': w.endedAtMs,
     'paused_ms': w.pausedMs,
     'app_version': w.appVersion,
+    'swaps': w.swaps,
     'sets': [
       for (final s in w.sets)
         {
@@ -846,6 +867,13 @@ class GymEngine implements GymApi {
       _ => s,
     };
   }
+}
+
+double _median(List<int> xs) {
+  if (xs.isEmpty) return 0;
+  final s = [...xs]..sort();
+  final m = s.length ~/ 2;
+  return s.length.isOdd ? s[m].toDouble() : (s[m - 1] + s[m]) / 2;
 }
 
 /// 22.5 → "22.5", 22.0 → "22".

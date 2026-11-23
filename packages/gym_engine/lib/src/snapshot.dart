@@ -243,6 +243,9 @@ class SessionSnapshot {
     this.rest,
     this.finished = false,
     this.endedAtMs,
+    this.setReadyAtMs,
+    this.nextSetN,
+    this.swaps = 0,
   });
 
   final int schema;
@@ -262,6 +265,18 @@ class SessionSnapshot {
   final Rest? rest;
   final bool finished;
   final int? endedAtMs;
+
+  /// When the current set became ready: session start, a rest's end, a
+  /// skipped rest, or a resume. A Done logs its set as started here (capped
+  /// at now), so rest and paused time are not set time (R2 HR join).
+  final int? setReadyAtMs;
+
+  /// The next set id number (`<uuid>:<n>`); never reused. Null in older
+  /// lines: derived from the highest id present.
+  final int? nextSetN;
+
+  /// Exercises swapped out in this session (plan 3 gate: median swaps).
+  final int swaps;
   final List<SnapshotExercise> exercises;
 
   /// (exercise index, set index) of the first pending set, or null.
@@ -288,6 +303,9 @@ class SessionSnapshot {
     Object? rest = _keep,
     bool? finished,
     Object? endedAtMs = _keep,
+    Object? setReadyAtMs = _keep,
+    int? nextSetN,
+    int? swaps,
     List<SnapshotExercise>? exercises,
   }) => SessionSnapshot(
     schema: schema,
@@ -305,6 +323,9 @@ class SessionSnapshot {
     rest: _pick(rest, this.rest),
     finished: finished ?? this.finished,
     endedAtMs: _pick(endedAtMs, this.endedAtMs),
+    setReadyAtMs: _pick(setReadyAtMs, this.setReadyAtMs),
+    nextSetN: nextSetN ?? this.nextSetN,
+    swaps: swaps ?? this.swaps,
     exercises: exercises ?? this.exercises,
   );
 
@@ -324,6 +345,9 @@ class SessionSnapshot {
     'rest': rest?.toJson(),
     'finished': finished,
     'ended_at_ms': endedAtMs,
+    'set_ready_at_ms': setReadyAtMs,
+    'next_set_n': nextSetN,
+    'swaps': swaps,
     'exercises': [for (final e in exercises) e.toJson()],
   };
 
@@ -344,6 +368,9 @@ class SessionSnapshot {
     final schema = j['schema'];
     if (schema is! int || schema < 1 || schema > snapshotSchema) {
       throw FormatException('unsupported snapshot schema $schema');
+    }
+    if (j['state'] == 'paused' && j['paused_at_ms'] is! int) {
+      throw const FormatException('paused snapshot without paused_at_ms');
     }
     try {
       return SessionSnapshot(
@@ -366,6 +393,9 @@ class SessionSnapshot {
             : Rest.fromJson((j['rest'] as Map).cast<String, Object?>()),
         finished: j['finished'] as bool,
         endedAtMs: j['ended_at_ms'] as int?,
+        setReadyAtMs: j['set_ready_at_ms'] as int?,
+        nextSetN: j['next_set_n'] as int?,
+        swaps: j['swaps'] as int? ?? 0,
         exercises: [
           for (final e in j['exercises'] as List)
             SnapshotExercise.fromJson((e as Map).cast<String, Object?>()),
@@ -421,6 +451,7 @@ class SessionSnapshot {
       endedAtMs: end,
       pausedMs: pausedTotalMs,
       appVersion: appVersion,
+      swaps: swaps,
       sets: sets,
     );
   }
