@@ -113,4 +113,19 @@ void main() {
       ], reason: lines.join('\n'));
     },
   );
+
+  test('history lists stored workouts for the restore drill', () async {
+    final store = SqliteStore.inMemory();
+    addTearDown(store.close);
+    final s = services(store, AlertingStubPort());
+    final lines = <String>[];
+    await E2eDriver(s, out: lines.add).run('run:r');
+    lines.clear();
+    await E2eDriver(s, out: lines.add).run('history:h');
+    final h = lines.map(step).firstWhere((m) => m['step'] == 'history');
+    expect(h['count'], 1);
+    expect((h['uuids'] as List).single, isA<String>());
+    expect(h['restore_failed'], 0);
+    expect(h['restore_pending'], isFalse);
+  });
 }
