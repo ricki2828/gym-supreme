@@ -259,6 +259,9 @@ private open class PlatformApiPigeonCodec : StandardMessageCodec() {
   }
 }
 
+val PlatformApiPigeonMethodCodec = StandardMethodCodec(PlatformApiPigeonCodec())
+
+
 /** Generated interface from Pigeon that represents a handler of messages from Flutter. */
 interface GymHostApi {
   fun getHostInfo(): HostInfo
@@ -290,3 +293,260 @@ interface GymHostApi {
     }
   }
 }
+/**
+ * Cut-1 live workout contract (t3x decision 23-Nov, integration doc ruling 1).
+ *
+ * Dart runs the session transitions (gym_engine) and sends every change whole.
+ * Kotlin's WorkoutService is the only journal writer and the rev authority:
+ * it rejects a stale `baseRev` (PlatformException code `stale_rev`), appends
+ * one fsync'd journal line, drives the rest alert and the notification, and
+ * echoes the accepted snapshot on [WorkoutEvents.snapshots]. Snapshots are
+ * JSON strings in the schema of contracts/session_snapshot.md (one schema for
+ * the channel, the journal line and the finish payload).
+ *
+ * Generated interface from Pigeon that represents a handler of messages from Flutter.
+ */
+interface WorkoutApi {
+  /**
+   * Starts the foreground service from the visible activity with rev 0.
+   * Returns the accepted rev (0).
+   */
+  fun startSession(snapshotJson: String, callback: (Result<Long>) -> Unit)
+  /**
+   * Replaces the live snapshot. Returns the new rev; `stale_rev` if
+   * [baseRev] is not the current rev.
+   */
+  fun submitSnapshot(snapshotJson: String, baseRev: Long, callback: (Result<Long>) -> Unit)
+  /** Stops the service and keeps the journal (resume on next open). */
+  fun pauseSession(callback: (Result<Unit>) -> Unit)
+  /**
+   * Writes the final snapshot with `finished: true`, fsyncs, stops the
+   * service and returns that snapshot. Dart then upserts it into SQLite and
+   * only after that calls [deleteJournal].
+   */
+  fun finishSession(callback: (Result<String>) -> Unit)
+  /** The last good journal snapshot on disk (torn tail ignored), or null. */
+  fun readPendingJournal(callback: (Result<String?>) -> Unit)
+  /** Deletes the journal for [workoutUuid] (after the SQLite upsert). */
+  fun deleteJournal(workoutUuid: String, callback: (Result<Unit>) -> Unit)
+  /** Opens the Android share sheet for a file the app wrote (export). */
+  fun shareFile(path: String, mimeType: String)
+  /**
+   * Native counters for the export: lost/corrupt journals, rest alerts
+   * fired/late.
+   */
+  fun getNativeCounters(): Map<String, Long>
+
+  companion object {
+    /** The codec used by WorkoutApi. */
+    val codec: MessageCodec<Any?> by lazy {
+      PlatformApiPigeonCodec()
+    }
+    /** Sets up an instance of `WorkoutApi` to handle messages through the `binaryMessenger`. */
+    @JvmOverloads
+    fun setUp(binaryMessenger: BinaryMessenger, api: WorkoutApi?, messageChannelSuffix: String = "") {
+      val separatedMessageChannelSuffix = if (messageChannelSuffix.isNotEmpty()) ".$messageChannelSuffix" else ""
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.gym_supreme.WorkoutApi.startSession$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val snapshotJsonArg = args[0] as String
+            api.startSession(snapshotJsonArg) { result: Result<Long> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(PlatformApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(PlatformApiPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.gym_supreme.WorkoutApi.submitSnapshot$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val snapshotJsonArg = args[0] as String
+            val baseRevArg = args[1] as Long
+            api.submitSnapshot(snapshotJsonArg, baseRevArg) { result: Result<Long> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(PlatformApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(PlatformApiPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.gym_supreme.WorkoutApi.pauseSession$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            api.pauseSession{ result: Result<Unit> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(PlatformApiPigeonUtils.wrapError(error))
+              } else {
+                reply.reply(PlatformApiPigeonUtils.wrapResult(null))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.gym_supreme.WorkoutApi.finishSession$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            api.finishSession{ result: Result<String> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(PlatformApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(PlatformApiPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.gym_supreme.WorkoutApi.readPendingJournal$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            api.readPendingJournal{ result: Result<String?> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(PlatformApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(PlatformApiPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.gym_supreme.WorkoutApi.deleteJournal$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val workoutUuidArg = args[0] as String
+            api.deleteJournal(workoutUuidArg) { result: Result<Unit> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(PlatformApiPigeonUtils.wrapError(error))
+              } else {
+                reply.reply(PlatformApiPigeonUtils.wrapResult(null))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.gym_supreme.WorkoutApi.shareFile$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val pathArg = args[0] as String
+            val mimeTypeArg = args[1] as String
+            val wrapped: List<Any?> = try {
+              api.shareFile(pathArg, mimeTypeArg)
+              listOf(null)
+            } catch (exception: Throwable) {
+              PlatformApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.gym_supreme.WorkoutApi.getNativeCounters$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.getNativeCounters())
+            } catch (exception: Throwable) {
+              PlatformApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+    }
+  }
+}
+
+private class PlatformApiPigeonStreamHandler<T>(
+    val wrapper: PlatformApiPigeonEventChannelWrapper<T>
+) : EventChannel.StreamHandler {
+  var pigeonSink: PigeonEventSink<T>? = null
+
+  override fun onListen(p0: Any?, sink: EventChannel.EventSink) {
+    pigeonSink = PigeonEventSink<T>(sink)
+    wrapper.onListen(p0, pigeonSink!!)
+  }
+
+  override fun onCancel(p0: Any?) {
+    pigeonSink = null
+    wrapper.onCancel(p0)
+  }
+}
+
+interface PlatformApiPigeonEventChannelWrapper<T> {
+  open fun onListen(p0: Any?, sink: PigeonEventSink<T>) {}
+
+  open fun onCancel(p0: Any?) {}
+}
+
+class PigeonEventSink<T>(private val sink: EventChannel.EventSink) {
+  fun success(value: T) {
+    sink.success(value)
+  }
+
+  fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+    sink.error(errorCode, errorMessage, errorDetails)
+  }
+
+  fun endOfStream() {
+    sink.endOfStream()
+  }
+}
+      
+abstract class SnapshotsStreamHandler : PlatformApiPigeonEventChannelWrapper<String> {
+  companion object {
+    fun register(messenger: BinaryMessenger, streamHandler: SnapshotsStreamHandler, instanceName: String = "") {
+      var channelName: String = "dev.flutter.pigeon.gym_supreme.WorkoutEvents.snapshots"
+      if (instanceName.isNotEmpty()) {
+        channelName += ".$instanceName"
+      }
+      val internalStreamHandler = PlatformApiPigeonStreamHandler<String>(streamHandler)
+      EventChannel(messenger, channelName, PlatformApiPigeonMethodCodec).setStreamHandler(internalStreamHandler)
+    }
+  }
+// Implement methods from PlatformApiPigeonEventChannelWrapper
+override fun onListen(p0: Any?, sink: PigeonEventSink<String>) {}
+
+override fun onCancel(p0: Any?) {}
+}
+      
