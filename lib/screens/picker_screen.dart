@@ -58,6 +58,12 @@ class PickerScreen extends StatelessWidget {
   final VoidCallback? onClose;
   final VoidCallback? onGymTap;
 
+  /// Screen height minus the status bar and other top/bottom insets.
+  static double _availableHeight(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    return mq.size.height - mq.padding.top - mq.padding.bottom;
+  }
+
   bool get _firstRun => days.values.every((d) => d.days == null);
 
   /// "Nearly everything" (s2): at least three in four muscles still resting.
@@ -211,13 +217,10 @@ class PickerScreen extends StatelessWidget {
               // the plan list's own cap scales with the screen (ui-e2e, #42).
               ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+                  maxHeight: _availableHeight(context) * 0.7,
                 ),
                 child: _sheet(
-                  listCap: math.min(
-                    300,
-                    MediaQuery.sizeOf(context).height * 0.3,
-                  ),
+                  listCap: math.min(300, _availableHeight(context) * 0.3),
                 ),
               ),
           ],
@@ -419,15 +422,7 @@ class PickerScreen extends StatelessWidget {
           if (readOnly)
             ...middle
           else
-            Flexible(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: middle,
-                ),
-              ),
-            ),
+            Flexible(child: _ScrollingMiddle(children: middle)),
           const SizedBox(height: 12),
           start,
         ],
@@ -635,5 +630,41 @@ class _MinutesChips extends StatelessWidget {
           ),
         ),
     ],
+  );
+}
+
+/// The sheet's middle: scrolls when the sheet hits its cap, with a visible
+/// scrollbar so a small phone shows there is more. Owns its controller (a
+/// Scrollbar with thumbVisibility needs one, not the page's primary).
+class _ScrollingMiddle extends StatefulWidget {
+  const _ScrollingMiddle({required this.children});
+  final List<Widget> children;
+
+  @override
+  State<_ScrollingMiddle> createState() => _ScrollingMiddleState();
+}
+
+class _ScrollingMiddleState extends State<_ScrollingMiddle> {
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scrollbar(
+    controller: _scroll,
+    thumbVisibility: true,
+    child: SingleChildScrollView(
+      controller: _scroll,
+      primary: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: widget.children,
+      ),
+    ),
   );
 }

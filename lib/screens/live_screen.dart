@@ -440,7 +440,13 @@ class _Header extends StatelessWidget {
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
           child: Text(
-            'LIFT ${view.lift} OF ${view.lifts} · SET ${view.set} OF ${view.sets}',
+            // Narrow phones keep the set count, which he needs mid-set, at a
+            // readable size rather than shrinking the whole line.
+            MediaQuery.sizeOf(context).width < 360
+                ? 'SET ${view.set} OF ${view.sets}'
+                : 'LIFT ${view.lift} OF ${view.lifts} · SET ${view.set} OF ${view.sets}',
+            semanticsLabel:
+                'Lift ${view.lift} of ${view.lifts}, set ${view.set} of ${view.sets}',
             style: LitType.cap(14, ink),
           ),
         ),
