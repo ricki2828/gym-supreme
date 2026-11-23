@@ -1,45 +1,45 @@
-## push 30min est=28 uncovered=[]
+## push 30min est=30 uncovered=[]
 dumbbell-bench-press 2x10 rest=120 ea
-incline-dumbbell-flyes 2x10 rest=120 ea
 incline-dumbbell-press 2x10 rest=120 ea
+pushups 2x10 rest=120 bodyweight
 arnold-dumbbell-press 2x10 rest=120 ea
-bench-dips 2x10 rest=120 bodyweight
-## push 45min est=44 uncovered=[]
-dumbbell-bench-press 3x10 rest=120 ea
-incline-dumbbell-flyes 3x10 rest=120 ea
-incline-dumbbell-press 3x10 rest=120 ea
-arnold-dumbbell-press 2x10 rest=120 ea
-bench-dips 2x10 rest=120 bodyweight
 cable-seated-lateral-raise 2x12 rest=75 kg
 seated-side-lateral-raise 2x12 rest=75 ea
-## push 60min est=54 uncovered=[]
+## push 45min est=45 uncovered=[]
 dumbbell-bench-press 3x10 rest=120 ea
-incline-dumbbell-flyes 3x10 rest=120 ea
 incline-dumbbell-press 3x10 rest=120 ea
+pushups 3x10 rest=120 bodyweight
 arnold-dumbbell-press 3x10 rest=120 ea
-bench-dips 3x10 rest=120 bodyweight
 cable-seated-lateral-raise 3x12 rest=75 kg
 seated-side-lateral-raise 3x12 rest=75 ea
-## pull 30min est=28 uncovered=[]
+## push 60min est=45 uncovered=[]
+dumbbell-bench-press 3x10 rest=120 ea
+incline-dumbbell-press 3x10 rest=120 ea
+pushups 3x10 rest=120 bodyweight
+arnold-dumbbell-press 3x10 rest=120 ea
+cable-seated-lateral-raise 3x12 rest=75 kg
+seated-side-lateral-raise 3x12 rest=75 ea
+## pull 30min est=29 uncovered=[]
 bent-over-two-dumbbell-row 2x10 rest=120 ea
 dumbbell-incline-row 2x10 rest=120 ea
 one-arm-dumbbell-row 2x10 rest=120 ea
-face-pull 2x10 rest=120 kg
-high-cable-curls 2x10 rest=120 kg
-## pull 45min est=44 uncovered=[]
+cable-rear-delt-fly 2x12 rest=75 kg
+cable-hammer-curls-rope-attachment 2x12 rest=75 kg
+palms-down-dumbbell-wrist-curl-over-a-bench 2x12 rest=75 ea
+## pull 45min est=45 uncovered=[]
 bent-over-two-dumbbell-row 3x10 rest=120 ea
 dumbbell-incline-row 3x10 rest=120 ea
 one-arm-dumbbell-row 3x10 rest=120 ea
-face-pull 2x10 rest=120 kg
-high-cable-curls 2x10 rest=120 kg
+cable-rear-delt-fly 3x12 rest=75 kg
+cable-hammer-curls-rope-attachment 3x12 rest=75 kg
 palms-down-dumbbell-wrist-curl-over-a-bench 2x12 rest=75 ea
 palms-up-dumbbell-wrist-curl-over-a-bench 2x12 rest=75 ea
-## pull 60min est=54 uncovered=[]
+## pull 60min est=49 uncovered=[]
 bent-over-two-dumbbell-row 3x10 rest=120 ea
 dumbbell-incline-row 3x10 rest=120 ea
 one-arm-dumbbell-row 3x10 rest=120 ea
-face-pull 3x10 rest=120 kg
-high-cable-curls 3x10 rest=120 kg
+cable-rear-delt-fly 3x12 rest=75 kg
+cable-hammer-curls-rope-attachment 3x12 rest=75 kg
 palms-down-dumbbell-wrist-curl-over-a-bench 3x12 rest=75 ea
 palms-up-dumbbell-wrist-curl-over-a-bench 3x12 rest=75 ea
 ## legs 30min est=29 uncovered=[]
@@ -60,24 +60,24 @@ dumbbell-lunges 3x10 rest=120 ea
 dumbbell-rear-lunge 3x10 rest=120 ea
 stiff-legged-dumbbell-deadlift 3x10 rest=120 ea
 dumbbell-seated-one-leg-calf-raise 3x12 rest=75 ea
-## core 30min est=30 uncovered=[]
-dead-bug 2x10 rest=120 bodyweight
-cable-russian-twists 2x10 rest=120 kg
-standing-cable-wood-chop 2x10 rest=120 kg
-hyperextensions-with-no-hyperextension-bench 2x10 rest=120 bodyweight
+## core 30min est=29 uncovered=[]
+hyperextensions-with-no-hyperextension-bench 3x10 rest=120 bodyweight
 cable-crunch 2x12 rest=75 kg
 crunches 2x12 rest=75 bodyweight
-## core 45min est=45 uncovered=[]
-dead-bug 3x10 rest=120 bodyweight
-cable-russian-twists 3x10 rest=120 kg
-standing-cable-wood-chop 3x10 rest=120 kg
+dead-bug 2x12 rest=75 bodyweight
+cable-russian-twists 2x12 rest=75 kg
+dumbbell-side-bend 2x12 rest=75 ea
+## core 45min est=39 uncovered=[]
 hyperextensions-with-no-hyperextension-bench 3x10 rest=120 bodyweight
 cable-crunch 3x12 rest=75 kg
 crunches 3x12 rest=75 bodyweight
-## core 60min est=45 uncovered=[]
-dead-bug 3x10 rest=120 bodyweight
-cable-russian-twists 3x10 rest=120 kg
-standing-cable-wood-chop 3x10 rest=120 kg
+dead-bug 3x12 rest=75 bodyweight
+cable-russian-twists 3x12 rest=75 kg
+dumbbell-side-bend 3x12 rest=75 ea
+## core 60min est=39 uncovered=[]
 hyperextensions-with-no-hyperextension-bench 3x10 rest=120 bodyweight
 cable-crunch 3x12 rest=75 kg
 crunches 3x12 rest=75 bodyweight
+dead-bug 3x12 rest=75 bodyweight
+cable-russian-twists 3x12 rest=75 kg
+dumbbell-side-bend 3x12 rest=75 ea
