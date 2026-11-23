@@ -540,6 +540,21 @@ class _PickerFlowState extends State<PickerFlow> {
   /// Exercise ids in the order he dragged them; null = engine order.
   List<String>? _order;
 
+  /// Time budget; starts at his default (settings), 45 unless changed.
+  late int _minutes = _nearestBudget(_engine.settings().defaultMinutes);
+
+  /// The chip closest to his default, so one is always selected.
+  static int _nearestBudget(int m) => const [
+    30,
+    45,
+    60,
+  ].reduce((a, b) => (a - m).abs() <= (b - m).abs() ? a : b);
+
+  /// Variety seed (t61, item 4): the stored workout count + 1, fixed while
+  /// this picker is open so the list never reshuffles on a tap. It only
+  /// breaks ties between lifts with no history and rotates one slot.
+  late final int _seed = _engine.counters().sessionsTotal + 1;
+
   eng.GymApi get _engine => widget.deps.engine;
 
   /// Session type of the pick, by picker rows: the engine's majority rule
@@ -554,6 +569,8 @@ class _PickerFlowState extends State<PickerFlow> {
       gymId: widget.gym.id,
       muscleIds: _picked,
       typeId: _typeId(),
+      minutes: _minutes,
+      seed: _seed,
     );
     final order = _order;
     if (order == null) return p;
@@ -619,6 +636,12 @@ class _PickerFlowState extends State<PickerFlow> {
           ? null
           : () => Navigator.of(context).pop(plan),
       onClose: () => Navigator.of(context).pop(),
+      minutes: _minutes,
+      // A new budget is a new plan: his drag order no longer applies.
+      onMinutes: (m) => setState(() {
+        _minutes = m;
+        _order = null;
+      }),
       sheetExtra: _rotationChip(),
     );
   }

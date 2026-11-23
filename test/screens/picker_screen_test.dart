@@ -354,4 +354,79 @@ void main() {
     expect(tester.takeException(), isNull, reason: 'read-only path capped too');
     expect(find.text('START PUSH'), findsOneWidget);
   });
+
+  testWidgets('minutes chips: shown only with a callback, report the pick', (
+    tester,
+  ) async {
+    phone(tester);
+    final got = <int>[];
+    await tester.pumpWidget(
+      app(
+        PickerScreen(
+          gym: condo,
+          days: storyDays,
+          selected: pushSelection,
+          plan: pushPlan,
+          minutes: 45,
+          onMinutes: got.add,
+        ),
+      ),
+    );
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('45 minutes')),
+      isSemantics(isSelected: true),
+    );
+    await tester.tap(find.byKey(const Key('picker.minutes.60')));
+    await tester.tap(find.byKey(const Key('picker.minutes.30')));
+    expect(got, [60, 30]);
+    await tester.pumpWidget(
+      app(
+        PickerScreen(
+          gym: condo,
+          days: storyDays,
+          selected: pushSelection,
+          plan: pushPlan,
+        ),
+      ),
+    );
+    expect(find.byKey(const Key('picker.minutes.60')), findsNothing);
+  });
+
+  testWidgets('the read-only peek never shows the minutes chips', (
+    tester,
+  ) async {
+    phone(tester, textScale: 1.3);
+    await tester.pumpWidget(
+      app(
+        PickerScreen(
+          gym: condo,
+          days: storyDays,
+          selected: pushSelection,
+          plan: pushPlan,
+          minutes: 45,
+          onMinutes: (_) {},
+          onStart: () {},
+        ),
+      ),
+    );
+    // Large text: the budget is on the page itself, live.
+    final chip = find.byKey(const Key('picker.minutes.30'));
+    await tester.scrollUntilVisible(
+      chip,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(chip, findsOneWidget);
+    await tester.tap(find.text('Swipe up or tap to see them'));
+    await tester.pumpAndSettle();
+    expect(find.text('Reorder once you start.'), findsOneWidget);
+    // ...but never inside the read-only peek.
+    expect(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.byKey(const Key('picker.minutes.30')),
+      ),
+      findsNothing,
+    );
+  });
 }

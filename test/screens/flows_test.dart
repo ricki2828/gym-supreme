@@ -329,4 +329,54 @@ void main() {
     expect(g.has('kettlebells'), isTrue, reason: 'his own tick kept');
     expect(g.has('adjustable-bench'), isTrue, reason: 'preset pre-ticks');
   });
+
+  testWidgets('picker minutes feed the suggestion', (tester) async {
+    engine.saveGym(engine.gymFromPreset('condo'));
+    await pumpRoot(tester);
+    await tapText(tester, 'LIGHT SOMETHING UP');
+    await tester.tap(find.bySemanticsLabel(RegExp(r'^Chest, ')));
+    await tester.pumpAndSettle();
+    final at30 = engine.suggest(
+      gymId: engine.gyms().single.id,
+      muscleIds: const ['chest'],
+      minutes: 30,
+    );
+    await tester.tap(find.byKey(const Key('picker.minutes.30')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('${at30.items.length} LIFTS · ${at30.estimatedMinutes} MIN'),
+      findsOneWidget,
+      reason: 'the sheet shows the 30-minute plan',
+    );
+    expect(at30.estimatedMinutes, lessThanOrEqualTo(30));
+  });
+
+  testWidgets('the picker passes a fixed seed: same list across taps', (
+    tester,
+  ) async {
+    engine.saveGym(engine.gymFromPreset('condo'));
+    await pumpRoot(tester);
+    await tapText(tester, 'LIGHT SOMETHING UP');
+    final chest = find.bySemanticsLabel(RegExp(r'^Chest, '));
+    await tester.tap(chest);
+    await tester.pumpAndSettle();
+    String sheet() => find
+        .byType(Text)
+        .evaluate()
+        .map((e) => (e.widget as Text).data ?? '')
+        .join('|');
+    final first = sheet();
+    await tester.tap(chest); // off
+    await tester.pumpAndSettle();
+    await tester.tap(chest); // on again
+    await tester.pumpAndSettle();
+    expect(sheet(), first);
+    final expected = engine.suggest(
+      gymId: engine.gyms().single.id,
+      muscleIds: const ['chest'],
+      minutes: 45,
+      seed: engine.counters().sessionsTotal + 1,
+    );
+    expect(find.text(expected.items.first.name), findsOneWidget);
+  });
 }

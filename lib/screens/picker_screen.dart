@@ -24,10 +24,17 @@ class PickerScreen extends StatelessWidget {
     this.onClose,
     this.onGymTap,
     this.sheetExtra,
+    this.minutes,
+    this.onMinutes,
   });
 
   /// Cut-2 slot at the top of the session sheet (rotation "next up" chip).
   final Widget? sheetExtra;
+
+  /// The session's time budget (30, 45 or 60); the engine fills or trims to
+  /// it. Null hides the control.
+  final int? minutes;
+  final ValueChanged<int>? onMinutes;
 
   final GymView gym;
 
@@ -156,6 +163,16 @@ class PickerScreen extends StatelessWidget {
                     Center(child: body),
                     const SizedBox(height: 12),
                     rows,
+                    // Large text has only the read-only peek, so the time
+                    // budget lives here, in the live page (rebuilds with it).
+                    if (onMinutes != null && minutes != null) ...[
+                      const SizedBox(height: 12),
+                      _MinutesChips(
+                        value: minutes!,
+                        onChanged: onMinutes!,
+                        dark: false,
+                      ),
+                    ],
                   ] else
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -347,6 +364,12 @@ class PickerScreen extends StatelessWidget {
         children: [
           ?sheetExtra,
           _sheetHead('${p.items.length} LIFTS · ${p.minutes} MIN'),
+          // Not in the read-only peek: it shows a plan captured when it
+          // opened, so a new budget there would start the old plan.
+          if (!readOnly && onMinutes != null && minutes != null) ...[
+            const SizedBox(height: 8),
+            _MinutesChips(value: minutes!, onChanged: onMinutes!),
+          ],
           const SizedBox(height: 4),
           PlanList(
             items: p.items,
@@ -502,4 +525,77 @@ class _GroupRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 30 / 45 / 60 minutes (review P1-4, t61 item 4: suggest(minutes:)).
+class _MinutesChips extends StatelessWidget {
+  const _MinutesChips({
+    required this.value,
+    required this.onChanged,
+    this.dark = true,
+  });
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  /// On the ink sheet (true) or the light page (false).
+  final bool dark;
+  static const options = [30, 45, 60];
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    // Wraps on a narrow phone at large text instead of overflowing.
+    crossAxisAlignment: WrapCrossAlignment.center,
+    spacing: 8,
+    runSpacing: 6,
+    children: [
+      Text(
+        'Time',
+        style: LitType.body(
+          13,
+          dark ? const Color(0xFFA5A9B1) : Lit.inkSecondary,
+          FontWeight.w700,
+        ),
+      ),
+      for (final m in options)
+        Semantics(
+          button: true,
+          selected: m == value,
+          label: '$m minutes',
+          excludeSemantics: true,
+          onTap: () => onChanged(m),
+          child: InkWell(
+            key: Key('picker.minutes.$m'),
+            onTap: () => onChanged(m),
+            customBorder: const StadiumBorder(),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 48, minWidth: 64),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: ShapeDecoration(
+                color: m == value
+                    ? (dark ? Colors.white : Lit.ink)
+                    : Colors.transparent,
+                shape: StadiumBorder(
+                  side: BorderSide(
+                    color: m == value
+                        ? (dark ? Colors.white : Lit.ink)
+                        : (dark ? const Color(0xFF5F646D) : Lit.inkQuiet),
+                    width: 1.5,
+                  ),
+                ),
+              ),
+              child: Text(
+                '$m MIN',
+                style: LitType.display(
+                  20,
+                  dark
+                      ? (m == value ? Lit.ink : Colors.white)
+                      : (m == value ? Colors.white : Lit.ink),
+                ),
+              ),
+            ),
+          ),
+        ),
+    ],
+  );
 }
