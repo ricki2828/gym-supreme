@@ -863,7 +863,9 @@ class _LiveFlowState extends State<LiveFlow> {
       swapItem(picked, ex, last: last),
       replacingId: ex.exerciseId,
     );
-    if (!ok && mounted) {
+    if (!ok && mounted && c.lastError == null) {
+      // A save failure shows the error banner instead; this is the case
+      // where the session moved on under the sheet.
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Not swapped: that exercise has a set logged now.'),
