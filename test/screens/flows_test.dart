@@ -6,9 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_engine/gym_engine.dart' as eng;
 import 'package:gym_supreme/screens/flows/flows.dart';
+import 'package:gym_supreme/screens/history_screen.dart';
 import 'package:gym_supreme/screens/live_screen.dart';
 import 'package:gym_supreme/screens/picker_screen.dart';
 import 'package:gym_supreme/screens/post_workout_screen.dart';
+import 'package:gym_supreme/screens/workout_detail_screen.dart';
+import 'package:gym_supreme/screens/view_models.dart';
 
 import 'fixtures.dart';
 import 'flaky_port.dart';
@@ -24,12 +27,14 @@ void main() {
   late eng.GymEngine engine;
   late FlakyPort port;
   late GymDeps deps;
+  late eng.MemoryStore store;
 
   setUp(() {
     now = DateTime.utc(2026, 11, 24, 1).millisecondsSinceEpoch;
+    store = eng.MemoryStore();
     engine = eng.GymEngine(
       catalog: catalog,
-      store: eng.MemoryStore(),
+      store: store,
       nowMs: () => now,
       tzOffsetMin: () => 480,
       random: Random(5),
@@ -42,6 +47,7 @@ void main() {
       appVersion: 'test',
       nowMs: () => now,
       tzOffsetMin: () => 480,
+      store: store,
     );
   });
 
@@ -455,5 +461,40 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('live.pause')));
     await tester.pumpAndSettle();
+  });
+  testWidgets('a history row opens the workout with its sets (5a)', (
+    tester,
+  ) async {
+    await pumpRoot(tester);
+    await tapText(tester, 'SAVE · 5 ON THE FLOOR');
+    await tapText(tester, 'LIGHT SOMETHING UP');
+    await tester.tap(find.bySemanticsLabel(RegExp(r'^Chest, ')));
+    await tester.pumpAndSettle();
+    await tapText(tester, 'START PUSH');
+    await tester.tap(find.bySemanticsLabel('More kilograms'));
+    await tester.pumpAndSettle();
+    await tapText(tester, 'DONE');
+    await tapText(tester, 'SKIP REST');
+    now += 600000;
+    await tester.tap(find.byKey(const Key('live.finish')));
+    await tester.pumpAndSettle();
+    if (find.byKey(const Key('finish.confirm')).evaluate().isNotEmpty) {
+      await tester.tap(find.byKey(const Key('finish.confirm')));
+      await tester.pumpAndSettle();
+    }
+    await tapText(tester, 'DONE');
+    await tester.ensureVisible(find.byType(HistoryRowTile).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(HistoryRowTile).first);
+    await tester.pumpAndSettle();
+    expect(find.byType(WorkoutDetailScreen), findsOneWidget);
+    final w = store.workout(engine.history().first.uuid)!;
+    final logged = w.doneSets.single;
+    expect(find.text(logged.exerciseName), findsOneWidget);
+    // 'KG EA' for dumbbells, 'KG' for a stack (#42 may lead with one).
+    expect(
+      find.textContaining('${logged.reps} × ${kg(logged.loadG!)} KG'),
+      findsOneWidget,
+    );
   });
 }

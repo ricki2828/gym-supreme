@@ -2,6 +2,7 @@ import 'package:gym_supreme/screens/body_screen.dart';
 import 'package:gym_supreme/screens/history_screen.dart';
 import 'package:gym_supreme/screens/post_workout_screen.dart';
 import 'package:gym_supreme/screens/view_models.dart';
+import 'package:gym_supreme/screens/workout_detail_screen.dart';
 
 const pushDone = PostWorkoutView(
   type: WorkoutType.push,
@@ -185,3 +186,35 @@ const bodyMuscles = [
     lastType: WorkoutType.legs,
   ),
 ];
+
+final pushDetail = WorkoutDetailView(
+  type: WorkoutType.push,
+  startedAt: DateTime(2026, 11, 24, 7, 5),
+  gymName: 'Condo gym',
+  durationS: 2892,
+  volumeKg: 7220,
+  lifts: const [
+    DetailLift(
+      name: 'Dumbbell bench press',
+      unit: LoadUnit.kgEach,
+      sets: [
+        DetailSet(loadG: 22000, reps: 10),
+        DetailSet(loadG: 22000, reps: 10),
+        DetailSet(loadG: 22000, reps: 8),
+      ],
+    ),
+    DetailLift(
+      name: 'Cable fly',
+      unit: LoadUnit.kg,
+      sets: [
+        DetailSet(loadG: 15000, reps: 12),
+        DetailSet(loadG: null, reps: null, skipped: true),
+      ],
+    ),
+    DetailLift(
+      name: 'Plank',
+      unit: LoadUnit.timed,
+      sets: [DetailSet(loadG: null, reps: 45, timed: true)],
+    ),
+  ],
+);

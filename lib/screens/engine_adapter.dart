@@ -7,6 +7,7 @@ import 'history_screen.dart';
 import 'live_controller.dart' show lastDoneSet;
 import 'live_screen.dart';
 import 'post_workout_screen.dart';
+import 'workout_detail_screen.dart';
 import 'view_models.dart';
 
 /// The one place gym_engine types become UI view models. Screens never
@@ -392,5 +393,49 @@ eng.PlannedItem swapItem(
     restS: replacing.restS,
     reason: 'Swapped in for ${replacing.name}.',
     primary: e.primary,
+  );
+}
+
+/// A stored workout for the detail screen: lifts in the order he did them,
+/// sets by ordinal. Units from the catalog's load kind.
+WorkoutDetailView workoutDetailOf(
+  eng.WorkoutRecord w, {
+  required String gymName,
+  required eng.Catalog catalog,
+}) {
+  final byPos = <int, List<eng.SetRecord>>{};
+  for (final s in w.sets) {
+    byPos.putIfAbsent(s.exercisePosition, () => []).add(s);
+  }
+  final load = {for (final e in catalog.exercises) e.id: e.load};
+  final lifts = [
+    for (final pos in byPos.keys.toList()..sort())
+      () {
+        final sets = byPos[pos]!
+          ..sort((a, b) => a.setOrdinal.compareTo(b.setOrdinal));
+        final first = sets.first;
+        return DetailLift(
+          name: first.exerciseName,
+          unit: unitOfKind(load[first.exerciseId] ?? 'stack'),
+          sets: [
+            for (final s in sets)
+              DetailSet(
+                loadG: s.loadG,
+                reps: s.reps,
+                skipped: s.skipped,
+                timed: s.kind == eng.SetKind.timed,
+              ),
+          ],
+        );
+      }(),
+  ];
+  // All from the stored record (no history scan; review of #43).
+  return WorkoutDetailView(
+    type: workoutTypeOf(w.typeId),
+    startedAt: localOf(w.startedAtMs, w.tzOffsetMin),
+    gymName: gymName,
+    durationS: w.durationMs ~/ 1000,
+    volumeKg: w.volumeGReps / 1000,
+    lifts: lifts,
   );
 }
