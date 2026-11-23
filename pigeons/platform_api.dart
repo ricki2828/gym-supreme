@@ -54,6 +54,17 @@ abstract class GymHostApi {
   /// and debug builds only; always null on play. Dart calls it on start and on
   /// every resume.
   String? takeLaunchCommand();
+
+  /// Asks for POST_NOTIFICATIONS through the current activity (API 33+) and
+  /// returns whether notifications are now on. Below 33 there is no runtime
+  /// permission and it returns the current notificationsEnabled. If the
+  /// permission is already granted it returns notificationsEnabled without a
+  /// dialog. Android stops showing the dialog after two refusals, so false
+  /// means: offer openNotificationSettings. A second call while one is pending
+  /// fails with code `already_pending`. If the activity goes away while a
+  /// dialog is open, the call returns false.
+  @async
+  bool requestNotificationPermission();
 }
 
 /// Cut-1 live workout contract (t3x decision 23-Nov, integration doc ruling 1).

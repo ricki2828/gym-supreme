@@ -1,14 +1,17 @@
 package app.gymsupreme
 
+import android.Manifest
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import android.os.Bundle
 import android.util.Log
 import app.gymsupreme.platform.GymHostApi
+import app.gymsupreme.platform.FlutterError
 import app.gymsupreme.platform.HostInfo
 import app.gymsupreme.platform.SnapshotsStreamHandler
 import app.gymsupreme.platform.WorkoutApi
@@ -37,6 +40,46 @@ class MainActivity : FlutterActivity() {
         launchCommand = null
         if (c != null) SpikeLog.write(this, SpikeLog.line("launch_command_taken").put("command", c))
         return c
+    }
+
+    /** The one in-flight requestNotificationPermission call (Dart awaits it). */
+    private var notifCallback: ((Result<Boolean>) -> Unit)? = null
+
+    fun notificationsEnabled(): Boolean =
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).areNotificationsEnabled()
+
+    fun requestNotificationPermission(callback: (Result<Boolean>) -> Unit) {
+        if (Build.VERSION.SDK_INT < 33 ||
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        ) {
+            val on = notificationsEnabled()
+            SpikeLog.write(this, SpikeLog.line("notif_request").put("result", on).put("asked", false))
+            callback(Result.success(on))
+            return
+        }
+        if (notifCallback != null) {
+            callback(Result.failure(FlutterError("already_pending", "a notification permission request is open", null)))
+            return
+        }
+        notifCallback = callback
+        SpikeLog.write(this, SpikeLog.line("notif_request_shown"))
+        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIF_REQUEST_CODE)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != NOTIF_REQUEST_CODE) return
+        val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+        resolveNotif(granted && notificationsEnabled(), if (grantResults.isEmpty()) "cancelled" else null)
+    }
+
+    private fun resolveNotif(on: Boolean, why: String?) {
+        val cb = notifCallback ?: return
+        notifCallback = null
+        val line = SpikeLog.line("notif_request").put("result", on).put("asked", true)
+        if (why != null) line.put("why", why)
+        SpikeLog.write(this, line)
+        cb(Result.success(on))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -94,6 +137,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        resolveNotif(false, "activity_gone")
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         GymHostApi.setUp(messenger, null)
         WorkoutApi.setUp(messenger, null)
@@ -110,6 +154,9 @@ class MainActivity : FlutterActivity() {
 
         /** `am start ... --es gym_e2e run|start_only|resume`: read by Dart via GymHostApi.takeLaunchCommand. */
         const val EXTRA_E2E = "gym_e2e"
+
+        /** Distinct from SpikeChannel's 7301. */
+        private const val NOTIF_REQUEST_CODE = 7302
     }
 }
 
@@ -120,11 +167,14 @@ private class HostApiImpl(private val activity: MainActivity) : GymHostApi {
             model = "${Build.MANUFACTURER} ${Build.MODEL}",
             versionCode = activity.packageManager.getPackageInfo(activity.packageName, 0).longVersionCode,
             release = Build.VERSION.RELEASE ?: "",
-            notificationsEnabled = (activity.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).areNotificationsEnabled(),
+            notificationsEnabled = activity.notificationsEnabled(),
             batterySaver = (activity.getSystemService(Context.POWER_SERVICE) as PowerManager).isPowerSaveMode,
         )
 
     override fun takeLaunchCommand(): String? = activity.takeLaunchCommand()
+
+    override fun requestNotificationPermission(callback: (Result<Boolean>) -> Unit) =
+        activity.requestNotificationPermission(callback)
 
     override fun openNotificationSettings() {
         val i = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)

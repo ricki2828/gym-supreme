@@ -292,6 +292,17 @@ interface GymHostApi {
    * every resume.
    */
   fun takeLaunchCommand(): String?
+  /**
+   * Asks for POST_NOTIFICATIONS through the current activity (API 33+) and
+   * returns whether notifications are now on. Below 33 there is no runtime
+   * permission and it returns the current notificationsEnabled. If the
+   * permission is already granted it returns notificationsEnabled without a
+   * dialog. Android stops showing the dialog after two refusals, so false
+   * means: offer openNotificationSettings. A second call while one is pending
+   * fails with code `already_pending`. If the activity goes away while a
+   * dialog is open, the call returns false.
+   */
+  fun requestNotificationPermission(callback: (Result<Boolean>) -> Unit)
 
   companion object {
     /** The codec used by GymHostApi. */
@@ -343,6 +354,24 @@ interface GymHostApi {
               PlatformApiPigeonUtils.wrapError(exception)
             }
             reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.gym_supreme.GymHostApi.requestNotificationPermission$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            api.requestNotificationPermission{ result: Result<Boolean> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(PlatformApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(PlatformApiPigeonUtils.wrapResult(data))
+              }
+            }
           }
         } else {
           channel.setMessageHandler(null)
