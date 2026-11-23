@@ -192,4 +192,16 @@ void main() {
     );
     expect(s.exercises[0].sets[1].planLoadG, 22000);
   });
+
+  test('known edge: a value carried from a skipped set is judged as shown '
+      'only against logged sets', () {
+    // Shown is derived from the last LOGGED set: carried from a set he then
+    // skipped, a first-time lift reads cold_start on the next Done.
+    var s = start([item('a', three)]);
+    s = Session.retarget(s, 'u:0', loadG: 16000);
+    s = Session.skip(s, 'u:0', nowMs: t0 + 1);
+    s = Session.done(s, 'u:1', nowMs: t0 + 2);
+    expect(s.exercises[0].sets[1].loadG, 16000);
+    expect(s.exercises[0].sets[1].completion, Completion.coldStart);
+  });
 }
