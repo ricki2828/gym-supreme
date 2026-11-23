@@ -19,6 +19,7 @@ import '../gym_setup_screen.dart';
 import '../history_screen.dart';
 import '../live_controller.dart';
 import '../live_screen.dart';
+import '../notification_access.dart';
 import '../picker_screen.dart';
 import '../post_workout_screen.dart';
 import '../view_models.dart';
@@ -34,6 +35,7 @@ class GymDeps {
     int Function()? nowMs,
     int Function()? tzOffsetMin,
     this.store,
+    this.notifications,
   }) : nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch),
        tzOffsetMin =
            tzOffsetMin ?? (() => DateTime.now().timeZoneOffset.inMinutes);
@@ -48,6 +50,10 @@ class GymDeps {
   /// History for the cut-2 ghost and rotation (lib/app passes the same
   /// store as the engine's). Null hides both even with their flags on.
   final eng.HistoryStore? store;
+
+  /// Notification permission for the rest alert; null (tests, play build
+  /// without the host call) skips the ask and the banner.
+  final NotificationAccess? notifications;
 
   LiveController liveController() => LiveController(
     store: store,
@@ -79,11 +85,48 @@ class _GymRootState extends State<GymRoot> {
   bool _recovering = true;
   Object? _recoveryError;
   int _tab = 0;
+  bool _notificationsOff = false;
+  late final AppLifecycleListener _life;
 
   @override
   void initState() {
     super.initState();
     _recover();
+    _checkNotifications();
+    // Back from the settings page: drop the banner once they are on.
+    _life = AppLifecycleListener(onResume: _checkNotifications);
+  }
+
+  @override
+  void dispose() {
+    _life.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkNotifications() async {
+    final n = widget.deps.notifications;
+    if (n == null) return;
+    bool off;
+    try {
+      off = !await n.enabled();
+    } on Object {
+      return; // unknown: no banner rather than a wrong one
+    }
+    if (mounted && off != _notificationsOff) {
+      setState(() => _notificationsOff = off);
+    }
+  }
+
+  /// The one-time ask, just before the first Start. Never blocks the start.
+  Future<void> _askNotifications() async {
+    final n = widget.deps.notifications;
+    if (n == null) return;
+    try {
+      final on = await askNotificationsOnce(n);
+      if (mounted) setState(() => _notificationsOff = !on);
+    } on Object {
+      // The workout starts anyway; the banner check runs again on resume.
+    }
   }
 
   /// A journal on open is either already stored (delete it), finished but
@@ -165,6 +208,8 @@ class _GymRootState extends State<GymRoot> {
       ),
     );
     if (plan == null || !mounted) return;
+    await _askNotifications();
+    if (!mounted) return;
     final c = widget.deps.liveController();
     try {
       await c.start(plan);
@@ -249,6 +294,10 @@ class _GymRootState extends State<GymRoot> {
         onResume: _resume,
         onOpenDiagnostics: widget.onOpenDiagnostics,
         recoveryError: _recoveryError,
+        notificationsOff: _notificationsOff,
+        onOpenNotificationSettings: widget.deps.notifications == null
+            ? null
+            : () => widget.deps.notifications!.openSettings(),
       ),
       _BodyTab(deps: widget.deps, gymId: gym.id),
       GymFlow(
@@ -292,10 +341,16 @@ class _Today extends StatelessWidget {
     required this.onResume,
     this.onOpenDiagnostics,
     this.recoveryError,
+    this.notificationsOff = false,
+    this.onOpenNotificationSettings,
   });
 
   /// The last open could not read or store a journal; it is kept on disk.
   final Object? recoveryError;
+
+  /// Plan 6.2: a standing banner while notifications are denied.
+  final bool notificationsOff;
+  final VoidCallback? onOpenNotificationSettings;
   final GymDeps deps;
   final eng.Gym gym;
   final eng.SessionSnapshot? pending;
@@ -321,6 +376,44 @@ class _Today extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
+          if (notificationsOff) ...[
+            Container(
+              key: const Key('today.notifications_off'),
+              padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+              decoration: BoxDecoration(
+                color: Lit.ink,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Notifications are off, so the rest timer cannot show '
+                      'on the lock screen. The buzz still works.',
+                      style: LitType.body(14, Colors.white, FontWeight.w600),
+                    ),
+                  ),
+                  if (onOpenNotificationSettings != null)
+                    TextButton(
+                      onPressed: onOpenNotificationSettings,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(48, 48),
+                      ),
+                      child: Text(
+                        'Turn on',
+                        style: LitType.body(15, Colors.white, FontWeight.w800)
+                            .copyWith(
+                              decoration: TextDecoration.underline,
+                              decorationColor: Colors.white,
+                            ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           if (recoveryError != null) ...[
             Container(
               padding: const EdgeInsets.all(12),
