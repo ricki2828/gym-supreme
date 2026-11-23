@@ -15,6 +15,15 @@ void main() {
     expect(Features.ghost, _want('ghost'));
     expect(Features.rotation, _want('rotation'));
     expect(Features.plateMath, _want('plates'));
+    if (_features == 'all') {
+      // Direct check, independent of the parser copy above.
+      expect([
+        Features.timers,
+        Features.ghost,
+        Features.rotation,
+        Features.plateMath,
+      ], everyElement(isTrue));
+    }
     if (_features.isEmpty) {
       expect([
         Features.timers,
