@@ -329,13 +329,14 @@ void main() {
       ]);
     });
 
-    test('elapsedBeforeMs outside the block is rejected', () {
+    test('negative elapsed throws; past the end clamps, block_end resent', () {
       final b = TimerBlock.emom(rounds: 1);
       expect(() => b.toSnapshotBlock(elapsedBeforeMs: -1), throwsArgumentError);
-      expect(
-        () => b.toSnapshotBlock(elapsedBeforeMs: 60001),
-        throwsArgumentError,
-      );
+      final j = b.toSnapshotBlock(elapsedBeforeMs: 60005);
+      expect(j['elapsed_before_ms'], 60000);
+      expect(j['cues'], [
+        {'index': 1, 'at_ms': 0, 'kind': 'block_end', 'label': 'Done'},
+      ]);
     });
 
     test('size stays small (t5v: 20-min EMOM ~20, 30-round interval ~60)', () {
