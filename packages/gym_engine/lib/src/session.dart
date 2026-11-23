@@ -172,7 +172,10 @@ class Session {
         }
       }
     }
-    final restore = clears || (s.rest == null && latest);
+    // ...but not across a pause: a resume after the set moved readiness
+    // past its end, and paused time is never set time.
+    final resumedSince = (s.setReadyAtMs ?? 0) > (set.endedAtMs ?? 0);
+    final restore = clears || (s.rest == null && latest && !resumedSince);
     return next.copyWith(
       rev: s.rev + 1,
       rest: clears ? null : s.rest,

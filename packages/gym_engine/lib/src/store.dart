@@ -28,6 +28,9 @@ abstract interface class HistoryStore {
     List<HrSample> hr = const [],
   });
   bool hasWorkout(String uuid);
+
+  /// HR samples stored with a workout (R2), by time.
+  List<HrSample> hrSamples(String uuid);
   WorkoutRecord? workout(String uuid);
 
   /// Every finished workout, oldest first.
@@ -88,6 +91,10 @@ class MemoryStore implements HistoryStore {
 
   @override
   bool hasWorkout(String uuid) => _workouts.containsKey(uuid);
+
+  @override
+  List<HrSample> hrSamples(String uuid) =>
+      [...?hrByWorkout[uuid]]..sort((a, b) => a.tMs.compareTo(b.tMs));
 
   @override
   WorkoutRecord? workout(String uuid) => _workouts[uuid];

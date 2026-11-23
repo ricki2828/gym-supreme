@@ -366,6 +366,15 @@ void main() {
     expect(s.exercises[0].sets[1].startedAtMs, t0 + 150000);
   });
 
+  test('undo after a pause does not count paused time as set time', () {
+    var s = Session.done(start(), 'u:0', nowMs: t0 + 60000);
+    s = Session.pause(s, nowMs: t0 + 70000);
+    s = Session.resume(s, nowMs: t0 + 670000);
+    s = Session.undo(s, 'u:0');
+    s = Session.done(s, 'u:0', nowMs: t0 + 700000);
+    expect(s.exercises[0].sets[0].startedAtMs, t0 + 670000);
+  });
+
   test('decode rejects next_set_n that would reuse an id', () {
     final enc = start().encode().replaceFirst(
       '"next_set_n":3',

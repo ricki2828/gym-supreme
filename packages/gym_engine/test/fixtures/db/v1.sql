@@ -42,13 +42,14 @@ CREATE TABLE set_row (
   kind TEXT NOT NULL CHECK (kind IS NOT NULL AND kind IN ('reps','timed')),
   load_g INTEGER,
   reps INTEGER,
-  completion TEXT NOT NULL CHECK (completion IS NOT NULL AND completion IN ('tap_unchanged','adjusted','typed','cold_start')),
+  completion TEXT CHECK (completion IS NULL OR completion IN ('tap_unchanged','adjusted','typed','cold_start')),
   skipped INTEGER NOT NULL CHECK (skipped IN (0,1)),
   source TEXT NOT NULL CHECK (source IS NOT NULL AND source IN ('app','lockscreen')),
   started_at_ms INTEGER,
   ended_at_ms INTEGER,
   offset_ms INTEGER,
-  block_json TEXT
+  block_json TEXT,
+  CHECK ((skipped = 1) = (completion IS NULL))
 );
 CREATE INDEX set_ghost ON set_row(gym_id, exercise_id, workout_uuid);
 CREATE INDEX set_workout ON set_row(workout_uuid);
