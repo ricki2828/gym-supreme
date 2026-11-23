@@ -407,8 +407,14 @@ class SessionSnapshot {
     } on ArgumentError catch (e) {
       throw FormatException('bad snapshot value: $e');
     }
+    final prefix = '${snap.workoutUuid}:';
+    var maxN = -1;
     for (final e in snap.exercises) {
       for (final x in e.sets) {
+        if (x.setId.startsWith(prefix)) {
+          final n = int.tryParse(x.setId.substring(prefix.length));
+          if (n != null && n > maxN) maxN = n;
+        }
         final done = x.state == SetState.done;
         if (done != (x.completion != null) || done != (x.source != null)) {
           throw FormatException(
@@ -416,6 +422,10 @@ class SessionSnapshot {
           );
         }
       }
+    }
+    final next = snap.nextSetN;
+    if (next != null && next <= maxN) {
+      throw FormatException('next_set_n $next would reuse set id $maxN');
     }
     return snap;
   }
@@ -480,31 +490,38 @@ class SessionSnapshot {
 ({SessionSnapshot? last, bool tornTail, int corruptLines}) readJournal(
   String text,
 ) {
-  SessionSnapshot? last;
-  var bad = 0;
-  var torn = false;
   final lines = [
     for (final l in const LineSplitter().convert(text))
       if (l.trim().isNotEmpty) l,
   ];
+  final decoded = <SessionSnapshot?>[];
+  var torn = false;
+  var bad = 0;
   for (var i = 0; i < lines.length; i++) {
-    final SessionSnapshot s;
     try {
-      s = SessionSnapshot.decode(lines[i]);
+      decoded.add(SessionSnapshot.decode(lines[i]));
     } on FormatException {
+      decoded.add(null);
       if (i == lines.length - 1) {
         torn = true;
       } else {
         bad++;
       }
-      continue;
     }
-    if (last != null &&
-        (s.workoutUuid != last.workoutUuid || s.rev <= last.rev)) {
+  }
+  // The workout is the one in the last good line; a stale leading line from
+  // another workout is the corrupt one, not everything after it.
+  final uuid = decoded
+      .lastWhere((d) => d != null, orElse: () => null)
+      ?.workoutUuid;
+  SessionSnapshot? last;
+  for (final d in decoded) {
+    if (d == null) continue;
+    if (d.workoutUuid != uuid || (last != null && d.rev <= last.rev)) {
       bad++;
       continue;
     }
-    last = s;
+    last = d;
   }
   return (last: last, tornTail: torn, corruptLines: bad);
 }

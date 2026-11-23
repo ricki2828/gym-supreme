@@ -80,7 +80,9 @@ class Session {
     return snap.copyWith(nextSetN: n);
   }
 
-  /// Logs a set. Values default to the targets. Starts the exercise's rest
+  /// Logs a set. Values default to the targets. A Done while paused resumes
+  /// first, so that set is logged as starting at the Done (zero length):
+  /// paused time is never set time. Starts the exercise's rest
   /// unless nothing is left to do. [completion] defaults to: `cold_start`
   /// when a loaded exercise had no planned load; `tap_unchanged` when the
   /// values equal the PLAN (not the target, which +/- may have moved) or the
@@ -109,10 +111,10 @@ class Session {
     final loaded = const {'dumbbell', 'stack', 'barbell'}.contains(ex.loadKind);
     final how =
         completion ??
-        (source == SetSource.lockscreen
-            ? Completion.tapUnchanged
-            : (loaded && set.planLoadG == null)
+        ((loaded && set.planLoadG == null)
             ? Completion.coldStart
+            : source == SetSource.lockscreen
+            ? Completion.tapUnchanged
             : (load == set.planLoadG && r == set.planReps)
             ? Completion.tapUnchanged
             : Completion.adjusted);
@@ -157,9 +159,14 @@ class Session {
       targetReps: set.targetReps,
     );
     final next = _replaceSet(s, at.e, at.s, back);
+    final clears = s.rest?.setId == setId;
     return next.copyWith(
       rev: s.rev + 1,
-      rest: s.rest?.setId == setId ? null : s.rest,
+      rest: clears ? null : s.rest,
+      // The undone set is ready again from when it first started.
+      setReadyAtMs: clears
+          ? (set.startedAtMs ?? s.setReadyAtMs)
+          : s.setReadyAtMs,
     );
   }
 

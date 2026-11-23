@@ -105,6 +105,31 @@ void main() {
     expect(s.exercises[0].sets[0].completion, Completion.coldStart);
   });
 
+  test('lock-screen Done on a cold-start set is cold_start', () {
+    const cold = SessionPlan(
+      gymId: 'g',
+      muscles: ['chest'],
+      estimatedMinutes: 5,
+      uncovered: [],
+      items: [
+        PlannedItem(
+          exerciseId: 'a',
+          name: 'A',
+          unit: LoadUnit.ea,
+          sets: [PlannedSet(loadG: null, reps: 10)],
+          repLo: 8,
+          repHi: 12,
+          restS: 90,
+          reason: '',
+          primary: ['chest'],
+        ),
+      ],
+    );
+    var s = Session.start(cold, nowMs: t0, tzOffsetMin: 0, workoutUuid: 'u');
+    s = Session.done(s, 'u:0', nowMs: t0 + 1, source: SetSource.lockscreen);
+    expect(s.exercises[0].sets[0].completion, Completion.coldStart);
+  });
+
   test('lock-screen Done counts as tap_unchanged (R3)', () {
     var s = Session.retarget(start(), 'u:0', reps: 8);
     s = Session.done(s, 'u:0', nowMs: t0 + 1, source: SetSource.lockscreen);
@@ -320,6 +345,42 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('undo restores the set start; cold start beats lock screen', () {
+    var s = Session.done(start(), 'u:0', nowMs: t0 + 60000);
+    s = Session.done(s, 'u:1', nowMs: t0 + 200000);
+    s = Session.undo(s, 'u:1');
+    s = Session.done(s, 'u:1', nowMs: t0 + 260000);
+    expect(s.exercises[0].sets[1].startedAtMs, t0 + 150000);
+  });
+
+  test('decode rejects next_set_n that would reuse an id', () {
+    final enc = start().encode().replaceFirst(
+      '"next_set_n":3',
+      '"next_set_n":2',
+    );
+    expect(() => SessionSnapshot.decode(enc), throwsFormatException);
+  });
+
+  test(
+    'journal: a stale leading line from another workout is the corrupt one',
+    () {
+      final other = Session.start(
+        plan(),
+        nowMs: t0,
+        tzOffsetMin: 0,
+        workoutUuid: 'v',
+      );
+      final a = start();
+      final b = Session.done(a, 'u:0', nowMs: t0 + 1);
+      final r = readJournal(
+        [other.encode(), a.encode(), b.encode()].join('\n'),
+      );
+      expect(r.last!.workoutUuid, 'u');
+      expect(r.last!.rev, 1);
+      expect(r.corruptLines, 1);
+    },
+  );
 
   test('uuidV4 shape', () {
     expect(
