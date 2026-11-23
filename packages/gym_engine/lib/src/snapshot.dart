@@ -75,6 +75,7 @@ class SnapshotSet {
     Object? startedAtMs = _keep,
     Object? endedAtMs = _keep,
     Object? offsetMs = _keep,
+    Object? block = _keep,
   }) => SnapshotSet(
     setId: setId,
     setOrdinal: setOrdinal ?? this.setOrdinal,
@@ -91,7 +92,7 @@ class SnapshotSet {
     startedAtMs: _pick(startedAtMs, this.startedAtMs),
     endedAtMs: _pick(endedAtMs, this.endedAtMs),
     offsetMs: _pick(offsetMs, this.offsetMs),
-    block: block,
+    block: _pick(block, this.block),
   );
 
   Map<String, Object?> toJson() => {
