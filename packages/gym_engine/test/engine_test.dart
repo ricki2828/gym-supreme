@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:gym_engine/gym_engine.dart';
+import 'package:gym_engine/sqlite_store.dart';
 import 'package:test/test.dart';
 
 const day = 86400000;
@@ -13,6 +14,9 @@ Catalog loadCatalog() => Catalog.fromJson(
   File('../../assets/exercises_taxonomy.json').readAsStringSync(),
   File('../../assets/exercises.json').readAsStringSync(),
 );
+
+/// Which store the rigs use; each group sets it.
+HistoryStore Function() newStore = MemoryStore.new;
 
 class Rig {
   Rig() {
@@ -32,7 +36,7 @@ class Rig {
   }
 
   static final catalog = loadCatalog();
-  final store = MemoryStore();
+  final HistoryStore store = newStore();
   late final GymEngine engine;
   late final String gymId;
   int now = monday;
@@ -74,6 +78,17 @@ class Rig {
 }
 
 void main() {
+  group('memory store', () {
+    setUp(() => newStore = MemoryStore.new);
+    engineTests();
+  });
+  group('sqlite store', () {
+    setUp(() => newStore = SqliteStore.inMemory);
+    engineTests();
+  });
+}
+
+void engineTests() {
   test('condo push suggestion: kit-valid, loads available, fits 45 min', () {
     final r = Rig();
     final p = r.engine.suggest(
