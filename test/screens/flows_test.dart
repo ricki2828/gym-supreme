@@ -111,6 +111,33 @@ void main() {
     expect(find.text('PUSH'), findsOneWidget);
   });
 
+  testWidgets('review P1-3: Chest + Shoulders + Triceps through the real '
+      'picker is a Push session', (tester) async {
+    await pumpRoot(tester);
+    await tapText(tester, 'SAVE · 5 ON THE FLOOR');
+    await tapText(tester, 'LIGHT SOMETHING UP');
+    for (final row in ['Chest', 'Shoulders', 'Triceps']) {
+      final f = find.bySemanticsLabel(RegExp('^$row, '));
+      await tester.ensureVisible(f.first);
+      await tester.tap(f.first);
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('START PUSH'), findsOneWidget);
+  });
+
+  testWidgets('review P1-3: Back + Biceps is a Pull session', (tester) async {
+    await pumpRoot(tester);
+    await tapText(tester, 'SAVE · 5 ON THE FLOOR');
+    await tapText(tester, 'LIGHT SOMETHING UP');
+    for (final row in ['Back', 'Biceps, forearms']) {
+      final f = find.bySemanticsLabel(RegExp('^${RegExp.escape(row)}, '));
+      await tester.ensureVisible(f.first);
+      await tester.tap(f.first);
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('START PULL'), findsOneWidget);
+  });
+
   testWidgets('item 5: pause, then resume from the journal on next open', (
     tester,
   ) async {

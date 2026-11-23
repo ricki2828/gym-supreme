@@ -186,6 +186,49 @@ const List<WorkoutType> workoutTypes = [
   WorkoutType('engine', 'Engine', []),
 ];
 
+/// The session type of a pick made of picker rows (review P1-3). Each row
+/// (a muscle group such as Shoulders = front, side and rear delts) counts as
+/// the type holding most of its muscles; the session is that type when at
+/// least two thirds of the picked rows share it, else null (mixed). So Chest +
+/// Shoulders + Triceps is Push even though Shoulders carries rear delts, Back +
+/// Biceps is Pull even though Back carries lower back, and Chest + Quads is a
+/// mix. Rotation advances only on a typed session.
+String? typeForGroups(Iterable<Iterable<String>> groups) {
+  final rows = [for (final g in groups) g.toSet()]
+    ..removeWhere((g) => g.isEmpty);
+  if (rows.isEmpty) return null;
+  final votes = <String, int>{};
+  for (final g in rows) {
+    final t = _majorityType(g);
+    if (t != null) votes[t] = (votes[t] ?? 0) + 1;
+  }
+  // At least two thirds of the rows: a full upper-body day (Chest, Shoulders,
+  // Triceps, Back, Biceps = 3 of 5 Push) stays mixed and does not move the
+  // Push rotation or ghost against Push history.
+  for (final e in votes.entries) {
+    if (e.value * 3 >= rows.length * 2) return e.key;
+  }
+  return null;
+}
+
+/// The type holding a strict majority of [muscles]; null on a tie or none.
+String? _majorityType(Set<String> muscles) {
+  String? best;
+  var bestN = 0;
+  var tie = false;
+  for (final t in workoutTypes) {
+    final n = t.muscles.where(muscles.contains).length;
+    if (n > bestN) {
+      best = t.id;
+      bestN = n;
+      tie = false;
+    } else if (n == bestN && n > 0) {
+      tie = true;
+    }
+  }
+  return (tie || bestN * 2 <= muscles.length) ? null : best;
+}
+
 WorkoutType? workoutType(String? id) {
   for (final t in workoutTypes) {
     if (t.id == id) return t;

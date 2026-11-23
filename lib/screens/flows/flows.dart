@@ -542,22 +542,11 @@ class _PickerFlowState extends State<PickerFlow> {
 
   eng.GymApi get _engine => widget.deps.engine;
 
-  /// The type whose default muscles hold every pick (most overlap wins);
-  /// null for a mixed pick, which then uses ink.
-  String? _typeId() {
-    if (_picked.isEmpty) return null;
-    String? best;
-    var bestOverlap = 0;
-    for (final t in eng.workoutTypes) {
-      if (!_picked.every(t.muscles.contains)) continue;
-      final overlap = t.muscles.where(_picked.contains).length;
-      if (overlap > bestOverlap) {
-        best = t.id;
-        bestOverlap = overlap;
-      }
-    }
-    return best;
-  }
+  /// Session type of the pick, by picker rows: the engine's majority rule
+  /// (review P1-3).
+  String? _typeId() => eng.typeForGroups([
+    for (final g in MuscleGroup.picker) g.muscleIds.where(_picked.contains),
+  ]);
 
   eng.SessionPlan? _plan() {
     if (_picked.isEmpty) return null;
