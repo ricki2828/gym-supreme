@@ -1,10 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:gym_engine/cut2.dart' as c2;
 import 'package:gym_engine/gym_engine.dart' as eng;
 import 'package:supreme_ui/supreme_ui.dart';
 
+import '../../app/feature_flags.dart';
 import '../../app/workout_port.dart';
+import '../../widgets/cut2/amrap_entry.dart';
+import '../../widgets/cut2/ghost_lines.dart';
+import '../../widgets/cut2/rotation_chip.dart';
+import '../../widgets/cut2/timer_panel.dart';
+import '../cut2/rotation_screen.dart';
+import '../cut2/timer_picker_screen.dart';
 import '../body_screen.dart';
 import '../engine_adapter.dart';
 import '../gym_setup_screen.dart';
@@ -25,6 +33,7 @@ class GymDeps {
     this.appVersion = '',
     int Function()? nowMs,
     int Function()? tzOffsetMin,
+    this.store,
   }) : nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch),
        tzOffsetMin =
            tzOffsetMin ?? (() => DateTime.now().timeZoneOffset.inMinutes);
@@ -36,7 +45,12 @@ class GymDeps {
   final int Function() nowMs;
   final int Function() tzOffsetMin;
 
+  /// History for the cut-2 ghost and rotation (lib/app passes the same
+  /// store as the engine's). Null hides both even with their flags on.
+  final eng.HistoryStore? store;
+
   LiveController liveController() => LiveController(
+    store: store,
     engine: engine,
     port: port,
     nowMs: nowMs,
@@ -500,7 +514,51 @@ class _PickerFlowState extends State<PickerFlow> {
           ? null
           : () => Navigator.of(context).pop(plan),
       onClose: () => Navigator.of(context).pop(),
+      sheetExtra: _rotationChip(),
     );
+  }
+
+  // ---- cut 2: rotation (Features.rotation) ----------------------------------
+
+  static final Map<String, String> _typeNames = {
+    for (final t in eng.workoutTypes) t.id: t.name,
+  };
+  static const Map<String, Color> _typeColours = {
+    'push': Lit.push,
+    'pull': Lit.pull,
+    'legs': Lit.legs,
+    'core': Lit.core,
+    'engine': Lit.engine,
+  };
+
+  Widget? _rotationChip() {
+    final st = widget.deps.store;
+    if (!Features.rotation || st == null) return null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: RotationChip(
+        rotation: c2.loadRotation(st),
+        names: _typeNames,
+        onTap: () => _editRotation(st),
+      ),
+    );
+  }
+
+  Future<void> _editRotation(eng.HistoryStore st) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => StatefulBuilder(
+          // Re-read from the store on every change: never a stale copy.
+          builder: (context, setLocal) => RotationScreen(
+            rotation: c2.loadRotation(st),
+            names: _typeNames,
+            colours: _typeColours,
+            onChanged: (r) => setLocal(() => c2.saveRotation(st, r)),
+          ),
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
   }
 }
 
@@ -562,6 +620,52 @@ class _LiveFlowState extends State<LiveFlow> {
     }
   }
 
+  // ---- cut 2 (each entry gated by its Features flag) ----------------------
+
+  /// Under the current set: the timer panel on a timer block, else the
+  /// ghost line. Null when both features are off.
+  Widget? _setExtra() {
+    final block = c.currentTimer;
+    if (Features.timers && block != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: TimerPanel(
+          block: block,
+          elapsedAt: c.timerElapsedMs,
+          running: c.timerRunning,
+          nowMs: c.nowMs,
+          onStart: c.startTimer,
+          onRound: c.markRound,
+          onFinish: () => _finishTimer(block),
+        ),
+      );
+    }
+    if (Features.ghost) {
+      final g = c.currentGhost();
+      if (g != null) return GhostSetLine(line: g, perHand: c.currentPerHand);
+    }
+    return null;
+  }
+
+  Future<void> _addTimer() async {
+    final block = await Navigator.of(context).push(
+      MaterialPageRoute<c2.TimerBlock>(
+        builder: (_) => const TimerPickerScreen(),
+      ),
+    );
+    if (block != null && mounted) await c.addTimer(block);
+  }
+
+  Future<void> _finishTimer(c2.TimerBlock block) async {
+    if (block.type == c2.TimerType.amrap) {
+      final r = await askAmrapResult(context);
+      if (r == null || !mounted) return;
+      await c.finishTimer(amrapRounds: r.rounds, amrapExtraReps: r.extraReps);
+    } else {
+      await c.finishTimer();
+    }
+  }
+
   Future<void> _pause() async {
     if (_leaving) return;
     _leaving = true;
@@ -597,6 +701,19 @@ class _LiveFlowState extends State<LiveFlow> {
             onReorder: c.reorderUpNext,
             onPause: _pause,
             onFinish: _finish,
+            setExtra: _setExtra(),
+            actions: [
+              if (Features.timers && c.view() != null && c.currentTimer == null)
+                BigButton(
+                  label: 'ADD TIMER',
+                  colour: Lit.ink.withValues(alpha: 0.12),
+                  ink: Lit.ink,
+                  fontSize: 22,
+                  height: 52,
+                  onTap: _addTimer,
+                  semanticLabel: 'Add a timer block to this exercise',
+                ),
+            ],
           ),
           if (c.lastError != null && c.lastError is! StaleRevException)
             Positioned(
@@ -642,8 +759,23 @@ class PostWorkoutFlow extends StatelessWidget {
         weekTypes: weekTypesOf(rows, localOf(deps.nowMs(), tz)),
         unitByExercise: units,
       ),
+      totalExtra: _ghostTotal(),
       onDone: () => Navigator.of(context).pop(),
     );
+  }
+
+  /// Cut 2 (Features.ghost): this workout against last time. Null hides it.
+  Widget? _ghostTotal() {
+    final st = deps.store;
+    if (!Features.ghost || st == null) return null;
+    final all = st.workouts();
+    final mine = [
+      for (final w in all)
+        if (w.uuid == uuid) w,
+    ];
+    if (mine.isEmpty) return null;
+    final t = c2.ghostTotalForRecord(mine.first, all);
+    return t == null ? null : GhostTotalLine(total: t);
   }
 }
 

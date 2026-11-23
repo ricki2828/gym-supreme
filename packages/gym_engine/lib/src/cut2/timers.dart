@@ -443,15 +443,18 @@ class TimerBlock {
   Map<String, Object?> toSnapshotBlock({
     int? startedAtWallMs,
     int elapsedBeforeMs = 0,
+    int run = 0,
   }) {
     if (elapsedBeforeMs < 0) {
       throw ArgumentError('elapsedBeforeMs $elapsedBeforeMs');
     }
+    if (run < 0) throw ArgumentError('run $run');
     // A pause that races the end (or wall-clock skew) lands just past it:
     // clamp, so block_end is still resent rather than the resume throwing.
     final e = elapsedBeforeMs > totalMs ? totalMs : elapsedBeforeMs;
     return {
       ...toJson(),
+      'run': run,
       'started_at_wall_ms': startedAtWallMs,
       'elapsed_before_ms': e,
       'cues': [

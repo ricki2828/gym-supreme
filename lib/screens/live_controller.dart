@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:gym_engine/cut2.dart' as c2;
 import 'package:gym_engine/gym_engine.dart' as eng;
 
+import '../app/feature_flags.dart';
 import '../app/workout_port.dart';
 import 'engine_adapter.dart';
 import 'live_screen.dart';
@@ -21,7 +23,11 @@ class LiveController extends ChangeNotifier {
     required this.tzOffsetMin,
     this.appVersion = '',
     this.tick = const Duration(seconds: 1),
+    this.store,
   });
+
+  /// History for the cut-2 ghost and rotation; null hides both.
+  final eng.HistoryStore? store;
 
   final eng.GymApi engine;
   final WorkoutPort port;
@@ -65,7 +71,9 @@ class LiveController extends ChangeNotifier {
   /// submit against the journal head and runs again.
   Future<void> resume(eng.SessionSnapshot pending) => _enqueue(() async {
     _s = pending;
-    final next = eng.Session.resume(pending, nowMs: nowMs());
+    // TimerSession.resume re-anchors a paused timer block; with no block it
+    // is byte-identical to Session.resume.
+    final next = c2.TimerSession.resume(pending, nowMs: nowMs());
     if (identical(next, pending)) {
       _set(pending);
       return;
@@ -92,11 +100,120 @@ class LiveController extends ChangeNotifier {
     return eng.Session.retarget(s, set.setId, loadG: next);
   });
 
-  Future<void> done() =>
-      _onCurrent((s, set) => eng.Session.done(s, set.setId, nowMs: nowMs()));
+  /// Done on a timer block logs the block (TimerSession.finish); any other
+  /// set is a plain Done.
+  Future<void> done() => _onCurrent((s, set) {
+    final f = c2.TimerSession.finish(s, set.setId, nowMs: nowMs());
+    return identical(f, s) ? eng.Session.done(s, set.setId, nowMs: nowMs()) : f;
+  });
 
-  Future<void> skipSet() =>
-      _onCurrent((s, set) => eng.Session.skip(s, set.setId, nowMs: nowMs()));
+  /// One path for skip (and undo): the TimerSession versions stop or re-arm a
+  /// timer block; for any other set they equal the Session versions.
+  Future<void> skipSet() => _onCurrent(
+    (s, set) => c2.TimerSession.skip(s, set.setId, nowMs: nowMs()),
+  );
+
+  // ---- cut 2: timer blocks (entry points gated by Features.timers) ---------
+
+  /// Adds [block] as a timed entry of the current exercise, placed before it
+  /// so it is the current set now. Lights that exercise's muscles (R4).
+  Future<void> addTimer(c2.TimerBlock block) => _transition((s) {
+    final cur = s.current;
+    if (cur == null) return s;
+    final ex = s.exercises[cur.exercise];
+    final added = eng.Session.addExercise(
+      s,
+      eng.PlannedItem(
+        exerciseId: ex.exerciseId,
+        name: ex.name,
+        unit: eng.LoadUnit.timed,
+        sets: const [eng.PlannedSet(loadG: null, reps: 0)],
+        repLo: 0,
+        repHi: 0,
+        restS: ex.restS,
+        reason: block.title,
+        primary: const [],
+      ),
+      at: cur.exercise,
+    );
+    if (identical(added, s)) return s;
+    final setId = added.exercises[cur.exercise].sets.first.setId;
+    // One rev for the whole tap.
+    return c2.TimerSession.attach(added, setId, block).copyWith(rev: s.rev + 1);
+  });
+
+  /// The current set's timer block, or null.
+  c2.TimerBlock? get currentTimer {
+    final s = _s;
+    final set = s?.currentSet;
+    if (s == null || set == null) return null;
+    return c2.TimerSession.blockOf(s, set.setId);
+  }
+
+  int timerElapsedMs(int now) {
+    final s = _s;
+    final set = s?.currentSet;
+    if (s == null || set == null) return 0;
+    return c2.TimerSession.elapsedMs(s, set.setId, now);
+  }
+
+  bool get timerRunning {
+    final s = _s;
+    final set = s?.currentSet;
+    return s != null && set != null && c2.TimerSession.isRunning(s, set.setId);
+  }
+
+  Future<void> startTimer() => _onCurrent(
+    (s, set) => c2.TimerSession.start(s, set.setId, nowWallMs: nowMs()),
+  );
+
+  Future<void> markRound() => _onCurrent(
+    (s, set) => c2.TimerSession.mark(s, set.setId, nowMs: nowMs()),
+  );
+
+  Future<void> finishTimer({int? amrapRounds, int? amrapExtraReps}) =>
+      _onCurrent(
+        (s, set) => c2.TimerSession.finish(
+          s,
+          set.setId,
+          nowMs: nowMs(),
+          amrapRounds: amrapRounds,
+          amrapExtraReps: amrapExtraReps,
+        ),
+      );
+
+  // ---- cut 2: ghost (gated by Features.ghost) ------------------------------
+
+  String? _ghostFor;
+  Map<String, c2.ExerciseGhost?> _ghosts = const {};
+
+  /// Last time's sets per exercise, read once per workout (history does not
+  /// change during it); new exercises added later get looked up then.
+  Map<String, c2.ExerciseGhost?> _ghostsOf(eng.SessionSnapshot s) {
+    final st = store;
+    if (st == null) return const {};
+    final missing = s.exercises.any((e) => !_ghosts.containsKey(e.exerciseId));
+    if (_ghostFor != s.workoutUuid || missing) {
+      _ghosts = c2.ghostsForSession(s, st.workouts());
+      _ghostFor = s.workoutUuid;
+    }
+    return _ghosts;
+  }
+
+  /// The ghost line for the current set; null when hidden.
+  c2.SetGhostLine? currentGhost() {
+    final s = _s;
+    final set = s?.currentSet;
+    if (s == null || set == null) return null;
+    return c2.ghostLineFor(s, set.setId, _ghostsOf(s));
+  }
+
+  /// Whether the current exercise is loaded per hand (dumbbells: "ea").
+  bool get currentPerHand {
+    final s = _s;
+    final c = s?.current;
+    return c != null && s!.exercises[c.exercise].loadKind == 'dumbbell';
+  }
 
   Future<void> restDelta(int seconds) => _transition(
     (s) => eng.Session.extendRest(s, seconds * 1000, nowMs: nowMs()),
@@ -125,7 +242,7 @@ class LiveController extends ChangeNotifier {
         ok = true;
         return;
       }
-      final next = eng.Session.pause(s, nowMs: nowMs());
+      final next = c2.TimerSession.pause(s, nowMs: nowMs());
       if (!identical(next, s) && !await _submit(next)) return;
       ok = true;
       try {
@@ -169,6 +286,14 @@ class LiveController extends ChangeNotifier {
   Future<void> _complete(eng.SessionSnapshot done) async {
     engine.saveFinished(done);
     await port.deleteJournal(done.workoutUuid);
+    final st = store;
+    if (Features.rotation && st != null) {
+      try {
+        c2.rotationAfterFinish(st, done.typeId);
+      } on Object catch (e) {
+        lastError = e; // the workout is stored; only the pointer is stale
+      }
+    }
     finishedUuid = done.workoutUuid;
     lastError = null;
     _set(done);
