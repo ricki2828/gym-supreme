@@ -55,6 +55,7 @@ class DeviceView {
 /// Unknown keys still show, under their raw name, so nothing is hidden.
 const Map<String, String> nativeCounterLabels = {
   'journals_lost': 'Journals lost',
+  'journal_delete_failed': 'Journal deletes refused (stuck on open)',
   'journal_corrupt_lines': 'Corrupt journal lines',
   'journal_torn_tails': 'Torn tails (crash, expected)',
   'rest_alerts_fired': 'Rest alerts fired',
@@ -157,6 +158,7 @@ class DiagnosticsPanel extends StatelessWidget {
             '${native[k]}',
             ok: switch (k) {
               'journals_lost' ||
+              'journal_delete_failed' ||
               'journal_corrupt_lines' ||
               'rest_alerts_missed' ||
               'rest_alerts_audio_failed' => native[k] == 0,

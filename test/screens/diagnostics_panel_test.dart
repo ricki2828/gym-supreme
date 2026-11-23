@@ -113,4 +113,24 @@ void main() {
     expect(find.text('starts at the first session'), findsOneWidget);
     expect(find.text('NaN'), findsNothing);
   });
+
+  testWidgets('journal delete failures show as a miss', (tester) async {
+    phone(tester);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: DiagnosticsPanel(
+            appVersion: 'x',
+            gate: gate,
+            native: {'journal_delete_failed': 3},
+          ),
+        ),
+      ),
+    );
+    final row = find.bySemanticsLabel(
+      'Journal deletes refused (stuck on open), 3, miss',
+    );
+    await tester.scrollUntilVisible(row, 200);
+    expect(row, findsOneWidget);
+  });
 }

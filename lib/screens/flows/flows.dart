@@ -142,7 +142,12 @@ class _GymRootState extends State<GymRoot> {
     } on Object catch (e) {
       // e.g. finish_pending / already_running: a journal is still on disk.
       c.dispose();
-      _say('Could not start: ${_reason(e)}. Reopen the app to recover it.');
+      _say(
+        _reason(e) == 'finish_pending' || _reason(e) == 'already_running'
+            ? 'A workout is still waiting to be saved. Close and reopen the '
+                  'app; if this keeps happening, see Diagnostics.'
+            : 'Could not start: ${_reason(e)}. Reopen the app to recover it.',
+      );
       return;
     }
     if (!mounted) {
@@ -740,9 +745,11 @@ class _GymFlowState extends State<GymFlow> {
       dumbbellMaxG: _dbMax,
       firstRun: widget.firstRun,
       onToggle: (id) => setState(() => _gym = _gym.toggle(id)),
+      // A preset only pre-ticks (plan 4.3): it adds its kit, and everything
+      // he already set (ticks, dumbbell pairs, stack weights) is kept.
       onPreset: (id) => setState(() {
         final fresh = widget.deps.engine.gymFromPreset(id);
-        _use(_gym.copyWith(kit: fresh.kit));
+        _use(_gym.copyWith(kit: {...fresh.kit, ..._gym.kit}));
       }),
       onDumbbellMax: _stepDumbbells,
       onPickGym: (id) => setState(() {
