@@ -322,12 +322,19 @@ interface GymHostApi {
  *
  * Ordering: the service applies calls one at a time in the order received.
  * Dart awaits each submit before the next call (finish included); there is
- * no concurrent submit. [finishSession] also works while paused (the pause
- * is folded in) and is refused with `not_running` when there is no journal,
- * `finished` when it is already finished. The finished snapshot is also
- * emitted on [WorkoutEvents.snapshots].
- * [pauseSession] with no running service: `not_running`.
- * [deleteJournal] on a paused, unfinished journal discards that workout.
+ * no concurrent submit.
+ *
+ * A submitted snapshot with `state: paused` or `finished: true` stops the
+ * service; `state: active` (re)starts it.
+ * [finishSession]: if Dart already submitted the finished snapshot (the
+ * preferred path) it is returned unchanged; otherwise the service stamps
+ * `finished: true` and rev + 1 (folding in a pause). `not_running` when
+ * there is no journal. The finished snapshot is emitted on
+ * [WorkoutEvents.snapshots] either way.
+ * [pauseSession] is idempotent while an unfinished journal exists;
+ * `not_running` when there is none or it is finished.
+ * [deleteJournal] on a paused, unfinished journal discards that workout;
+ * `still_running` only while the service is active for that uuid.
  *
  * Generated interface from Pigeon that represents a handler of messages from Flutter.
  */

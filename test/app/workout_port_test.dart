@@ -76,10 +76,38 @@ void main() {
     await port.startSession(snap('w1'));
     await port.finishSession();
     expect(
-      () => port.submitSnapshot(snap('w1', rev: 1), 0),
+      () => port.submitSnapshot(snap('w1', rev: 2), 1),
       refused('finished'),
     );
-    expect(port.finishSession, refused('finished'));
+    final again = jsonDecode(await port.finishSession()) as Map;
+    expect(again['rev'], 1, reason: 'already finished: returned unchanged');
+  });
+
+  test('finish stamps finished and rev + 1 unless Dart already did', () async {
+    final port = StubWorkoutPort();
+    await port.startSession(snap('w1'));
+    final stamped = jsonDecode(await port.finishSession()) as Map;
+    expect(stamped['rev'], 1);
+    expect(stamped['finished'], isTrue);
+
+    final p2 = StubWorkoutPort();
+    await p2.startSession(snap('w2'));
+    final fin = jsonEncode({'uuid': 'w2', 'rev': 1, 'finished': true});
+    expect(await p2.submitSnapshot(fin, 0), 1);
+    expect(p2.running, isFalse);
+    expect(await p2.finishSession(), fin);
+    await p2.deleteJournal('w2');
+  });
+
+  test('a paused snapshot stops the service; delete then allowed', () async {
+    final port = StubWorkoutPort();
+    await port.startSession(snap('w1'));
+    final paused = jsonEncode({'uuid': 'w1', 'rev': 1, 'state': 'paused'});
+    await port.submitSnapshot(paused, 0);
+    expect(port.running, isFalse);
+    await port.pauseSession();
+    await port.deleteJournal('w1');
+    expect(await port.readPendingJournal(), isNull);
   });
 
   test('finish works while paused', () async {
@@ -128,7 +156,8 @@ void main() {
       final other = StubWorkoutPort();
       await other.startSession(snap('w2'));
       await other.pauseSession();
-      expect(other.pauseSession, refused('not_running'));
+      await other.pauseSession(); // idempotent while the journal is unfinished
+      expect(StubWorkoutPort().pauseSession, refused('not_running'));
       await other.deleteJournal('w2');
       expect(await other.readPendingJournal(), isNull);
     },

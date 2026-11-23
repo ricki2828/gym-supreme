@@ -145,26 +145,40 @@ class StubWorkoutPort implements WorkoutPort {
     }
     _checkRev(snapshotJson, _rev + 1);
     _rev++;
-    _running = true;
+    // A paused or finished snapshot stops the service; an active one starts it.
+    final next = jsonDecode(snapshotJson) as Map<String, dynamic>;
+    _running = next['state'] != 'paused' && next['finished'] != true;
     _write(snapshotJson);
     return _rev;
   }
 
+  /// Idempotent while an unfinished journal exists (Dart usually submitted
+  /// the paused snapshot already, which stopped the service).
   @override
   Future<void> pauseSession() async {
-    if (!_running) throw WorkoutPortException('not_running');
+    final head = _journalMap();
+    if (head == null || head['finished'] == true) {
+      throw WorkoutPortException('not_running');
+    }
     _running = false;
   }
 
-  /// Works while paused too: the service folds the pause in (contract).
+  /// Returns an already-finished journal unchanged (the preferred path: Dart
+  /// submits the finished snapshot first). Otherwise stamps `finished: true`
+  /// and rev + 1 like the service (works while paused). Emits either way.
   @override
   Future<String> finishSession() async {
     final head = _journalMap();
     if (head == null) throw WorkoutPortException('not_running');
-    if (head['finished'] == true) throw WorkoutPortException('finished');
-    final map = head..['finished'] = true;
-    final done = jsonEncode(map);
     _running = false;
+    if (head['finished'] == true) {
+      _controller.add(_journal!);
+      return _journal!;
+    }
+    _rev++;
+    head['finished'] = true;
+    head['rev'] = _rev;
+    final done = jsonEncode(head);
     _write(done);
     return done;
   }
