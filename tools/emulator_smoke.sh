@@ -42,6 +42,50 @@ wait_for() { # wait_for <grep -E pattern> <seconds>: prints the newest matching 
   done
   return 1
 }
+# e2e helpers (lib/app/e2e_driver.dart), used by the ask check and the e2e flows below.
+e2e_lines() { timeout 30 adb logcat -d -s flutter:I | sed -n 's/.*GymSupreme\/e2e //p' | grep -F "\"nonce\":\"$NONCE\"" || true; }
+e2e_cmd() { NONCE="$1-$RANDOM$RANDOM"; adb shell am start -W -n "$PKG/app.gymsupreme.MainActivity" --es gym_e2e "$1:$NONCE" > /dev/null; }
+e2e_field() { sed -n "s/.*\"$1\":\"\([^\"]*\)\".*/\1/p" | head -1; }
+e2e_wait() { # e2e_wait <step> <seconds>: fails fast on an error or refused step
+  local i
+  for i in $(seq 1 "$2"); do
+    if e2e_lines | grep -qE '"step":"(error|refused)"'; then echo "e2e failed:" >&2; e2e_lines | tail -n 12 >&2; exit 1; fi
+    e2e_lines | grep -q "\"step\":\"$1\"" && return 0
+    sleep 1
+  done
+  echo "e2e: no $1 step within $2 s" >&2; e2e_lines | tail -n 12 >&2; timeout 60 adb logcat -d | tail -n 60 >&2; exit 1
+}
+
+# Notification ask (t3x, 0.1.1): on a fresh install the app's one-time ask must show the system
+# permission dialog on API 33+ (and resolve without one below 33). Runs BEFORE any pm grant.
+ask_lines() { timeout 30 adb logcat -d -s GymSupreme/service:I | grep -E '"event":"notif_request' || true; }
+adb logcat -c || true
+e2e_cmd ask
+if [ "$sdk" -ge 33 ]; then
+  for i in $(seq 1 30); do ask_lines | grep -q '"event":"notif_request_shown"' && break; sleep 1; done
+  ask_lines | grep -q '"event":"notif_request_shown"' || { echo "::error::API $sdk: the notification ask was never shown" >&2; e2e_lines | tail -n 5 >&2; exit 1; }
+  sleep 2
+  focus="$(adb shell dumpsys window | tr -d '\r' | grep -E 'mCurrentFocus|mFocusedApp' | head -2)"
+  echo "ask focus: $focus"
+  grep -qi 'permissioncontroller' <<< "$focus" || { echo "::error::API $sdk: permission dialog not in front" >&2; exit 1; }
+  # Tap the real Allow button, as Ricki would (uiautomator gives its bounds).
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1 || true
+  allow="$(adb shell cat /sdcard/ui.xml 2>/dev/null | tr -d '\r' | grep -o 'resource-id="com.android.permissioncontroller:id/permission_allow_button"[^>]*bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | grep -o 'bounds="[^"]*"' | head -1)"
+  [ -n "$allow" ] || { echo "::error::API $sdk: no Allow button in the permission dialog" >&2; exit 1; }
+  read -r x1 y1 x2 y2 <<< "$(grep -oE '[0-9]+' <<< "$allow" | tr '\n' ' ')"
+  adb shell input tap $(( (x1 + x2) / 2 )) $(( (y1 + y2) / 2 ))
+  for i in $(seq 1 20); do ask_lines | grep -q '"event":"notif_request".*"asked":true' && break; sleep 1; done
+  ask_lines | grep -q '"event":"notif_request".*"result":true.*"asked":true\|"event":"notif_request".*"asked":true.*"result":true' \
+    || { echo "::error::API $sdk: Allow did not resolve the ask as granted" >&2; ask_lines >&2; exit 1; }
+fi
+e2e_wait ok 30
+e2e_lines | sed 's/^/ask: /'
+e2e_lines | grep '"step":"ask"' | grep -q '"allowed":true' || { echo "::error::API $sdk: the ask did not end allowed" >&2; exit 1; }
+if [ "$sdk" -lt 33 ] && ask_lines | grep -q '"event":"notif_request_shown"'; then
+  echo "::error::API $sdk: a dialog was asked for below Android 13" >&2; exit 1
+fi
+ask_lines | sed 's/^/ask: /'
+
 if [ "$sdk" -ge 33 ]; then adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS; fi
 adb shell am start -W -n "$PKG/app.gymsupreme.MainActivity" --ez gym_selftest true > /dev/null
 started="$(wait_for '"event":"service_started".*"mode":"selftest"' 30)" || {
@@ -104,18 +148,6 @@ fatal_check "$PKG" session
 # SQLite store and the WorkoutService, driven by the gym_e2e launch extra (dogfood/debug only).
 # Each command carries a nonce that the driver echoes in every line: only lines from THIS
 # command count, so a failed `logcat -c` cannot produce a false pass.
-e2e_lines() { timeout 30 adb logcat -d -s flutter:I | sed -n 's/.*GymSupreme\/e2e //p' | grep -F "\"nonce\":\"$NONCE\"" || true; }
-e2e_cmd() { NONCE="$1-$RANDOM$RANDOM"; adb shell am start -W -n "$PKG/app.gymsupreme.MainActivity" --es gym_e2e "$1:$NONCE" > /dev/null; }
-e2e_field() { sed -n "s/.*\"$1\":\"\([^\"]*\)\".*/\1/p" | head -1; }
-e2e_wait() { # e2e_wait <step> <seconds>: fails fast on an error or refused step
-  local i
-  for i in $(seq 1 "$2"); do
-    if e2e_lines | grep -qE '"step":"(error|refused)"'; then echo "e2e failed:" >&2; e2e_lines | tail -n 12 >&2; exit 1; fi
-    e2e_lines | grep -q "\"step\":\"$1\"" && return 0
-    sleep 1
-  done
-  echo "e2e: no $1 step within $2 s" >&2; e2e_lines | tail -n 12 >&2; timeout 60 adb logcat -d | tail -n 60 >&2; exit 1
-}
 adb logcat -c || true
 e2e_cmd run
 e2e_wait ok 120
@@ -139,4 +171,21 @@ e2e_lines | sed 's/^/e2e resume: /'
 e2e_lines | grep '"step":"recover"' | grep -q '"action":"offerResume"' || { echo "e2e: the killed workout was not offered for resume" >&2; exit 1; }
 [ "$(e2e_lines | grep '"step":"finish"' | e2e_field uuid)" = "$started_uuid" ] || { echo "e2e: resumed a different workout than the one killed" >&2; exit 1; }
 fatal_check "$PKG" "e2e resume"
+# Rest alert with notifications DENIED (t3x, 0.1.1): plan 6.2 says the service itself buzzes
+# and plays the tone, so a refused permission must not silence the rest. API 33+ only (below
+# 33 the permission does not exist). Revoking kills the app; the e2e run starts it again.
+if [ "$sdk" -ge 33 ]; then
+  adb shell pm revoke "$PKG" android.permission.POST_NOTIFICATIONS
+  sleep 2
+  adb logcat -c || true
+  e2e_cmd run
+  e2e_wait ok 120
+  denied="$(timeout 30 adb logcat -d -s GymSupreme/service:I | grep -o '{"event":"rest_alert"[^}]*}' | tail -1 || true)"
+  echo "rest alert, notifications denied: $denied"
+  [ -n "$denied" ] || { echo "::error::API $sdk: no rest_alert with notifications denied" >&2; exit 1; }
+  grep -q '"audio":"ok"' <<< "$denied" || { echo "::error::API $sdk: tone failed with notifications denied" >&2; exit 1; }
+  grep -q '"vibrate":"ok' <<< "$denied" || { echo "::error::API $sdk: no vibration with notifications denied" >&2; exit 1; }
+  adb shell dumpsys package "$PKG" | tr -d '\r' | grep -q 'POST_NOTIFICATIONS: granted=false' || { echo "::error::API $sdk: permission was not actually denied during the check" >&2; exit 1; }
+  fatal_check "$PKG" "rest alert, notifications denied"
+fi
 echo "smoke ok on API $sdk"

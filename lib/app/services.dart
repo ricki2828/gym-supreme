@@ -6,7 +6,9 @@ import 'package:gym_engine/sqlite_store.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../platform/platform_api.g.dart';
+import '../screens/notification_access.dart';
 import 'flavor.dart';
+import 'notifications.dart';
 import 'workout_port.dart';
 
 /// Everything the app needs, built once before runApp (integration doc,
@@ -23,6 +25,7 @@ class AppServices {
     this.restoreFailed = 0,
     this.restorePending = false,
     this.restoreGaveUp = 0,
+    this.notifications,
     this.host,
   });
 
@@ -49,6 +52,9 @@ class AppServices {
   /// Times the app stopped retrying a snapshot restore and moved it aside to
   /// `backup/gym-snapshot.db.unrestored-<ms>` (kept for recovery).
   final int restoreGaveUp;
+
+  /// One-time notification ask + status (null in tests: ask and banner off).
+  final NotificationAccess? notifications;
 
   /// Null in tests (no platform channel).
   final GymHostApi? host;
@@ -202,6 +208,7 @@ Future<AppServices> bootstrap() async {
     restoreFailed: restoreFailed,
     restorePending: pending,
     restoreGaveUp: _counter(dir, 'restore_gave_up', bump: gaveUp),
+    notifications: HostNotificationAccess(host, dir),
     host: host,
   );
 }

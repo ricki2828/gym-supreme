@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/widgets.dart';
 import 'package:gym_engine/gym_engine.dart' as eng;
 
 import '../screens/live_controller.dart';
+import '../screens/notification_access.dart';
 import 'services.dart';
 
 /// Phase-1 exit e2e (CI emulator, dogfood/debug only). The real app flow
@@ -17,6 +19,7 @@ import 'services.dart';
 /// - `start_only`: start and log one set, then stop (the script kills us).
 /// - `resume`: the pending journal from start_only is resumed, finished and
 ///   stored (crash-safe resume, item 5).
+/// - `ask`: the one-time notification ask (0.1.1).
 class E2eDriver {
   E2eDriver(this.s, {void Function(String line)? out}) : _out = out ?? print;
 
@@ -60,6 +63,8 @@ class E2eDriver {
           await _run(fullFlow: false);
         case 'resume':
           await _resume();
+        case 'ask':
+          await _ask();
         default:
           _log('unknown', {'command': name});
       }
@@ -116,6 +121,29 @@ class E2eDriver {
     _check(c, 'resume');
     _log('resume', {'uuid': snap.workoutUuid, 'rev': c.snapshot!.rev});
     await _finish(c);
+  }
+
+  /// The one-time notification ask exactly as the app runs it before the
+  /// first Start; the smoke checks the system dialog it raises (API 33+).
+  Future<void> _ask() async {
+    final n = s.notifications;
+    if (n == null) throw StateError('no NotificationAccess');
+    // The request only shows a dialog while the activity is resumed (t5v).
+    var resumed = false;
+    for (var i = 0; i < 50 && !resumed; i++) {
+      resumed =
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+      if (!resumed) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+    }
+    if (!resumed) {
+      throw StateError('activity not resumed: the ask would be cancelled');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    final allowed = await askNotificationsOnce(n);
+    _log('ask', {'allowed': allowed});
+    _log('ok');
   }
 
   /// Cuts the running rest to about 5 s, then waits for the service's
