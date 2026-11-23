@@ -1,7 +1,9 @@
-/// Build flavour from `--dart-define=FLAVOR=...` (CI: dogfood). Debug and
-/// local runs default to `debug`. Diagnostics (and the spike checklist) show
-/// in every flavour except `play`.
-const String kFlavor = String.fromEnvironment('FLAVOR', defaultValue: 'debug');
+import 'package:flutter/foundation.dart' show kReleaseMode;
+import 'package:flutter/services.dart' show appFlavor;
+
+/// The Android product flavour, set by `flutter build --flavor` (play or
+/// dogfood); null in `flutter test` and plain `flutter run`.
+String get flavor => appFlavor ?? (kReleaseMode ? 'unknown' : 'debug');
 
 /// Set by CI with `--dart-define=BUILD_SHA=<sha>`.
 const String kBuildSha = String.fromEnvironment(
@@ -12,4 +14,8 @@ const String kBuildSha = String.fromEnvironment(
 String get buildLabel =>
     kBuildSha.length > 7 ? kBuildSha.substring(0, 7) : kBuildSha;
 
-bool get showDiagnostics => kFlavor != 'play';
+/// Diagnostics (and the spike checklist) show only in dogfood builds and
+/// non-release runs. Fails closed: a release build of an unknown flavour hides
+/// them.
+bool get showDiagnostics =>
+    flavor == 'dogfood' || (!kReleaseMode && flavor != 'play');

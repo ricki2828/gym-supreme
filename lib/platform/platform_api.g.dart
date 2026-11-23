@@ -219,6 +219,26 @@ class GymHostApi {
 /// echoes the accepted snapshot on [WorkoutEvents.snapshots]. Snapshots are
 /// JSON strings in the schema of contracts/session_snapshot.md (one schema for
 /// the channel, the journal line and the finish payload).
+///
+/// Revs: the start snapshot is rev 0; the first submit uses baseRev 0 and
+/// returns 1, and so on.
+///
+/// Resume (after pause, crash, force-stop or reboot): never [startSession].
+/// Read the pending journal (rev R) and [submitSnapshot] with baseRev R; the
+/// service accepts it against the journal head and runs again (re-arming a
+/// rest still due). [startSession] while any journal exists is refused:
+/// `already_running` (unfinished) or `finish_pending` (finished).
+///
+/// Refusals are PlatformException codes: `stale_rev`, `wrong_workout`,
+/// `finished`, `not_running`, `already_running`, `finish_pending` (a finished
+/// journal not yet deleted at start), `still_running` (delete while active),
+/// `bad_snapshot`, `bad_schema`, `bad_file_name`.
+///
+/// Ordering: the service applies calls one at a time in the order received.
+/// Dart awaits each submit before the next call (finish included); there is
+/// no concurrent submit. [finishSession] also works while paused (the pause
+/// is folded in) and is refused with `not_running` when there is no journal,
+/// `finished` when it is already finished.
 class WorkoutApi {
   /// Constructor for [WorkoutApi].  The [binaryMessenger] named argument is
   /// available for dependency injection.  If it is left null, the default
@@ -354,15 +374,17 @@ class WorkoutApi {
     ;
   }
 
-  /// Opens the Android share sheet for a file the app wrote (export).
-  Future<void> shareFile(String path, String mimeType) async {
+  /// Writes [content] to files/export/[fileName] (a plain name, no slashes;
+  /// refused with `bad_file_name` otherwise) and opens the Android share
+  /// sheet for it (export).
+  Future<void> shareFile(String fileName, String mimeType, String content) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.WorkoutApi.shareFile$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[path, mimeType]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[fileName, mimeType, content]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
@@ -373,8 +395,9 @@ class WorkoutApi {
     ;
   }
 
-  /// Native counters for the export: lost/corrupt journals, rest alerts
-  /// fired/late.
+  /// Native counters for the export: journals_lost, journal_corrupt_lines,
+  /// journal_torn_tails, rest_alerts_fired, rest_alerts_late (>1 s),
+  /// rest_alerts_missed, rest_alert_max_late_ms, rest_alerts_audio_failed.
   Future<Map<String, int>> getNativeCounters() async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.WorkoutApi.getNativeCounters$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(

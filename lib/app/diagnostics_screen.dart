@@ -17,7 +17,7 @@ class DiagnosticsScreen extends StatelessWidget {
         children: [
           ListTile(
             title: const Text('Build'),
-            subtitle: Text('$kFlavor · $buildLabel'),
+            subtitle: Text('$flavor · $buildLabel'),
           ),
           ListTile(
             key: const Key('diagnostics.spike'),
