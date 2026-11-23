@@ -45,7 +45,21 @@ object JsonWriter {
 
     private fun str(sb: StringBuilder, s: String) {
         sb.append('"')
-        for (ch in s) {
+        var i = 0
+        while (i < s.length) {
+            val ch = s[i]
+            if (Character.isSurrogate(ch)) {
+                // A valid pair is written raw (UTF-8); a lone surrogate as lowercase \udxxx, like Dart.
+                if (Character.isHighSurrogate(ch) && i + 1 < s.length && Character.isLowSurrogate(s[i + 1])) {
+                    sb.append(ch).append(s[i + 1])
+                    i += 2
+                } else {
+                    sb.append(String.format("\\u%04x", ch.code))
+                    i++
+                }
+                continue
+            }
+            i++
             when (ch) {
                 '"' -> sb.append("\\\"")
                 '\\' -> sb.append("\\\\")

@@ -103,6 +103,9 @@ class HostInfo {
     required this.sdkInt,
     required this.model,
     required this.versionCode,
+    required this.release,
+    required this.notificationsEnabled,
+    required this.batterySaver,
   });
 
   int sdkInt;
@@ -111,11 +114,24 @@ class HostInfo {
 
   int versionCode;
 
+  /// Android release name, e.g. "15".
+  String release;
+
+  /// False: rest alerts only buzz and beep; Diagnostics and the live screen
+  /// show the standing banner (plan 6.2).
+  bool notificationsEnabled;
+
+  /// Battery saver on right now.
+  bool batterySaver;
+
   List<Object?> _toList() {
     return <Object?>[
       sdkInt,
       model,
       versionCode,
+      release,
+      notificationsEnabled,
+      batterySaver,
     ];
   }
 
@@ -128,6 +144,9 @@ class HostInfo {
       sdkInt: result[0]! as int,
       model: result[1]! as String,
       versionCode: result[2]! as int,
+      release: result[3]! as String,
+      notificationsEnabled: result[4]! as bool,
+      batterySaver: result[5]! as bool,
     );
   }
 
@@ -140,7 +159,7 @@ class HostInfo {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(sdkInt, other.sdkInt) && _deepEquals(model, other.model) && _deepEquals(versionCode, other.versionCode);
+    return _deepEquals(sdkInt, other.sdkInt) && _deepEquals(model, other.model) && _deepEquals(versionCode, other.versionCode) && _deepEquals(release, other.release) && _deepEquals(notificationsEnabled, other.notificationsEnabled) && _deepEquals(batterySaver, other.batterySaver);
   }
 
   @override
@@ -207,6 +226,25 @@ class GymHostApi {
     )
     ;
     return pigeonVar_replyValue! as HostInfo;
+  }
+
+  /// Opens this app's notification settings (the banner's "Turn on").
+  Future<void> openNotificationSettings() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.GymHostApi.openNotificationSettings$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
   }
 }
 

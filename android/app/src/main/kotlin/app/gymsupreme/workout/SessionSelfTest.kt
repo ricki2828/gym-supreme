@@ -57,6 +57,8 @@ object SessionSelfTest {
         "set_id" to id,
         "set_ordinal" to ordinal.toLong(),
         "kind" to "reps",
+        "plan_load_g" to 20_000L,
+        "plan_reps" to 10L,
         "target_load_g" to 20_000L,
         "target_reps" to 10L,
         "state" to if (done) "done" else "pending",
@@ -83,9 +85,12 @@ object SessionSelfTest {
         "state" to "active",
         "paused_at_ms" to null,
         "paused_total_ms" to 0L,
-        "rest" to linkedMapOf("set_id" to "st-1", "ends_at_wall_ms" to restEnd, "duration_ms" to REST_MS),
+        "rest" to linkedMapOf("set_id" to "$uuid:0", "ends_at_wall_ms" to restEnd, "duration_ms" to REST_MS),
         "finished" to false,
         "ended_at_ms" to null,
+        "set_ready_at_ms" to now,
+        "next_set_n" to 2L,
+        "swaps" to 0L,
         "exercises" to listOf(
             linkedMapOf(
                 "exercise_id" to "selftest-press",
@@ -95,7 +100,7 @@ object SessionSelfTest {
                 "rest_s" to 3L,
                 "rep_lo" to 8L,
                 "rep_hi" to 12L,
-                "sets" to listOf(set("st-1", 1, true, now), set("st-2", 2, false, now)),
+                "sets" to listOf(set("$uuid:0", 1, true, now), set("$uuid:1", 2, false, now)),
             ),
         ),
     )

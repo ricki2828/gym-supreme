@@ -6,6 +6,7 @@ import app.gymsupreme.core.rest.RestSpec
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -87,5 +88,58 @@ class ContractFixtureTest {
         val fin = Json.parseObject(fixture("finished"))
         assertEquals(JsonWriter.write(fin), JsonWriter.write(FinishStamp.stamp(fin, 1L)))
         assertFalse(fin.containsKey("nothing"))
+    }
+}
+
+class SnapshotSchemaTest {
+    private val fresh = File("src/test/fixtures/contract/snapshot_v1_fresh.json").readText(Charsets.UTF_8).dropLast(1)
+
+    private fun bad(edit: (LinkedHashMap<String, Any?>) -> Unit): String {
+        val m = LinkedHashMap(Json.parseObject(fresh))
+        edit(m)
+        return assertFailsWith<app.gymsupreme.core.json.JsonException> { SnapshotSchema.validate(Json.parseObject(JsonWriter.write(m))) }.message ?: ""
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun firstSet(m: Map<String, Any?>): LinkedHashMap<String, Any?> =
+        ((m["exercises"] as List<Any?>)[0] as Map<String, Any?>)["sets"].let { (it as List<Any?>)[0] as LinkedHashMap<String, Any?> }
+
+    @Test
+    fun `every fixture passes strict decode, the torn journal's whole lines too`() {
+        for (n in listOf("fresh", "resting", "mid_set", "paused", "finished")) {
+            SnapshotSchema.validate(Json.parseObject(File("src/test/fixtures/contract/snapshot_v1_$n.json").readText(Charsets.UTF_8).dropLast(1)))
+        }
+        val lines = File("src/test/fixtures/contract/journal_v1_torn_tail.jsonl").readText(Charsets.UTF_8).split('\n')
+        lines.dropLast(1).forEach { SnapshotSchema.validate(Json.parseObject(it)) }
+    }
+
+    @Test
+    fun `fresh fixture keeps U+2028 and DEL raw`() {
+        val name = ((Json.parseObject(fresh)["exercises"] as List<*>)[1] as Map<*, *>)["name"] as String
+        assertTrue(name.contains(' ') && name.contains('\u007f'), name)
+        assertTrue(JsonWriter.write(name).contains(' '))
+    }
+
+    @Test
+    fun `strict rules refuse missing keys, unknown enums, broken pairings, doubles`() {
+        assertTrue(bad { it.remove("swaps") }.contains("swaps"))
+        assertTrue(bad { it["type_id"] = 3L }.contains("type_id"))
+        assertTrue(bad { it["state"] = "stopped" }.contains("state"))
+        assertTrue(bad { it["state"] = "paused" }.contains("paused_at_ms"))
+        assertTrue(bad { it["paused_at_ms"] = 5L }.contains("paused_at_ms"))
+        assertTrue(bad { it["rev"] = 1.5 }.contains("floating"))
+        assertTrue(bad { firstSet(it)["block"] = mapOf("work_ms" to 60000.0) }.contains("floating"))
+        assertTrue(bad { firstSet(it)["state"] = "done" }.contains("completion"))
+        assertTrue(bad { firstSet(it)["completion"] = "tap_unchanged" }.contains("completion"))
+        assertTrue(bad { firstSet(it)["kind"] = "distance" }.contains("kind"))
+        assertTrue(bad { firstSet(it).remove("plan_reps") }.contains("plan_reps"))
+        assertTrue(bad { it["next_set_n"] = 0L }.contains("next_set_n"))
+    }
+
+    @Test
+    fun `extra keys are ignored`() {
+        val m = LinkedHashMap(Json.parseObject(fresh))
+        m["future_field"] = "x"
+        SnapshotSchema.validate(m)
     }
 }

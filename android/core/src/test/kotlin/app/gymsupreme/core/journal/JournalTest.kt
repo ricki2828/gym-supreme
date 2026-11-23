@@ -1,5 +1,8 @@
 package app.gymsupreme.core.journal
 
+import app.gymsupreme.core.json.Json
+import app.gymsupreme.core.json.JsonWriter
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -10,8 +13,15 @@ import kotlin.test.assertTrue
 class JournalTest {
     private val u = "8f2c9a1e-3b4d-4e5f-9a6b-7c8d9e0f1a2b"
 
-    private fun snap(rev: Long, uuid: String = u, finished: Boolean = false, schema: Long = 1) =
-        """{"schema":$schema,"workout_uuid":"$uuid","rev":$rev,"finished":$finished,"exercises":[]}"""
+    /** A strict-valid schema-1 snapshot (the shared fresh fixture) with these head fields. */
+    private fun snap(rev: Long, uuid: String = u, finished: Boolean = false, schema: Long = 1): String {
+        val m = LinkedHashMap(Json.parseObject(File("src/test/fixtures/contract/snapshot_v1_fresh.json").readText(Charsets.UTF_8).dropLast(1)))
+        m["schema"] = schema
+        m["workout_uuid"] = uuid
+        m["rev"] = rev
+        m["finished"] = finished
+        return JsonWriter.write(m)
+    }
 
     private fun accepted(r: Journal.Submit) = assertIs<Journal.Submit.Accepted>(r)
 
@@ -45,6 +55,7 @@ class JournalTest {
         assertEquals("bad_schema", code(Journal.submit(snap(0, schema = 99), 0, null, true)))
         assertEquals("bad_snapshot", code(Journal.submit("{not json", 0, null, true)))
         assertEquals("bad_snapshot", code(Journal.submit("""{"schema":1,"rev":0}""", 0, null, true)))
+        assertEquals("stale_rev", code(Journal.submit(snap(0), 3, null, true)), "a start has base 0")
         assertEquals("bad_snapshot", code(Journal.submit(snap(0).replace(",", ",\n"), 0, null, true)))
     }
 

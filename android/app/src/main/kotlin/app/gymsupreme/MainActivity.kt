@@ -1,14 +1,22 @@
 package app.gymsupreme
 
+import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import android.os.Bundle
 import android.util.Log
 import app.gymsupreme.platform.GymHostApi
 import app.gymsupreme.platform.HostInfo
+import app.gymsupreme.platform.SnapshotsStreamHandler
+import app.gymsupreme.platform.WorkoutApi
 import app.gymsupreme.workout.SessionSelfTest
 import app.gymsupreme.workout.SpikeChannel
+import app.gymsupreme.workout.SnapshotsStream
 import app.gymsupreme.workout.SpikeLog
+import app.gymsupreme.workout.WorkoutApiImpl
 import app.gymsupreme.workout.WorkoutService
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -17,6 +25,7 @@ import java.util.UUID
 
 class MainActivity : FlutterActivity() {
     private var spike: SpikeChannel? = null
+    private var snapshots: SnapshotsStream? = null
     private var selftestPending = false
     private var sessionStepPending: String? = null
 
@@ -63,11 +72,19 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        GymHostApi.setUp(flutterEngine.dartExecutor.binaryMessenger, HostApiImpl(this))
-        spike = SpikeChannel(this, flutterEngine.dartExecutor.binaryMessenger)
+        val messenger = flutterEngine.dartExecutor.binaryMessenger
+        GymHostApi.setUp(messenger, HostApiImpl(this))
+        WorkoutApi.setUp(messenger, WorkoutApiImpl(this))
+        snapshots = SnapshotsStream(this).also { SnapshotsStreamHandler.register(messenger, it) }
+        spike = SpikeChannel(this, messenger)
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        val messenger = flutterEngine.dartExecutor.binaryMessenger
+        GymHostApi.setUp(messenger, null)
+        WorkoutApi.setUp(messenger, null)
+        snapshots?.dispose()
+        snapshots = null
         spike?.dispose()
         spike = null
         super.cleanUpFlutterEngine(flutterEngine)
@@ -85,7 +102,15 @@ private class HostApiImpl(private val activity: MainActivity) : GymHostApi {
             sdkInt = Build.VERSION.SDK_INT.toLong(),
             model = "${Build.MANUFACTURER} ${Build.MODEL}",
             versionCode = activity.packageManager.getPackageInfo(activity.packageName, 0).longVersionCode,
+            release = Build.VERSION.RELEASE ?: "",
+            notificationsEnabled = (activity.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).areNotificationsEnabled(),
+            batterySaver = (activity.getSystemService(Context.POWER_SERVICE) as PowerManager).isPowerSaveMode,
         )
+
+    override fun openNotificationSettings() {
+        val i = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
+        activity.startActivity(i)
+    }
 }
 
 /**

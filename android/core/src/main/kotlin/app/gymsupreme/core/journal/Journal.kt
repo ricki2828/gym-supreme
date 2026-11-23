@@ -58,8 +58,14 @@ object Journal {
             return Submit.Rejected("bad_snapshot", e.message ?: "bad head")
         }
         if (h.schema !in SUPPORTED_SCHEMAS) return Submit.Rejected("bad_schema", "schema ${h.schema} not supported")
+        try {
+            SnapshotSchema.validate(snap)
+        } catch (e: JsonException) {
+            return Submit.Rejected("bad_snapshot", e.message ?: "invalid snapshot")
+        }
         if (isStart) {
             if (current != null && !current.finished) return Submit.Rejected("already_running", "workout ${current.uuid} is in progress")
+            if (baseRev != 0L) return Submit.Rejected("stale_rev", "a start has base 0")
             if (h.rev != 0L) return Submit.Rejected("bad_snapshot", "a start snapshot carries rev 0")
         } else {
             if (current == null) return Submit.Rejected("not_running", "no workout in progress")
@@ -93,7 +99,8 @@ object Journal {
         for ((i, line) in lines.withIndex()) {
             val isTail = i == lines.size - 1 && !complete
             val h = try {
-                head(Json.parseObject(line)).takeIf { it.schema in SUPPORTED_SCHEMAS }
+                val m = Json.parseObject(line)
+                head(m).takeIf { it.schema in SUPPORTED_SCHEMAS }?.also { SnapshotSchema.validate(m) }
             } catch (_: JsonException) {
                 null
             }
