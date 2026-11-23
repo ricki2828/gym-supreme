@@ -129,7 +129,15 @@ class Session {
       endedAtMs: nowMs,
       offsetMs: nowMs - live.startedAtMs - live.pausedTotalMs,
     );
-    var next = _replaceSet(live, at.e, at.s, logged);
+    var next = _carryForward(
+      _replaceSet(live, at.e, at.s, logged),
+      at.e,
+      at.s,
+      fromLoadG: set.targetLoadG,
+      toLoadG: load,
+      fromReps: set.targetReps,
+      toReps: r,
+    );
     final restMs = ex.restS * 1000;
     final more = next.current != null;
     next = next.copyWith(
@@ -238,7 +246,8 @@ class Session {
 
   /// Changes what Done (and a lock-screen Done) will log for a pending set.
   /// The plan values stay, so a later Done is still judged against the plan:
-  /// +/- then Done is `adjusted`, not `tap_unchanged`.
+  /// +/- then Done is `adjusted`, not `tap_unchanged`. A changed value also
+  /// carries forward to the lift's later pending sets (see [_carryForward]).
   static SessionSnapshot retarget(
     SessionSnapshot s,
     String setId, {
@@ -250,14 +259,21 @@ class Session {
     if (at == null) return s;
     final set = s.exercises[at.e].sets[at.s];
     if (set.state != SetState.pending) return s;
-    return _replaceSet(
-      s,
+    final load = identical(loadG, _keep) ? set.targetLoadG : loadG as int?;
+    final r = identical(reps, _keep) ? set.targetReps : reps as int?;
+    return _carryForward(
+      _replaceSet(
+        s,
+        at.e,
+        at.s,
+        set.copyWith(targetLoadG: load, targetReps: r),
+      ),
       at.e,
       at.s,
-      set.copyWith(
-        targetLoadG: identical(loadG, _keep) ? set.targetLoadG : loadG,
-        targetReps: identical(reps, _keep) ? set.targetReps : reps,
-      ),
+      fromLoadG: set.targetLoadG,
+      toLoadG: load,
+      fromReps: set.targetReps,
+      toReps: r,
     ).copyWith(rev: s.rev + 1);
   }
 
@@ -531,6 +547,51 @@ SessionSnapshot _replaceExercise(
   int e,
   SnapshotExercise ex,
 ) => s.copyWith(exercises: [...s.exercises]..[e] = ex);
+
+/// Carry-forward (0.2, P1-1): when set [i] of exercise [e] moves from one
+/// load (or reps) to another, every LATER pending set of the same kind whose
+/// target still equals the old value takes the new one. Sets the lifter
+/// already changed on their own, a planned pyramid (different targets) and
+/// timed sets are left alone, and a cleared (null) value never carries; plan values never change, so completion is
+/// still judged against the plan. Each field carries independently.
+SessionSnapshot _carryForward(
+  SessionSnapshot s,
+  int e,
+  int i, {
+  required int? fromLoadG,
+  required int? toLoadG,
+  required int? fromReps,
+  required int? toReps,
+}) {
+  // A cleared value (null) never carries: it would wipe the next sets.
+  final loadMoved = toLoadG != null && fromLoadG != toLoadG;
+  final repsMoved = toReps != null && fromReps != toReps;
+  if (!loadMoved && !repsMoved) return s;
+  final ex = s.exercises[e];
+  final kind = ex.sets[i].kind;
+  if (kind == SetKind.timed) return s;
+  var changed = false;
+  final sets = [
+    for (var k = 0; k < ex.sets.length; k++)
+      if (k <= i ||
+          ex.sets[k].state != SetState.pending ||
+          ex.sets[k].kind != kind)
+        ex.sets[k]
+      else
+        () {
+          final x = ex.sets[k];
+          final l = loadMoved && x.targetLoadG == fromLoadG;
+          final rr = repsMoved && x.targetReps == fromReps;
+          if (!l && !rr) return x;
+          changed = true;
+          return x.copyWith(
+            targetLoadG: l ? toLoadG : x.targetLoadG,
+            targetReps: rr ? toReps : x.targetReps,
+          );
+        }(),
+  ];
+  return changed ? _replaceExercise(s, e, ex.withSets(sets)) : s;
+}
 
 SessionSnapshot _replaceSet(SessionSnapshot s, int e, int i, SnapshotSet set) {
   final ex = s.exercises[e];
