@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Auto Backup, API 29-30 (plan 7, B6). Backs up ONLY a consistent database snapshot and the
+     native gate counters. The live files/gym.db (+ -wal/-shm) are never copied: Auto Backup copies
+     files one by one, and a checkpoint between copies would restore a silently corrupt database.
+     The app writes files/backup/gym-snapshot.db with VACUUM INTO (tmp, fsync, rename) on pause,
+     after a finish and before export; on first open with no gym.db it restores the snapshot and
+     runs PRAGMA quick_check. Includes are an allowlist: the journal, exports, spike evidence, strap
+     state and the install marker are never backed up. Same list as data_extraction_rules.xml. -->
+<full-backup-content>
+    <include domain="file" path="backup/gym-snapshot.db" />
+    <include domain="sharedpref" path="gymsupreme.counters.xml" />
+</full-backup-content>

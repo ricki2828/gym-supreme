@@ -89,6 +89,8 @@ def build():
             errs.append(f"{who}: unknown load {o['load']!r}")
         if not o.get("cue"):
             errs.append(f"{who}: missing cue")
+        if o.get("mechanic") not in (None, "compound", "isolation"):
+            errs.append(f"{who}: bad mechanic {o['mechanic']!r}")
         sh = o.get("shoulders")
         if sh and sh not in SHOULDER_IDS:
             errs.append(f"{who}: bad shoulders {sh!r}")
@@ -117,7 +119,7 @@ def build():
             "equipment_sets": sets,
             "load": o["load"],
             "unilateral": bool(o.get("unilateral")),
-            "mechanic": s.get("mechanic"),
+            "mechanic": o.get("mechanic") or s.get("mechanic"),
             "force": s.get("force"),
             "level": s.get("level"),
             "cue": o["cue"],
