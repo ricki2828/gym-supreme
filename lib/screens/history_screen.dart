@@ -82,7 +82,7 @@ class HistoryScreen extends StatelessWidget {
                       child: Text('HISTORY', style: LitType.display(48)),
                     );
                   }
-                  return _Row(row: rows[i - 1], onOpen: onOpen);
+                  return HistoryRowTile(row: rows[i - 1], onOpen: onOpen);
                 },
               ),
       ),
@@ -90,8 +90,8 @@ class HistoryScreen extends StatelessWidget {
   }
 }
 
-class _Row extends StatelessWidget {
-  const _Row({required this.row, this.onOpen});
+class HistoryRowTile extends StatelessWidget {
+  const HistoryRowTile({super.key, required this.row, this.onOpen});
   final HistoryRowView row;
   final ValueChanged<String>? onOpen;
 
