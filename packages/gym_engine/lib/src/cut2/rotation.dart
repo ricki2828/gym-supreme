@@ -17,13 +17,23 @@ class Rotation {
   /// [next] into range. An empty order is allowed (rotation off).
   factory Rotation(List<String> order, {int next = 0}) {
     final seen = <String>{};
-    final clean = [
-      for (final id in order)
-        if (id.isNotEmpty && seen.add(id)) id,
-    ];
+    final clean = <String>[];
+    String? pointed;
+    for (var i = 0; i < order.length; i++) {
+      final id = order[i];
+      if (id.isNotEmpty && seen.add(id)) clean.add(id);
+    }
+    if (clean.isEmpty) return Rotation._(const [], 0);
+    // Resolve [next] against the raw list first, so dropping an empty or
+    // duplicate id before it does not shift the suggestion.
+    if (order.isNotEmpty) {
+      final raw = order[next % order.length];
+      if (raw.isNotEmpty) pointed = raw;
+    }
+    final at = pointed == null ? -1 : clean.indexOf(pointed);
     return Rotation._(
       List.unmodifiable(clean),
-      clean.isEmpty ? 0 : next % clean.length,
+      at >= 0 ? at : next % clean.length,
     );
   }
 
@@ -74,6 +84,12 @@ class Rotation {
     return Rotation._(List.unmodifiable(list), list.indexOf(keep!));
   }
 
+  /// [move] with Flutter `ReorderableListView.onReorder` indices, where
+  /// [newIndex] counts the dragged item still in place (drag to the end
+  /// gives `newIndex == length`).
+  Rotation onReorder(int oldIndex, int newIndex) =>
+      move(oldIndex, newIndex > oldIndex ? newIndex - 1 : newIndex);
+
   /// Makes [typeId] the suggested next one (he taps a row).
   Rotation pointAt(String typeId) {
     final i = order.indexOf(typeId);
@@ -98,8 +114,11 @@ class Rotation {
   }
 
   /// Drops ids that are no longer workout types (e.g. a type renamed in a
-  /// later build), keeping the suggestion where possible.
+  /// later build), keeping the suggestion where possible. An empty
+  /// [validIds] (types not loaded yet) changes nothing rather than wiping the
+  /// stored rotation.
   Rotation retainOnly(Set<String> validIds) {
+    if (validIds.isEmpty) return this;
     var r = this;
     for (final id in order) {
       if (!validIds.contains(id)) r = r.remove(id);

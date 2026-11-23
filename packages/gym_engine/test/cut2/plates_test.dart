@@ -31,10 +31,36 @@ void main() {
 
   group('limited pairs', () {
     test('respects counts where greedy fails', () {
-      // 50 kg on a 20 kg bar = 15 per side. One pair of 20s, two pairs of
-      // 7.5s, no 10/5: greedy would take nothing useful; DP finds 7.5 + 7.5.
-      final r = loadBar(50000, pairs: {20000: 1, 7500: 2});
-      expect(r.exact!.perSideG, [7500, 7500]);
+      // 80 kg = 30 per side. Greedy takes the single 20 and finds no 10;
+      // the DP finds 15 + 15.
+      final r = loadBar(80000, pairs: {20000: 1, 15000: 2});
+      expect(r.exact!.perSideG, [15000, 15000]);
+    });
+
+    test('never uses a plate more than its pair count', () {
+      final pairs = {20000: 1, 10000: 2, 5000: 1, 2500: 1};
+      for (var t = 20000; t <= 140000; t += 2500) {
+        final r = loadBar(t, pairs: pairs);
+        for (final l in [r.exact, r.below, r.above]) {
+          if (l == null) continue;
+          for (final e in pairs.entries) {
+            expect(
+              l.perSideG.where((x) => x == e.key).length,
+              lessThanOrEqualTo(e.value),
+              reason: 'target $t: ${l.perSideG}',
+            );
+          }
+        }
+      }
+    });
+
+    test('huge counts and unlimited stay fast', () {
+      final sw = Stopwatch()..start();
+      for (var t = 20000; t <= 300000; t += 2500) {
+        loadBar(t);
+      }
+      loadBar(200000, pairs: {1250: 100000});
+      expect(sw.elapsedMilliseconds, lessThan(2000));
     });
 
     test('out of plates: best below, nothing above', () {
@@ -55,6 +81,8 @@ void main() {
     });
 
     test('bad input throws', () {
+      expect(() => barSteps(pairs: {-5000: 1}), throwsArgumentError);
+      expect(() => barSteps(pairs: {5000: -1}), throwsArgumentError);
       expect(() => loadBar(50000, pairs: {0: 1}), throwsArgumentError);
       expect(() => loadBar(50000, pairs: {5000: -1}), throwsArgumentError);
       expect(() => loadBar(50000, barG: -1), throwsArgumentError);
@@ -89,5 +117,7 @@ void main() {
     expect(formatKg(22500), '22.5');
     expect(formatKg(1250), '1.25');
     expect(formatKg(0), '0');
+    expect(formatKg(-1250), '-1.25');
+    expect(formatKg(-500), '-0.5');
   });
 }

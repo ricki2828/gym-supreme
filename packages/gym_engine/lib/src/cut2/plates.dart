@@ -70,25 +70,30 @@ PlateResult loadBar(
   Map<int, int>? pairs,
 }) {
   if (barG < 0) throw ArgumentError('bar $barG');
-  final stock = <int>[];
-  if (pairs == null) {
-    // Unlimited: enough pairs of each to reach any sane load (300 kg).
-    for (final p in standardPlatesG) {
-      stock.addAll(List.filled(150000 ~/ p + 1, p));
-    }
-  } else {
-    final sizes = pairs.keys.toList()..sort((a, b) => b.compareTo(a));
-    for (final p in sizes) {
-      final n = pairs[p]!;
-      if (p <= 0 || n < 0) throw ArgumentError('plate $p x $n');
-      stock.addAll(List.filled(n, p));
+  final Map<int, int?> avail =
+      pairs ?? {for (final p in standardPlatesG) p: null};
+  for (final e in avail.entries) {
+    if (e.key <= 0 || (e.value ?? 0) < 0) {
+      throw ArgumentError('plate ${e.key} x ${e.value}');
     }
   }
-  if (stock.isEmpty || targetG <= barG) {
-    final bar = PlateLoad(barG: barG, perSideG: const []);
-    if (targetG == barG) return PlateResult(exact: bar);
-    if (targetG < barG) return PlateResult(above: bar);
-    return PlateResult(below: bar);
+  final bar = PlateLoad(barG: barG, perSideG: const []);
+  if (targetG == barG) return PlateResult(exact: bar);
+  if (targetG < barG) return PlateResult(above: bar);
+
+  // The lightest load above the target is at most one plate past it (drop
+  // any plate from it and it is at or below), so no side needs more than
+  // target side + heaviest plate. Capping the stock there keeps the DP
+  // small for the UI, also for "unlimited" and for huge pair counts.
+  final sizes = avail.keys.where((p) => (avail[p] ?? 1) > 0).toList()
+    ..sort((x, y) => y.compareTo(x));
+  if (sizes.isEmpty) return PlateResult(below: bar);
+  final capSideG = (targetG - barG + 1) ~/ 2 + sizes.first;
+  final stock = <int>[]; // heaviest first
+  for (final p in sizes) {
+    final need = (capSideG + p - 1) ~/ p;
+    final n = avail[p];
+    stock.addAll(List.filled(n == null || n > need ? need : n, p));
   }
 
   // Per-side sums reachable, in units of the gcd of all plate sizes, each
@@ -107,7 +112,8 @@ PlateResult loadBar(
     for (var s = maxSide; s >= w; s--) {
       final b = best[s - w];
       if (b == null) continue;
-      final cand = [...b, stock[i]]..sort((x, y) => y.compareTo(x));
+      // Stock is heaviest first, so appending keeps the list sorted.
+      final cand = [...b, stock[i]];
       final cur = best[s];
       if (cur == null || _better(cand, cur)) best[s] = cand;
     }
@@ -143,8 +149,12 @@ PlateResult loadBar(
 /// Every total the bar can make with [pairs], ascending: the load steps for a
 /// barbell exercise at that gym.
 List<int> barSteps({int barG = standardBarG, required Map<int, int> pairs}) {
+  if (barG < 0) throw ArgumentError('bar $barG');
   final sums = <int>{0};
   for (final e in pairs.entries) {
+    if (e.key <= 0 || e.value < 0) {
+      throw ArgumentError('plate ${e.key} x ${e.value}');
+    }
     for (var n = 0; n < e.value; n++) {
       sums.addAll([for (final s in sums) s + e.key]);
     }
@@ -174,6 +184,7 @@ double? nextStepJumpPct(int fromG, List<int> stepsG) {
 
 /// "22.5", "20", "1.25": kilograms without trailing zeros.
 String formatKg(int g) {
+  if (g < 0) return '-${formatKg(-g)}';
   final whole = g ~/ 1000;
   final frac = (g % 1000)
       .toString()

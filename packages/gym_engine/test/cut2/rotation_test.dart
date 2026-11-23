@@ -13,6 +13,12 @@ void main() {
     expect(r.upcoming, ['push', 'pull', 'legs']);
   });
 
+  test('next is resolved before empties and duplicates are dropped', () {
+    expect(Rotation(['push', '', 'pull'], next: 2).nextId, 'pull');
+    expect(Rotation(['push', 'push', 'legs'], next: 2).nextId, 'legs');
+    expect(Rotation(['push', 'push', 'legs'], next: 1).nextId, 'push');
+  });
+
   test('normalises duplicates, empties and next out of range', () {
     final r = Rotation(['push', '', 'pull', 'push'], next: 5);
     expect(r.order, ['push', 'pull']);
@@ -61,6 +67,13 @@ void main() {
       expect(m2.nextId, 'pull');
     });
 
+    test('onReorder takes Flutter indices (drag to the end)', () {
+      final m = ppl.onReorder(0, 3); // push dragged below legs
+      expect(m.order, ['pull', 'legs', 'push']);
+      expect(m.nextId, 'push');
+      expect(ppl.onReorder(2, 0).order, ['legs', 'push', 'pull']);
+    });
+
     test('same index is a no-op; out of range throws', () {
       expect(ppl.move(1, 1), ppl);
       expect(() => ppl.move(3, 0), throwsRangeError);
@@ -99,6 +112,10 @@ void main() {
     test('removing the last one empties; missing id is a no-op', () {
       expect(Rotation(['push']).remove('push').isEmpty, isTrue);
       expect(ppl.remove('core'), ppl);
+    });
+
+    test('retainOnly with no known types keeps the rotation', () {
+      expect(ppl.retainOnly(const {}), ppl);
     });
 
     test('retainOnly drops unknown types', () {
