@@ -56,7 +56,8 @@
   "load": "dumbbell",
   "unilateral": false,
   "cue": "Same arc as the flat fly, bench at 30 degrees, stop at shoulder height.",
-  "shoulders": "front-delts"
+  "shoulders": "front-delts",
+  "mechanic": "isolation"
  },
  {
   "seed": "Cable_Crossover",
@@ -214,7 +215,8 @@
   "load": "stack",
   "unilateral": false,
   "cue": "Rope at face height, pull to the forehead, elbows high, hands apart.",
-  "shoulders": "rear-delts"
+  "shoulders": "rear-delts",
+  "mechanic": "isolation"
  },
  {
   "seed": "Cable_Rear_Delt_Fly",
@@ -298,7 +300,8 @@
   ],
   "load": "stack",
   "unilateral": false,
-  "cue": "Two high pulleys, arms out wide, curl the hands to the ears."
+  "cue": "Two high pulleys, arms out wide, curl the hands to the ears.",
+  "mechanic": "isolation"
  },
  {
   "seed": "Cable_Hammer_Curls_-_Rope_Attachment",
@@ -483,7 +486,8 @@
   ],
   "load": "bodyweight",
   "unilateral": false,
-  "cue": "Back flat, lower opposite arm and leg, keep the ribs down."
+  "cue": "Back flat, lower opposite arm and leg, keep the ribs down.",
+  "mechanic": "isolation"
  },
  {
   "seed": "Hanging_Leg_Raise",
@@ -512,7 +516,8 @@
   "secondary": [
    "abs",
    "front-delts"
-  ]
+  ],
+  "mechanic": "isolation"
  },
  {
   "seed": "Dumbbell_Side_Bend",
@@ -547,7 +552,8 @@
   "secondary": [
    "abs",
    "side-delts"
-  ]
+  ],
+  "mechanic": "isolation"
  },
  {
   "seed": "Pallof_Press",
@@ -581,7 +587,8 @@
   ],
   "secondary": [
    "abs"
-  ]
+  ],
+  "mechanic": "isolation"
  },
  {
   "seed": "Dumbbell_Shrug",
