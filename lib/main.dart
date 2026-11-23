@@ -3,6 +3,7 @@ import 'package:supreme_ui/supreme_ui.dart';
 
 import 'app/db_probe.dart';
 import 'app/diagnostics_screen.dart';
+import 'app/e2e_driver.dart';
 import 'app/flavor.dart';
 import 'app/services.dart';
 import 'app/workout_port.dart';
@@ -97,7 +98,22 @@ class _GymSupremeAppState extends State<GymSupremeApp> {
     _life = AppLifecycleListener(
       // onHide always precedes onPause on Android; one snapshot per backgrounding.
       onHide: widget.services.persist,
+      onResume: _takeLaunchCommand,
     );
+    _takeLaunchCommand();
+  }
+
+  /// CI e2e hook (dogfood/debug only; the native side returns null on play).
+  Future<void> _takeLaunchCommand() async {
+    final host = widget.services.host;
+    if (host == null || !showDiagnostics) return;
+    String? cmd;
+    try {
+      cmd = await host.takeLaunchCommand();
+    } on Object {
+      return;
+    }
+    if (cmd != null) await E2eDriver(widget.services).run(cmd);
   }
 
   @override
