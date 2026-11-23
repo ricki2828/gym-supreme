@@ -32,6 +32,7 @@ class LiveView {
     this.paused = false,
     this.allDone = false,
     this.timerBlock = false,
+    this.blockTitle,
   });
 
   final WorkoutType? type;
@@ -74,6 +75,10 @@ class LiveView {
   /// controls come from the caller's setExtra (the timer panel), so the
   /// reps/load steppers, last-time line, DONE and the rest panel are hidden.
   final bool timerBlock;
+
+  /// The block's own name ("EMOM 20 × 1:00"); null when not a block or
+  /// unreadable. Shown wherever a set would show "reps × load".
+  final String? blockTitle;
 
   bool get coldStart =>
       targetLoadG == null && (unit == LoadUnit.kg || unit == LoadUnit.kgEach);
@@ -266,6 +271,7 @@ class LiveScreen extends StatelessWidget {
   }
 
   String _doneSub() {
+    if (view.blockTitle != null) return view.blockTitle!;
     final load = loadLabel(view.loadG, view.unit);
     final work = view.unit == LoadUnit.timed
         ? clock(view.reps)
@@ -559,9 +565,11 @@ class _RestScreen extends StatelessWidget {
     const ink = Lit.ink;
     final left = view.restLeftS!;
     final load = loadLabel(view.loadG, view.unit);
-    final next = view.unit == LoadUnit.timed
-        ? clock(view.reps)
-        : (load.isEmpty ? '${view.reps} reps' : '${view.reps} × $load');
+    final next =
+        view.blockTitle ??
+        (view.unit == LoadUnit.timed
+            ? clock(view.reps)
+            : (load.isEmpty ? '${view.reps} reps' : '${view.reps} × $load'));
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(

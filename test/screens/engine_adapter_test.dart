@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gym_engine/cut2.dart' as c2;
 import 'package:gym_engine/gym_engine.dart' as eng;
 import 'package:gym_supreme/screens/engine_adapter.dart';
 import 'package:gym_supreme/screens/view_models.dart';
@@ -151,5 +152,38 @@ void main() {
       exercises: [...s.exercises]..[c.exercise] = ex.withSets(sets),
     );
     expect(liveViewOf(withBlock, nowMs: now)!.timerBlock, isTrue);
+  });
+
+  test('blockTitle is the block\'s own name; null without one', () {
+    final plan = engine.suggest(gymId: gym.id, muscleIds: const ['chest']);
+    final s = eng.Session.start(plan, nowMs: now, tzOffsetMin: 480);
+    expect(liveViewOf(s, nowMs: now)!.blockTitle, isNull);
+    // As LiveController.addTimer: a timed entry before the current one,
+    // then the block attached to its set.
+    final ex = s.exercises[s.current!.exercise];
+    final added = eng.Session.addExercise(
+      s,
+      eng.PlannedItem(
+        exerciseId: ex.exerciseId,
+        name: ex.name,
+        unit: eng.LoadUnit.timed,
+        sets: const [eng.PlannedSet(loadG: null, reps: 0)],
+        repLo: 0,
+        repHi: 0,
+        restS: ex.restS,
+        reason: 'EMOM',
+        primary: const [],
+      ),
+      at: s.current!.exercise,
+    );
+    final withBlock = c2.TimerSession.attach(
+      added,
+      added.exercises[s.current!.exercise].sets.first.setId,
+      c2.TimerBlock.emom(rounds: 20),
+    );
+    expect(withBlock, isNot(same(added)), reason: 'block attached');
+    final v = liveViewOf(withBlock, nowMs: now)!;
+    expect(v.timerBlock, isTrue);
+    expect(v.blockTitle, 'EMOM 20 × 1:00');
   });
 }
