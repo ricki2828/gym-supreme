@@ -48,6 +48,12 @@ abstract class GymHostApi {
 
   /// Opens this app's notification settings (the banner's "Turn on").
   void openNotificationSettings();
+
+  /// CI e2e (phase-1 exit): the `gym_e2e` string extra of the latest launch
+  /// intent (onCreate or onNewIntent), returned once and then cleared. Dogfood
+  /// and debug builds only; always null on play. Dart calls it on start and on
+  /// every resume.
+  String? takeLaunchCommand();
 }
 
 /// Cut-1 live workout contract (t3x decision 23-Nov, integration doc ruling 1).

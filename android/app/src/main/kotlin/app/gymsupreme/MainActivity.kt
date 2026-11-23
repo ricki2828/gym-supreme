@@ -29,6 +29,16 @@ class MainActivity : FlutterActivity() {
     private var selftestPending = false
     private var sessionStepPending: String? = null
 
+    /** `gym_e2e` from the latest launch intent, until Dart takes it (CI e2e; dogfood/debug only). */
+    private var launchCommand: String? = null
+
+    fun takeLaunchCommand(): String? {
+        val c = launchCommand
+        launchCommand = null
+        if (c != null) SpikeLog.write(this, SpikeLog.line("launch_command_taken").put("command", c))
+        return c
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         InstallMarker.check(this)
@@ -68,6 +78,10 @@ class MainActivity : FlutterActivity() {
             i.removeExtra(SessionSelfTest.EXTRA)
             sessionStepPending = it
         }
+        i.getStringExtra(EXTRA_E2E)?.let {
+            i.removeExtra(EXTRA_E2E)
+            launchCommand = it
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -93,6 +107,9 @@ class MainActivity : FlutterActivity() {
     companion object {
         /** `am start -n <pkg>/app.gymsupreme.MainActivity --ez gym_selftest true` (tools/emulator_smoke.sh). */
         const val EXTRA_SELFTEST = "gym_selftest"
+
+        /** `am start ... --es gym_e2e run|start_only|resume`: read by Dart via GymHostApi.takeLaunchCommand. */
+        const val EXTRA_E2E = "gym_e2e"
     }
 }
 
@@ -106,6 +123,8 @@ private class HostApiImpl(private val activity: MainActivity) : GymHostApi {
             notificationsEnabled = (activity.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).areNotificationsEnabled(),
             batterySaver = (activity.getSystemService(Context.POWER_SERVICE) as PowerManager).isPowerSaveMode,
         )
+
+    override fun takeLaunchCommand(): String? = activity.takeLaunchCommand()
 
     override fun openNotificationSettings() {
         val i = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
