@@ -491,8 +491,9 @@ void main() {
     final w = store.workout(engine.history().first.uuid)!;
     final logged = w.doneSets.single;
     expect(find.text(logged.exerciseName), findsOneWidget);
+    // 'KG EA' for dumbbells, 'KG' for a stack (#42 may lead with one).
     expect(
-      find.text('${logged.reps} × ${kg(logged.loadG!)} KG EA'),
+      find.textContaining('${logged.reps} × ${kg(logged.loadG!)} KG'),
       findsOneWidget,
     );
   });
