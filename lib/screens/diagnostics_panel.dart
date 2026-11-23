@@ -114,6 +114,8 @@ class DiagnosticsPanel extends StatelessWidget {
           'Window',
           gate.dayOfWindow == null
               ? 'starts at the first session'
+              : gate.dayOfWindow! > 14
+              ? 'closed (day ${gate.dayOfWindow})'
               : 'day ${gate.dayOfWindow} of 14',
         ),
         _Row(

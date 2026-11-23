@@ -82,7 +82,7 @@ class HistoryScreen extends StatelessWidget {
                       child: Text('HISTORY', style: LitType.display(48)),
                     );
                   }
-                  return _Row(row: rows[i - 1], onOpen: onOpen);
+                  return HistoryRowTile(row: rows[i - 1], onOpen: onOpen);
                 },
               ),
       ),
@@ -90,8 +90,8 @@ class HistoryScreen extends StatelessWidget {
   }
 }
 
-class _Row extends StatelessWidget {
-  const _Row({required this.row, this.onOpen});
+class HistoryRowTile extends StatelessWidget {
+  const HistoryRowTile({super.key, required this.row, this.onOpen});
   final HistoryRowView row;
   final ValueChanged<String>? onOpen;
 
@@ -165,6 +165,7 @@ class ResumeCard extends StatelessWidget {
     required this.lifts,
     required this.set,
     required this.pausedWhen,
+    this.finishedUnsaved = false,
     this.onResume,
     this.onDiscard,
   });
@@ -173,6 +174,9 @@ class ResumeCard extends StatelessWidget {
 
   /// "Sunday", "today", "an hour ago": composed by the caller.
   final String pausedWhen;
+
+  /// Finished (e.g. from the lock screen) but not saved yet: Resume saves it.
+  final bool finishedUnsaved;
   final VoidCallback? onResume;
 
   /// Ends it as is, saving the sets already logged.
@@ -204,7 +208,9 @@ class ResumeCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Paused $pausedWhen. Pick it up at set $set.',
+                    finishedUnsaved
+                        ? 'Finished but not saved yet. Resume to save it.'
+                        : 'Paused $pausedWhen. Pick it up at set $set.',
                     style: LitType.body(15, ink, FontWeight.w600),
                   ),
                   if (onDiscard != null)
