@@ -14,6 +14,11 @@ abstract interface class HistoryStore {
   Settings settings();
   void saveSettings(Settings settings);
 
+  /// Raw key/value settings for other features (e.g. `rotation`, cut 2).
+  /// Values are JSON text. The key `settings` is reserved for [settings].
+  String? setting(String key);
+  void saveSetting(String key, String json);
+
   /// Insert or replace the workout and its sets, and add its HR samples, in
   /// one transaction (B1, R2). Idempotent by uuid; samples already stored
   /// are kept.
@@ -37,6 +42,16 @@ class MemoryStore implements HistoryStore {
   final Map<String, WorkoutRecord> _workouts = {};
   final Map<String, List<HrSample>> hrByWorkout = {};
   Settings _settings = const Settings();
+  final Map<String, String> _raw = {};
+
+  @override
+  String? setting(String key) => _raw[key];
+
+  @override
+  void saveSetting(String key, String json) {
+    if (key == 'settings') throw ArgumentError('reserved key');
+    _raw[key] = json;
+  }
 
   @override
   List<Gym> gyms() =>
