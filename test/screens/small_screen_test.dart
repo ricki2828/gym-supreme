@@ -103,8 +103,28 @@ void main() {
     // Bring the first row to the top of the scrolling middle so a one-row
     // drag stays inside the visible part of the nested scroll.
     await tester.ensureVisible(grip);
-    Scrollable.ensureVisible(tester.element(grip));
+    await Scrollable.ensureVisible(tester.element(grip));
     await tester.pumpAndSettle();
+    // Both the plan list and the sheet's middle really scroll here, so the
+    // drag starts inside two live vertical scrollables (the nested case).
+    final inner = tester.state<ScrollableState>(
+      find
+          .descendant(
+            of: find.byType(PlanList),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(inner.position.maxScrollExtent, greaterThan(0));
+    final outer = tester.state<ScrollableState>(
+      find
+          .ancestor(
+            of: find.byType(PlanList),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(outer.position.maxScrollExtent, greaterThan(0));
     final g = await tester.startGesture(tester.getCenter(grip));
     await tester.pump(kLongPressTimeout);
     for (var i = 0; i < 10; i++) {
@@ -131,5 +151,24 @@ void main() {
       startsWith('Lift 1 of 5, set 3 of 3'),
       reason: 'screen readers still hear the lift',
     );
+  });
+
+  testWidgets('a 360 dp phone at 1.3x also gets the short header', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 740);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(
+          size: Size(360, 740),
+          textScaler: TextScaler.linear(1.3),
+        ),
+        child: MaterialApp(home: LiveScreen(view: liveView())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('SET 3 OF 3'), findsOneWidget);
   });
 }
