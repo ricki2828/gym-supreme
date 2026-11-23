@@ -426,7 +426,8 @@ class WorkoutService : Service() {
         NativeCounters.add(this, NativeCounters.REST_ALERTS_FIRED)
         if (late > NativeCounters.LATE_MS) NativeCounters.add(this, NativeCounters.REST_ALERTS_LATE)
         NativeCounters.max(this, NativeCounters.REST_ALERT_MAX_LATE_MS, late)
-        if (r == null || !r.audio.startsWith("ok")) NativeCounters.add(this, NativeCounters.REST_ALERTS_AUDIO_FAILED)
+        // Headphones at media volume 0 is the user's choice, not a failure.
+        if (r == null || !(r.audio.startsWith("ok") || r.audio == "skipped:media_volume_0")) NativeCounters.add(this, NativeCounters.REST_ALERTS_AUDIO_FAILED)
         SpikeLog.write(
             this,
             DeviceState.addTo(
