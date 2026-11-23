@@ -102,7 +102,7 @@ void main() {
               coldStartSets: 0,
               oneTapRate: double.nan,
               oneTapRateInclCold: double.nan,
-              medianSwapsPerSession: null,
+              medianSwapsPerSession: double.nan,
             ),
             native: {},
           ),
@@ -111,5 +111,6 @@ void main() {
     );
     expect(tester.takeException(), isNull);
     expect(find.text('starts at the first session'), findsOneWidget);
+    expect(find.text('NaN'), findsNothing);
   });
 }

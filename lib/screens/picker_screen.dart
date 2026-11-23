@@ -224,10 +224,12 @@ class PickerScreen extends StatelessWidget {
       builder: (modal) => SingleChildScrollView(
         child: _sheet(
           readOnly: true,
-          onStartHere: () {
-            Navigator.of(modal).pop();
-            onStart?.call();
-          },
+          onStartHere: onStart == null
+              ? null
+              : () {
+                  Navigator.of(modal).pop();
+                  onStart!();
+                },
         ),
       ),
     );
@@ -365,7 +367,7 @@ class PickerScreen extends StatelessWidget {
                 : 'START ${p.type!.label.toUpperCase()}',
             colour: _pickColour,
             ink: _onPick,
-            onTap: onStartHere ?? onStart,
+            onTap: readOnly ? onStartHere : onStart,
           ),
         ],
       ),

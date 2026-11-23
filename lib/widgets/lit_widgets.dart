@@ -279,8 +279,19 @@ class PlanList extends StatelessWidget {
       );
     }
 
+    Widget capped(Widget w) => maxHeight == null
+        ? w
+        : ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxHeight!),
+            child: w,
+          );
     if (onReorder == null) {
-      return Column(children: [for (var i = 0; i < items.length; i++) row(i)]);
+      final rows = Column(
+        children: [for (var i = 0; i < items.length; i++) row(i)],
+      );
+      return capped(
+        maxHeight == null ? rows : SingleChildScrollView(child: rows),
+      );
     }
     final list = ReorderableListView(
       shrinkWrap: true,
@@ -294,11 +305,6 @@ class PlanList extends StatelessWidget {
       ),
       children: [for (var i = 0; i < items.length; i++) row(i)],
     );
-    return maxHeight == null
-        ? list
-        : ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: maxHeight!),
-            child: list,
-          );
+    return capped(list);
   }
 }

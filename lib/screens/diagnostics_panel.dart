@@ -130,12 +130,10 @@ class DiagnosticsPanel extends StatelessWidget {
         _Row('One-tap rate incl. cold starts', _pct(gate.oneTapRateInclCold)),
         _Row(
           'Median swaps per session',
-          gate.medianSwapsPerSession == null
-              ? '–'
-              : _num(gate.medianSwapsPerSession!),
-          ok: gate.medianSwapsPerSession == null
-              ? null
-              : gate.medianSwapsPerSession! <= 1,
+          _num(gate.medianSwapsPerSession),
+          ok: (gate.medianSwapsPerSession?.isFinite ?? false)
+              ? gate.medianSwapsPerSession! <= 1
+              : null,
         ),
         _Row('Lost workouts', '$lost', ok: lost == 0),
         const SizedBox(height: 18),
@@ -234,8 +232,11 @@ class DiagnosticsPanel extends StatelessWidget {
 
 /// "89%"; a 0/0 rate before any sets is "–", not a crash.
 String _pct(double r) => r.isFinite ? '${(r * 100).round()}%' : '–';
-String _num(double v) =>
-    v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+String _num(double? v) => v == null || !v.isFinite
+    ? '–'
+    : v == v.roundToDouble()
+    ? v.toStringAsFixed(0)
+    : v.toStringAsFixed(1);
 
 class _Section extends StatelessWidget {
   const _Section(this.title);

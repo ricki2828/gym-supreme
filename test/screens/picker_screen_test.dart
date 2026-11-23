@@ -348,11 +348,10 @@ void main() {
           days: storyDays,
           selected: pushSelection,
           plan: many,
-          onReorder: (_, _) {},
         ),
       ),
     );
-    expect(tester.takeException(), isNull);
+    expect(tester.takeException(), isNull, reason: 'read-only path capped too');
     expect(find.text('START PUSH'), findsOneWidget);
   });
 }
