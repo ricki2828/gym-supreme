@@ -1001,7 +1001,8 @@ class _GymFlowState extends State<GymFlow> {
     // (review of #39: leaving via Today or another gym lost it). A new gym
     // (first run) is stored by its own Save, with the list in it.
     final stored = widget.deps.engine.gym(_gym.id);
-    if (stored != null) {
+    // Only for kit already stored: an unsaved tick waits for the floor Save.
+    if (stored != null && stored.has(id)) {
       widget.deps.engine.saveGym(stored.withWeights(id, list));
     }
     setState(() => _gym = _gym.withWeights(id, list));

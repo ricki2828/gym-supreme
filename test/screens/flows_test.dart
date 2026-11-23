@@ -390,7 +390,6 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(row);
     await tester.pumpAndSettle();
-    final before = find.byType(Text).evaluate().length;
     await tester.scrollUntilVisible(
       find.text('Fill a range'),
       200,
@@ -404,7 +403,6 @@ void main() {
       await tester.pumpAndSettle();
     }
     expect(find.textContaining('That range does not work'), findsOneWidget);
-    expect(before, greaterThan(0));
   });
 
   testWidgets('weights rows only for loaded kit; pairs only on dumbbells', (
