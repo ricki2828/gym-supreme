@@ -121,7 +121,7 @@ class StubWorkoutPort implements WorkoutPort {
         pending['finished'] == true ? 'finish_pending' : 'already_running',
       );
     }
-    _uuidOf(snapshotJson);
+    _checkRev(snapshotJson, 0);
     _rev = 0;
     _running = true;
     _write(snapshotJson);
@@ -143,6 +143,7 @@ class StubWorkoutPort implements WorkoutPort {
     if (baseRev != _rev) {
       throw StaleRevException('base $baseRev, current $_rev');
     }
+    _checkRev(snapshotJson, _rev + 1);
     _rev++;
     _running = true;
     _write(snapshotJson);
@@ -163,8 +164,8 @@ class StubWorkoutPort implements WorkoutPort {
     if (head['finished'] == true) throw WorkoutPortException('finished');
     final map = head..['finished'] = true;
     final done = jsonEncode(map);
-    _journal = done;
     _running = false;
+    _write(done);
     return done;
   }
 
@@ -202,6 +203,21 @@ class StubWorkoutPort implements WorkoutPort {
 
   Map<String, dynamic>? _journalMap() =>
       _journal == null ? null : jsonDecode(_journal!) as Map<String, dynamic>;
+
+  static void _checkRev(String json, int expected) {
+    final Object? rev;
+    try {
+      rev = (jsonDecode(json) as Map<String, dynamic>)['rev'];
+    } on Object {
+      throw WorkoutPortException('bad_snapshot');
+    }
+    if (rev != expected) {
+      throw WorkoutPortException(
+        'bad_snapshot',
+        'rev $rev, expected $expected',
+      );
+    }
+  }
 
   static Object? _uuidOf(String json) {
     try {

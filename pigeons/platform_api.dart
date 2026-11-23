@@ -44,8 +44,10 @@ abstract class GymHostApi {
 /// JSON strings in the schema of contracts/session_snapshot.md (one schema for
 /// the channel, the journal line and the finish payload).
 ///
-/// Revs: the start snapshot is rev 0; the first submit uses baseRev 0 and
-/// returns 1, and so on.
+/// Revs: Dart writes `rev` into every snapshot it sends: 0 in [startSession],
+/// baseRev + 1 in [submitSnapshot]. The service validates it (a mismatch is
+/// `bad_snapshot`) and stores and echoes the JSON as sent, so every journal
+/// line, event and finish payload carries its rev.
 ///
 /// Resume (after pause, crash, force-stop or reboot): never [startSession].
 /// Read the pending journal (rev R) and [submitSnapshot] with baseRev R; the
@@ -62,7 +64,10 @@ abstract class GymHostApi {
 /// Dart awaits each submit before the next call (finish included); there is
 /// no concurrent submit. [finishSession] also works while paused (the pause
 /// is folded in) and is refused with `not_running` when there is no journal,
-/// `finished` when it is already finished.
+/// `finished` when it is already finished. The finished snapshot is also
+/// emitted on [WorkoutEvents.snapshots].
+/// [pauseSession] with no running service: `not_running`.
+/// [deleteJournal] on a paused, unfinished journal discards that workout.
 @HostApi()
 abstract class WorkoutApi {
   /// Starts the foreground service from the visible activity with rev 0.
