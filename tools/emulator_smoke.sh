@@ -16,6 +16,14 @@ fatal_check "$PKG" launch
 line="$(marker_line)"
 [ -n "$line" ] || { echo "no install-marker log line from MainActivity" >&2; timeout 60 adb logcat -d | tail -n 100; exit 1; }
 echo "$line"
+# The build's cut-2 flags match GS_FEATURES (CI env; repo variable, default empty = all off).
+feat="$(timeout 30 adb logcat -d -s flutter:I | grep -o 'GymSupreme/features.*' | tail -1 || true)"
+[ -n "$feat" ] || { echo "::error::no GymSupreme/features line" >&2; exit 1; }
+echo "$feat"
+for f in timers ghost rotation plates; do
+  want=0; case ",${GS_FEATURES:-}," in *",$f,"*|*",all,"*) want=1;; esac
+  grep -q " $f=$want" <<< " ${feat#GymSupreme/features }" || { echo "::error::feature $f should be $want (GS_FEATURES='${GS_FEATURES:-}'): $feat" >&2; exit 1; }
+done
 # The bundled SQLite loads (lib/app/db_probe.dart, printed at startup on the flutter tag).
 db="$(timeout 30 adb logcat -d -s flutter:I | grep -E 'GymSupreme/db (ok|FAILED)' | tail -1 || true)"
 case "$db" in *"GymSupreme/db ok"*) echo "$db";; *) echo "::error::SQLite did not load on API $sdk: ${db:-no GymSupreme/db line}" >&2; exit 1;; esac
