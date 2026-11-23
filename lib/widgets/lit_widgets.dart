@@ -94,6 +94,7 @@ class BigButton extends StatelessWidget {
     enabled: onTap != null,
     label: semanticLabel ?? [label, ?sub].join('. '),
     excludeSemantics: true,
+    onTap: onTap,
     child: Material(
       color: colour,
       borderRadius: BorderRadius.circular(radius),
@@ -147,6 +148,7 @@ class GymChip extends StatelessWidget {
       button: true,
       label: 'Gym: $name. Change gym',
       excludeSemantics: true,
+      onTap: onTap,
       // 48 dp tap target around a 32 dp chip.
       child: InkWell(
         onTap: onTap,

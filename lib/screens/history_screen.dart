@@ -106,6 +106,7 @@ class HistoryRowTile extends StatelessWidget {
           '$label, ${shortDate(row.startedAt)}, ${row.gymName}, '
           '${row.durationS ~/ 60} minutes, ${row.setCount} sets, $volume kilograms',
       excludeSemantics: true,
+      onTap: onOpen == null ? null : () => onOpen!(row.uuid),
       child: InkWell(
         onTap: onOpen == null ? null : () => onOpen!(row.uuid),
         child: Container(

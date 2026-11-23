@@ -89,9 +89,11 @@ void main() {
 
   test('same-snapshot transitions send nothing', () async {
     await startPush();
-    await c.load(-1); // nothing below null
     await c.skipRest(); // no rest running
-    expect(port.rev, 0);
+    await c.setReps(1);
+    final rev = port.rev;
+    await c.reps(-1); // already at 1: clamps, nothing to send
+    expect(port.rev, rev);
   });
 
   test('rest ±15 and skip', () async {
@@ -306,5 +308,161 @@ void main() {
     now += 60000;
     expect(c.view()!.elapsedS, at, reason: 'finished clock stops');
     expect(await c.finish(), fin.workoutUuid);
+  });
+
+  test('first weight starts mid-list, either direction (P1-1)', () async {
+    await startPush();
+    final steps = engine.loadSteps(
+      gymId: gymId,
+      exerciseId: c.snapshot!.exercises.first.exerciseId,
+    );
+    final mid = steps.loadsG[(steps.loadsG.length - 1) ~/ 2];
+    await c.load(-1);
+    expect(c.view()!.loadG, mid);
+    expect(mid, greaterThan(steps.loadsG.first));
+  });
+
+  test(
+    'typed values log as typed; a first-time set stays cold start',
+    () async {
+      await startPush();
+      await c.setLoad(13250); // not on the list: he logs what he lifted
+      expect(c.view()!.loadG, 13250);
+      await c.done();
+      final first = c.snapshot!.exercises.first.sets.first;
+      expect(first.loadG, 13250);
+      expect(first.completion, eng.Completion.coldStart);
+    },
+  );
+
+  test('typed reps on a prefilled set log as typed', () async {
+    // A second session: the first one gives this lift a plan load.
+    await startPush();
+    await c.load(1);
+    for (var i = 0; i < 3; i++) {
+      await c.done();
+      await c.skipRest();
+    }
+    await c.finish();
+    final c2 = LiveController(
+      engine: engine,
+      port: port,
+      nowMs: () => now,
+      tzOffsetMin: 480,
+      tick: const Duration(days: 1),
+    );
+    now += 3 * 86400000;
+    final plan = engine.suggest(
+      gymId: gymId,
+      muscleIds: const ['chest', 'front-delts', 'side-delts', 'triceps'],
+      typeId: 'push',
+    );
+    await c2.start(plan);
+    final set = c2.snapshot!.currentSet!;
+    expect(set.planLoadG, isNotNull, reason: 'prefilled from last time');
+    await c2.setReps((set.targetReps ?? 8) + 2);
+    await c2.done();
+    final logged = c2.snapshot!.exercises.first.sets.first;
+    expect(logged.completion, eng.Completion.typed);
+    c2.dispose();
+  });
+
+  test('held +/- coalesce: many steps, few submits, exact total', () async {
+    await startPush();
+    await c.load(1); // starts mid-list
+    final start = port.rev;
+    final r0 = c.view()!.reps;
+    final all = [for (var i = 0; i < 6; i++) c.reps(1)];
+    await Future.wait(all);
+    expect(c.view()!.reps, r0 + 6, reason: 'every tick counted once');
+    expect(
+      port.rev - start,
+      lessThan(6),
+      reason: 'coalesced into fewer submits',
+    );
+  });
+
+  test('typing the value already there sends nothing', () async {
+    await startPush();
+    await c.load(1);
+    final rev = port.rev;
+    await c.setLoad(c.view()!.loadG!);
+    await c.setReps(c.view()!.reps);
+    expect(port.rev, rev);
+  });
+
+  test(
+    'a typed value lands on the set it was typed for, not the next',
+    () async {
+      await startPush();
+      await c.load(1);
+      final first = c.snapshot!.currentSet!.setId;
+      await c.done(); // the number pad was open on set 1; set 1 got logged
+      await c.skipRest();
+      final rev = port.rev;
+      await c.setReps(3, setId: first); // set 1 is no longer pending
+      expect(port.rev, rev, reason: 'dropped, not moved to set 2');
+      final second = c.snapshot!.currentSet!.setId;
+      await c.setReps(3, setId: second);
+      expect(c.view()!.reps, 3);
+    },
+  );
+
+  test('a machine stack starts a third of the way up, not mid-list', () async {
+    final plan = engine.suggest(gymId: gymId, muscleIds: const ['triceps']);
+    final stackItem = plan.items.indexWhere((i) => i.unit == eng.LoadUnit.kg);
+    expect(stackItem, greaterThanOrEqualTo(0), reason: 'a cable lift');
+    await c.start(plan);
+    for (var i = 0; i < stackItem; i++) {
+      final ex = c.snapshot!.exercises[i];
+      for (final _ in ex.sets) {
+        await c.skipSet();
+      }
+    }
+    final steps = engine.loadSteps(
+      gymId: gymId,
+      exerciseId: c.snapshot!.exercises[stackItem].exerciseId,
+    );
+    await c.load(1);
+    expect(c.view()!.loadG, steps.loadsG[(steps.loadsG.length - 1) ~/ 3]);
+  });
+
+  test('reps and kg coalesced into one job: one submit at rev + 1', () async {
+    await startPush();
+    await c.load(1);
+    final r0 = c.view()!.reps;
+    final g0 = c.view()!.loadG!;
+    final a = c.reps(1); // runs now
+    final b = c.reps(1); // queued
+    final d = c.load(1); // joins the queued job: reps and kg together
+    await Future.wait([a, b, d]);
+    expect(c.lastError, isNull, reason: 'the stub enforces rev + 1');
+    expect(c.view()!.reps, r0 + 2);
+    expect(c.view()!.loadG, greaterThan(g0));
+  });
+
+  test('held − stops at 1 rather than dropping the batch', () async {
+    await startPush();
+    await c.load(1);
+    await c.setReps(6);
+    await Future.wait([for (var i = 0; i < 9; i++) c.reps(-1)]);
+    expect(c.view()!.reps, 1);
+  });
+
+  test('steppers recover after a step lands with no current set', () async {
+    await startPush();
+    await c.load(1);
+    // Log every set, so there is no current set, and press + meanwhile.
+    final all = <Future<void>>[];
+    for (final e in c.snapshot!.exercises) {
+      for (final _ in e.sets) {
+        all.add(c.done());
+      }
+    }
+    all.add(c.reps(1));
+    await Future.wait(all);
+    expect(c.view()!.allDone, isTrue);
+    await c.reps(1); // runs with no current set
+    expect(c.stepQueued, isFalse, reason: 'reset even with no set');
   });
 }

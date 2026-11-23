@@ -80,7 +80,7 @@ void main() {
     // Item 4: live logging through the real WorkoutService.
     await _waitFor(tester, 'live', find.byType(LiveScreen));
     if (find.text('Set a weight first').evaluate().isNotEmpty) {
-      await _tap(tester, find.bySemanticsLabel('More').last);
+      await _tap(tester, find.bySemanticsLabel('More kilograms'));
       await _waitFor(tester, 'weight', find.textContaining('first time'));
     }
     await _tap(tester, find.text('DONE'));

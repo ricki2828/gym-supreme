@@ -90,7 +90,7 @@ void main() {
     expect(find.byType(LiveScreen), findsOneWidget);
     expect(port.rev, 0);
     expect(find.text('Set a weight first'), findsOneWidget);
-    await tester.tap(find.bySemanticsLabel('More').last);
+    await tester.tap(find.bySemanticsLabel('More kilograms'));
     await tester.pumpAndSettle();
     await tapText(tester, 'DONE');
     expect(port.rev, 2);
