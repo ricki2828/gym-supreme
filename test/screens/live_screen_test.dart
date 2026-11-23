@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show kLongPressTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_supreme/screens/live_screen.dart';
@@ -59,12 +60,10 @@ void main() {
         ),
       ),
     );
-    final more = find.bySemanticsLabel('More');
-    final less = find.bySemanticsLabel('Less');
-    await tester.tap(more.first);
-    await tester.tap(less.first);
-    await tester.tap(more.last); // top of the rack: disabled
-    await tester.tap(less.last);
+    await tester.tap(find.bySemanticsLabel('More reps'));
+    await tester.tap(find.bySemanticsLabel('Less reps'));
+    await tester.tap(find.bySemanticsLabel('More kilograms')); // top: off
+    await tester.tap(find.bySemanticsLabel('Less kilograms'));
     expect(reps, [1, -1]);
     expect(load, [-1]);
   });
@@ -295,5 +294,56 @@ void main() {
     );
     expect(find.text('EMOM 20 × 1:00'), findsOneWidget);
     expect(find.text('0:00'), findsNothing);
+  });
+
+  testWidgets('hold + to repeat; tap the number to type', (tester) async {
+    phone(tester);
+    final reps = <int>[];
+    final typedReps = <int>[];
+    final typedLoad = <int>[];
+    await tester.pumpWidget(
+      app(
+        LiveScreen(
+          view: liveView(),
+          onReps: reps.add,
+          onTypeReps: (v, _) => typedReps.add(v),
+          onTypeLoad: (g, _) => typedLoad.add(g),
+        ),
+      ),
+    );
+    final more = find.bySemanticsLabel('More reps');
+    final g = await tester.startGesture(tester.getCenter(more));
+    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 10));
+    await tester.pump(const Duration(milliseconds: 500));
+    await g.up();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(reps.length, greaterThanOrEqualTo(4), reason: 'held ~0.5 s');
+    final held = reps.length;
+    await tester.pump(const Duration(seconds: 1));
+    expect(reps.length, held, reason: 'stops on release');
+
+    await tester.tap(find.bySemanticsLabel(RegExp(r'^22 kilograms')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('live.keypad')), '23.75');
+    await tester.tap(find.byKey(const Key('live.keypad.set')));
+    await tester.pumpAndSettle();
+    expect(typedLoad, [23750]);
+
+    await tester.tap(find.bySemanticsLabel(RegExp(r'^10 reps')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('live.keypad')), '7');
+    await tester.tap(find.byKey(const Key('live.keypad.set')));
+    await tester.pumpAndSettle();
+    expect(typedReps, [7]);
+
+    // Cancel and nonsense change nothing.
+    await tester.tap(find.bySemanticsLabel(RegExp(r'^10 reps')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('live.keypad')), 'abc');
+    await tester.tap(find.byKey(const Key('live.keypad.set')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(typedReps, [7]);
   });
 }

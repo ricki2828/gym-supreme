@@ -835,6 +835,8 @@ class _LiveFlowState extends State<LiveFlow> {
             view: v,
             onReps: c.reps,
             onLoad: c.load,
+            onTypeReps: (v, id) => c.setReps(v, setId: id),
+            onTypeLoad: (g, id) => c.setLoad(g, setId: id),
             onDone: _onDone,
             onSkipSet: c.skipSet,
             onRestDelta: c.restDelta,

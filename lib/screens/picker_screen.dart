@@ -477,6 +477,7 @@ class _GroupRow extends StatelessWidget {
       selected: on,
       label: semantics,
       excludeSemantics: true,
+      onTap: noKit && !on ? null : onTap,
       child: Material(
         color: on ? pickColour : (noKit ? Lit.ground : Colors.white),
         shape: RoundedRectangleBorder(

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show max;
 
 import 'package:flutter/foundation.dart';
 import 'package:gym_engine/cut2.dart' as c2;
@@ -83,29 +84,154 @@ class LiveController extends ChangeNotifier {
 
   // ---- intents from LiveScreen --------------------------------------------
 
-  Future<void> reps(int delta) => _onCurrent((s, set) {
-    final r = (set.targetReps ?? 0) + delta;
-    if (r < 1) return s;
-    return eng.Session.retarget(s, set.setId, reps: r);
+  // Held +/- (8 a second) add up here while one submit is in flight, so a
+  // long hold writes a few journal lines, not one per tick, and the steps
+  // never run on after he lets go (review of #36, P2).
+  int _pendingReps = 0;
+  int _pendingLoad = 0;
+  bool _stepQueued = false;
+
+  /// A step job is queued and not yet run (tests: it must never stick).
+  @visibleForTesting
+  bool get stepQueued => _stepQueued;
+
+  Future<void> reps(int delta) {
+    _pendingReps += delta;
+    return _flushSteps();
+  }
+
+  /// Steps along the gym's real weight list (plan 5.6). A lift with no weight
+  /// yet (first time here) starts partway up the list, not at the lightest:
+  /// mid-list for dumbbells (about 12 kg, not a dozen taps from 2 kg; P1-1),
+  /// a third of the way for machine stacks (about 35 kg, not 50).
+  Future<void> load(int delta) {
+    _pendingLoad += delta;
+    return _flushSteps();
+  }
+
+  Future<void> _flushSteps() {
+    if (_stepQueued) return _queue;
+    _stepQueued = true;
+    return _enqueue(() async {
+      // Reset first, whatever happens below (no current set, finished...),
+      // so the steppers can never stay dead (review of #36 fixes).
+      _stepQueued = false;
+      final dr = _pendingReps;
+      final dl = _pendingLoad;
+      _pendingReps = 0;
+      _pendingLoad = 0;
+      final s = _s;
+      if (s == null || s.finished) return;
+      final set = s.currentSet;
+      if (set == null) return;
+      int? reps;
+      int? loadG;
+      if (dr != 0) {
+        // A held − stops at 1, it doesn't drop the whole batch.
+        final r = max(1, (set.targetReps ?? 0) + dr);
+        if (r != set.targetReps) reps = r;
+      }
+      if (dl != 0) {
+        final g = _stepLoad(s, set, dl);
+        if (g != null && g != set.targetLoadG) loadG = g;
+      }
+      if (reps == null && loadG == null) return;
+      // One retarget, so the snapshot is exactly rev + 1 (two chained
+      // retargets made rev + 2, which the service refuses).
+      final next = reps != null && loadG != null
+          ? eng.Session.retarget(s, set.setId, reps: reps, loadG: loadG)
+          : reps != null
+          ? eng.Session.retarget(s, set.setId, reps: reps)
+          : eng.Session.retarget(s, set.setId, loadG: loadG);
+      await _submit(next);
+    });
+  }
+
+  int? _stepLoad(eng.SessionSnapshot s, eng.SnapshotSet set, int delta) {
+    final steps = _stepsFor(s);
+    if (steps == null || steps.loadsG.isEmpty) return null;
+    var g = set.targetLoadG;
+    var left = delta.abs();
+    if (g == null) {
+      final c = s.current;
+      final kind = c == null ? '' : s.exercises[c.exercise].loadKind;
+      final n = steps.loadsG.length;
+      g = steps.loadsG[kind == 'stack' ? (n - 1) ~/ 3 : (n - 1) ~/ 2];
+      left--;
+    }
+    for (; left > 0; left--) {
+      final n = delta > 0 ? steps.next(g) : steps.prev(g);
+      if (n == null) break;
+      g = n;
+    }
+    return g;
+  }
+
+  /// Set ids whose value he typed; their Done is logged as `typed` (B4).
+  /// Kept in this controller only: after a restart and Resume a typed set
+  /// logs as `adjusted` (a known undercount until the snapshot carries it).
+  final Set<String> _typed = {};
+
+  /// A typed rep count (or seconds on a timed set), for the set the number
+  /// pad was opened on ([setId]); dropped if that set is no longer pending.
+  Future<void> setReps(int reps, {String? setId}) => _onSet(setId, (s, set) {
+    if (reps < 1 || reps == set.targetReps) return s;
+    _typed.add(set.setId);
+    return eng.Session.retarget(s, set.setId, reps: reps);
   });
 
-  /// Steps along the gym's real weight list (plan 5.6); never invents a load.
-  Future<void> load(int delta) => _onCurrent((s, set) {
-    final steps = _stepsFor(s);
-    if (steps == null) return s;
-    final next = delta > 0
-        ? steps.next(set.targetLoadG)
-        : steps.prev(set.targetLoadG);
-    if (next == null) return s;
-    return eng.Session.retarget(s, set.setId, loadG: next);
+  /// A typed load in grams. Any value, on the gym's list or not: he logs
+  /// what he lifted (P1-2); the list only drives +/- and progression.
+  Future<void> setLoad(int grams, {String? setId}) => _onSet(setId, (s, set) {
+    if (grams < 0 || grams == set.targetLoadG) return s;
+    _typed.add(set.setId);
+    return eng.Session.retarget(s, set.setId, loadG: grams);
   });
+
+  /// Runs [f] on the set [setId] if it is still pending, else on the current
+  /// set when no id is given.
+  Future<void> _onSet(
+    String? setId,
+    eng.SessionSnapshot Function(eng.SessionSnapshot, eng.SnapshotSet) f,
+  ) => _transition((s) {
+    if (setId == null) {
+      final cur = s.currentSet;
+      return cur == null ? s : f(s, cur);
+    }
+    for (final e in s.exercises) {
+      for (final x in e.sets) {
+        if (x.setId == setId) {
+          return x.state == eng.SetState.pending ? f(s, x) : s;
+        }
+      }
+    }
+    return s;
+  });
+
+  /// `typed` when he typed this set's value, except a first-time set, which
+  /// stays a cold start (the one-tap rate leaves those out).
+  eng.Completion? _completionFor(eng.SessionSnapshot s, eng.SnapshotSet set) {
+    if (!_typed.contains(set.setId)) return null;
+    final c = s.current;
+    final kind = c == null ? '' : s.exercises[c.exercise].loadKind;
+    final loaded = const {'dumbbell', 'stack', 'barbell'}.contains(kind);
+    if (loaded && set.planLoadG == null) return null;
+    return eng.Completion.typed;
+  }
 
   /// Done on a timer block logs the block (TimerSession.finish); any other
   /// set is a plain Done.
   Future<void> done() => _onCurrent((s, set) {
     final now = nowMs();
     final f = c2.TimerSession.finish(s, set.setId, nowMs: now);
-    return identical(f, s) ? eng.Session.done(s, set.setId, nowMs: now) : f;
+    return identical(f, s)
+        ? eng.Session.done(
+            s,
+            set.setId,
+            nowMs: now,
+            completion: _completionFor(s, set),
+          )
+        : f;
   });
 
   /// One path for skip (and undo): the TimerSession versions stop or re-arm a
