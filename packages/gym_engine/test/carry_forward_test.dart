@@ -140,4 +140,16 @@ void main() {
     );
     expect(reps(s, 0), [5, 1]);
   });
+
+  test('undo after a carried change leaves the later sets carried', () {
+    var s = start([item('a', three)]);
+    s = Session.retarget(s, 'u:0', loadG: 16000);
+    s = Session.done(s, 'u:0', nowMs: t0 + 1);
+    s = Session.undo(s, 'u:0');
+    expect(s.exercises[0].sets[0].state, SetState.pending);
+    expect(loads(s, 0), [16000, 16000, 16000]);
+    // Completion is still judged against the (empty) plan: cold start.
+    s = Session.done(s, 'u:1', nowMs: t0 + 2);
+    expect(s.exercises[0].sets[1].completion, Completion.coldStart);
+  });
 }
