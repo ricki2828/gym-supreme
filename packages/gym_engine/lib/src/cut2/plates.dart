@@ -99,7 +99,10 @@ PlateResult loadBar(
   // Per-side sums reachable, in units of the gcd of all plate sizes, each
   // with the fewest plates (0/1 knapsack over the stock list).
   final unit = stock.fold(stock.first, _gcd);
-  final maxSide = stock.fold(0, (a, b) => a + b) ~/ unit;
+  // Sums past the cap are never an answer, and their plate lists are not
+  // guaranteed fewest, so the DP stops there too.
+  final stockSum = stock.fold(0, (a, b) => a + b);
+  final maxSide = (stockSum < capSideG ? stockSum : capSideG) ~/ unit;
   final targetSide2 = targetG - barG; // two sides
   // best[s]: the plate list (heaviest first) for per-side sum s, fewest
   // plates, ties to the heavier plates (25 + 15 over 20 + 20). Whole lists

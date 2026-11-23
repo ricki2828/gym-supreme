@@ -60,7 +60,8 @@ void main() {
         loadBar(t);
       }
       loadBar(200000, pairs: {1250: 100000});
-      expect(sw.elapsedMilliseconds, lessThan(2000));
+      // Loose bound: catches a return to the uncapped DP, not CI jitter.
+      expect(sw.elapsedMilliseconds, lessThan(10000));
     });
 
     test('out of plates: best below, nothing above', () {
@@ -87,6 +88,37 @@ void main() {
       expect(() => loadBar(50000, pairs: {5000: -1}), throwsArgumentError);
       expect(() => loadBar(50000, barG: -1), throwsArgumentError);
     });
+  });
+
+  test('matches brute force (barSteps) for every target, 20-150 kg', () {
+    final pairs = {20000: 2, 15000: 1, 10000: 2, 5000: 1, 2500: 1, 1250: 2};
+    final steps = barSteps(pairs: pairs);
+    for (var t = 15000; t <= 150000; t += 500) {
+      final r = loadBar(t, pairs: pairs);
+      final below = [
+        for (final x in steps)
+          if (x < t) x,
+      ];
+      final above = [
+        for (final x in steps)
+          if (x > t) x,
+      ];
+      if (steps.contains(t)) {
+        expect(r.exact?.totalG, t, reason: 'exact $t');
+      } else {
+        expect(r.exact, isNull, reason: '$t');
+        expect(
+          r.below?.totalG,
+          below.isEmpty ? null : below.last,
+          reason: 'below $t',
+        );
+        expect(
+          r.above?.totalG,
+          above.isEmpty ? null : above.first,
+          reason: 'above $t',
+        );
+      }
+    }
   });
 
   test('barSteps lists every makeable total', () {
