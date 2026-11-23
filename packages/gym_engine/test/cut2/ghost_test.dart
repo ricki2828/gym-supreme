@@ -79,6 +79,39 @@ void main() {
       expect(g.workoutUuid, 'w1');
     });
 
+    test('equal starts tie-break on uuid, whatever the input order', () {
+      final a = w('aaa', 'g', 5, [s('x', 1, load: 1, reps: 1)]);
+      final b = w('bbb', 'g', 5, [s('x', 1, load: 2, reps: 1)]);
+      for (final order in [
+        [a, b],
+        [b, a],
+      ]) {
+        expect(
+          ghostFor(
+            gymId: 'g',
+            exerciseId: 'x',
+            beforeMs: 9,
+            workouts: order,
+          )!.workoutUuid,
+          'bbb',
+        );
+      }
+    });
+
+    test('the live workout is never its own ghost', () {
+      final live = w('live', 'condo', 4500, [
+        s('db-press', 1, load: 1, reps: 1),
+      ]);
+      final g = ghostFor(
+        gymId: 'condo',
+        exerciseId: 'db-press',
+        beforeMs: 9999, // caller passed now(), not the live start
+        workouts: [...history, live],
+        currentUuid: 'live',
+      )!;
+      expect(g.workoutUuid, 'w3');
+    });
+
     test('first session: hidden', () {
       expect(
         ghostFor(
@@ -209,12 +242,33 @@ void main() {
       expect(l.ghostLoadG, isNull);
     });
 
-    test('missing values give null deltas, not a crash', () {
+    test('untouched target (no reps): pending, ghost values shown', () {
       final l = compareSet(ghost: g, setOrdinal: 1);
+      expect(l.verdict, GhostVerdict.pending);
+      expect(l.ghostLoadG, 22500);
+      expect(l.ghostReps, 10);
       expect(l.loadDeltaG, isNull);
       expect(l.repsDelta, isNull);
       expect(l.paceDeltaMs, isNull);
-      expect(l.verdict, GhostVerdict.behind);
+    });
+
+    test('a skipped ghost set inside the range is new', () {
+      final sk = ghostFor(
+        gymId: 'g',
+        exerciseId: 'x',
+        beforeMs: 10,
+        workouts: [
+          w('a', 'g', 1, [
+            s('x', 1, load: 1000, reps: 5),
+            s('x', 2, skipped: true),
+            s('x', 3, load: 1000, reps: 5),
+          ]),
+        ],
+      )!;
+      expect(
+        compareSet(ghost: sk, setOrdinal: 2, loadG: 1000, reps: 5).verdict,
+        GhostVerdict.newSet,
+      );
     });
   });
 
@@ -246,6 +300,31 @@ void main() {
       expect(t.exercisesCompared, 2);
       expect(t.deltaGReps, 25000);
       expect(t.deltaPct, closeTo(11.11, 0.01));
+    });
+
+    test('ordinals not reached or skipped this time do not count', () {
+      final g3 = ghostFor(
+        gymId: 'g',
+        exerciseId: 'p',
+        beforeMs: 10,
+        workouts: [
+          w('a', 'g', 1, [
+            s('p', 1, load: 100, reps: 1),
+            s('p', 2, load: 100, reps: 1),
+            s('p', 3, load: 100, reps: 1),
+          ]),
+        ],
+      );
+      final t = sessionTotal(
+        ghosts: {'p': g3},
+        done: [
+          (exerciseId: 'p', setOrdinal: 1, volumeGReps: 100),
+          (exerciseId: 'p', setOrdinal: 3, volumeGReps: 100),
+        ],
+      )!;
+      expect(t.volumeGReps, 200);
+      expect(t.ghostSoFarGReps, 200); // not 300: set 2 not done this time
+      expect(t.ghostFullGReps, 300);
     });
 
     test('hidden when nothing has a ghost', () {

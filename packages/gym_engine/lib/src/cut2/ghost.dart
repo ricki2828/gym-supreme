@@ -88,18 +88,29 @@ class ExerciseGhost {
 
 /// The latest workout at [gymId] that started before [beforeMs] and has a
 /// non-timed set of [exerciseId]; null when there is none (first session:
-/// the ghost stays hidden). [workouts] may be in any order.
+/// the ghost stays hidden). [workouts] may be in any order. Pass the live
+/// workout's start as [beforeMs] and its uuid as [currentUuid], so it can
+/// never be its own ghost even if the caller includes it.
 ExerciseGhost? ghostFor({
   required String gymId,
   required String exerciseId,
   required int beforeMs,
   required Iterable<GhostInputWorkout> workouts,
+  String? currentUuid,
 }) {
   GhostInputWorkout? best;
   List<GhostInputSet>? bestSets;
   for (final w in workouts) {
     if (w.gymId != gymId || w.startedAtMs >= beforeMs) continue;
-    if (best != null && w.startedAtMs <= best.startedAtMs) continue;
+    if (w.uuid == currentUuid) continue;
+    // Latest first; equal starts tie-break on uuid so input order never
+    // changes the answer.
+    if (best != null &&
+        (w.startedAtMs < best.startedAtMs ||
+            (w.startedAtMs == best.startedAtMs &&
+                w.uuid.compareTo(best.uuid) <= 0))) {
+      continue;
+    }
     final sets = [
       for (final s in w.sets)
         if (s.exerciseId == exerciseId && !s.timed) s,
@@ -124,6 +135,10 @@ enum GhostVerdict {
   ahead,
   level,
   behind,
+
+  /// Nothing to judge yet (no reps entered: the current set's untouched
+  /// target). The ghost's values are still filled in.
+  pending,
 
   /// Last time had no set at this ordinal (or it was skipped).
   newSet,
@@ -169,7 +184,16 @@ SetGhostLine compareSet({
   final pd = (offsetMs == null || g.offsetMs == null)
       ? null
       : offsetMs - g.offsetMs!;
-  final now = (loadG ?? 0) * (reps ?? 0);
+  if (reps == null) {
+    return SetGhostLine(
+      verdict: GhostVerdict.pending,
+      ghostLoadG: g.loadG,
+      ghostReps: g.reps,
+      loadDeltaG: ld,
+      paceDeltaMs: pd,
+    );
+  }
+  final now = (loadG ?? 0) * reps;
   final then = g.volumeGReps;
   final GhostVerdict v;
   if (now > then) {
@@ -234,26 +258,23 @@ SessionGhostTotal? sessionTotal({
   required Map<String, ExerciseGhost?> ghosts,
   required Iterable<DoneSet> done,
 }) {
-  final maxOrdinal = <String, int>{};
+  // Like for like: last time's sets at exactly the ordinals done this time,
+  // so an ordinal not reached (or skipped) yet never counts against him.
+  // Matched by the map key on both sides.
   var vol = 0;
+  var soFar = 0;
   for (final d in done) {
-    if (ghosts[d.exerciseId] == null) continue;
+    final g = ghosts[d.exerciseId];
+    if (g == null) continue;
     vol += d.volumeGReps;
-    final m = maxOrdinal[d.exerciseId] ?? 0;
-    if (d.setOrdinal > m) maxOrdinal[d.exerciseId] = d.setOrdinal;
+    soFar += g.byOrdinal(d.setOrdinal)?.volumeGReps ?? 0;
   }
   final compared = [for (final g in ghosts.values) ?g];
   if (compared.isEmpty) return null;
-  var soFar = 0;
-  var full = 0;
-  for (final g in compared) {
-    soFar += g.volumeThrough(maxOrdinal[g.exerciseId] ?? 0);
-    full += g.volumeGReps;
-  }
   return SessionGhostTotal(
     volumeGReps: vol,
     ghostSoFarGReps: soFar,
-    ghostFullGReps: full,
+    ghostFullGReps: compared.fold(0, (a, g) => a + g.volumeGReps),
     exercisesCompared: compared.length,
   );
 }
