@@ -417,7 +417,8 @@ class _WeightTile extends StatelessWidget {
     button: onTap != null,
     label:
         '${row.name}, ${row.summary}'
-        '${row.fromDefaults ? ', app guesses' : ''}. Edit',
+        '${row.fromDefaults ? ', app guesses' : ''}',
+    onTapHint: 'edit weights',
     excludeSemantics: true,
     onTap: onTap,
     child: InkWell(

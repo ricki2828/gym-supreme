@@ -96,7 +96,16 @@ class _WeightListScreenState extends State<WeightListScreen> {
     final a = (from * 1000).round();
     final b = (to * 1000).round();
     final st = (step * 1000).round();
-    if (b < a || (b - a) ~/ st > 200) return; // nonsense: ignore
+    if (a <= 0 || st <= 0 || b < a || (b - a) ~/ st > 200) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(
+            content: Text('That range does not work: check from, to and step.'),
+          ),
+        );
+      }
+      return;
+    }
     setState(() {
       for (var g = a; g <= b; g += st) {
         _w.add(g);
@@ -148,27 +157,33 @@ class _WeightListScreenState extends State<WeightListScreen> {
                       for (final g in sorted)
                         Semantics(
                           button: true,
-                          label: '${kg(g)} $_unit. Tap to remove',
+                          label: '${kg(g)} $_unit',
+                          onTapHint: 'remove',
                           excludeSemantics: true,
-                          child: InkWell(
-                            onTap: () => setState(() => _w.remove(g)),
-                            customBorder: const StadiumBorder(),
-                            child: Container(
-                              constraints: const BoxConstraints(
-                                minHeight: 48,
-                                minWidth: 64,
-                              ),
-                              alignment: Alignment.center,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                              ),
-                              decoration: const ShapeDecoration(
-                                color: Lit.ink,
-                                shape: StadiumBorder(),
-                              ),
-                              child: Text(
-                                kg(g),
-                                style: LitType.display(26, Colors.white),
+                          onTap: () => setState(() => _w.remove(g)),
+                          child: Material(
+                            color: Lit.ink,
+                            shape: const StadiumBorder(),
+                            child: InkWell(
+                              onTap: () => setState(() => _w.remove(g)),
+                              customBorder: const StadiumBorder(),
+                              child: Container(
+                                constraints: const BoxConstraints(
+                                  minHeight: 48,
+                                  minWidth: 64,
+                                ),
+                                alignment: Alignment.center,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                ),
+                                decoration: const ShapeDecoration(
+                                  color: Colors.transparent,
+                                  shape: StadiumBorder(),
+                                ),
+                                child: Text(
+                                  kg(g),
+                                  style: LitType.display(26, Colors.white),
+                                ),
                               ),
                             ),
                           ),

@@ -73,7 +73,7 @@ void main() {
         ],
       ),
     );
-    final dumb = find.bySemanticsLabel('Dumbbells, 2–24 kg ea · 3 pairs. Edit');
+    final dumb = find.bySemanticsLabel('Dumbbells, 2–24 kg ea · 3 pairs');
     await tester.scrollUntilVisible(
       dumb,
       200,
@@ -86,7 +86,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(dumb);
     final cable = find.bySemanticsLabel(
-      'Cable stack, 5–100 kg · 2 weights, app guesses. Edit',
+      'Cable stack, 5–100 kg · 2 weights, app guesses',
     );
     await tester.scrollUntilVisible(
       cable,

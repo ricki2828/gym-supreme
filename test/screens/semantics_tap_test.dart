@@ -11,6 +11,7 @@ import 'package:gym_supreme/screens/live_screen.dart';
 import 'package:gym_supreme/screens/picker_screen.dart';
 import 'package:gym_supreme/screens/post_workout_screen.dart';
 import 'package:gym_supreme/screens/view_models.dart';
+import 'package:gym_supreme/screens/weight_list_screen.dart';
 
 import 'diagnostics_fixtures.dart';
 import 'fixtures.dart';
@@ -69,12 +70,19 @@ void main() {
       kit: condo.kit,
       equipment: equipmentFixture,
       presets: presetsFixture,
-      dumbbellMaxG: 25000,
+      weights: const [
+        WeightRow(
+          id: 'dumbbells',
+          name: 'Dumbbells',
+          weightsG: [2000, 4000],
+          perHand: true,
+        ),
+      ],
       onPickGym: noop1,
       onAddGym: noop,
       onPreset: noop1,
       onToggle: noop1,
-      onDumbbellMax: noop1,
+      onEditWeights: noop1,
       onSave: noop,
     ),
     'live': LiveScreen(
@@ -96,6 +104,13 @@ void main() {
       onRestDelta: noop1,
       onSkipRest: noop,
       onFinish: noop,
+    ),
+    'weights': const WeightListScreen(
+      row: WeightRow(
+        id: 'cable-stack',
+        name: 'Cable stack',
+        weightsG: [5000, 10000, 15000],
+      ),
     ),
     'post': PostWorkoutScreen(view: pushDone, onDone: noop),
     'history': HistoryScreen(rows: historyRows, onOpen: noop1),

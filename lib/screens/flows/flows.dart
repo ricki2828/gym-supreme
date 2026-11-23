@@ -960,11 +960,21 @@ class _GymFlowState extends State<GymFlow> {
   /// Loads with a weight list he can edit (P1-2), by catalog load kind.
   static const _listed = {'dumbbell', 'stack'};
 
+  /// Equipment some exercise actually loads (a stack nothing uses, like the
+  /// condo's bench with overhead cable today, gets no weights row).
+  late final Set<String> _loaded = {
+    for (final x in widget.deps.catalog.exercises)
+      for (final set in x.equipmentSets)
+        for (final id in set) id,
+  };
+
   List<WeightRow> _weightRows() {
     final cat = widget.deps.catalog;
     return [
       for (final e in cat.equipment)
-        if (_listed.contains(e.load) && _gym.has(e.id))
+        if (_listed.contains(e.load) &&
+            _gym.has(e.id) &&
+            _loaded.contains(e.id))
           () {
             final own = _gym.kit[e.id]?.weightsG ?? const <int>[];
             return WeightRow(
@@ -973,7 +983,8 @@ class _GymFlowState extends State<GymFlow> {
               weightsG: own.isNotEmpty
                   ? own
                   : (eng.defaultWeightsG[e.load] ?? const <int>[]),
-              perHand: e.load == 'dumbbell',
+              // Pairs only for dumbbells; a wall ball or kettlebell is one.
+              perHand: e.id == 'dumbbells',
               fromDefaults: own.isEmpty,
             );
           }(),
@@ -986,6 +997,13 @@ class _GymFlowState extends State<GymFlow> {
       MaterialPageRoute(builder: (_) => WeightListScreen(row: row)),
     );
     if (list == null || list.isEmpty || !mounted) return;
+    // The editor's Save keeps: a gym already stored gets the list at once
+    // (review of #39: leaving via Today or another gym lost it). A new gym
+    // (first run) is stored by its own Save, with the list in it.
+    final stored = widget.deps.engine.gym(_gym.id);
+    if (stored != null) {
+      widget.deps.engine.saveGym(stored.withWeights(id, list));
+    }
     setState(() => _gym = _gym.withWeights(id, list));
   }
 

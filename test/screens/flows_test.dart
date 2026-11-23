@@ -311,7 +311,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(row);
     await tester.pumpAndSettle();
-    await tester.tap(find.bySemanticsLabel('4 kg ea. Tap to remove'));
+    await tester.tap(find.bySemanticsLabel('4 kg ea'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Add one'));
     await tester.pumpAndSettle();
@@ -319,12 +319,15 @@ void main() {
     await tester.tap(find.byKey(const Key('live.keypad.set')));
     await tester.pumpAndSettle();
     await tapText(tester, 'SAVE · 3');
-    await tapText(tester, 'SAVE · 5 ON THE FLOOR');
+    // Stored by the editor's Save alone: leaving for Today keeps it.
     expect(engine.gym(g.id)!.kit['dumbbells']!.weightsG, const [
       2000,
       13500,
       24000,
     ]);
+    await tester.tap(find.text('Today'));
+    await tester.pumpAndSettle();
+    expect(engine.gym(g.id)!.kit['dumbbells']!.weightsG, contains(13500));
   });
 
   testWidgets('weights editor: fill a range for the cable stack', (
@@ -366,5 +369,65 @@ void main() {
       isTrue,
       reason: 'the engine steps along his list now',
     );
-  }, skip: false);
+  });
+
+  testWidgets('fill a range refuses a zero step with a message', (
+    tester,
+  ) async {
+    engine.saveGym(engine.gymFromPreset('condo'));
+    await pumpRoot(tester);
+    await tester.tap(find.text('Gyms'));
+    await tester.pumpAndSettle();
+    final row = find.bySemanticsLabel(RegExp(r'^Cable stack, \d'));
+    await tester.scrollUntilVisible(
+      row,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.runAsync(
+      () => Scrollable.ensureVisible(tester.element(row), alignment: 0.5),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    final before = find.byType(Text).evaluate().length;
+    await tester.scrollUntilVisible(
+      find.text('Fill a range'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Fill a range'));
+    await tester.pumpAndSettle();
+    for (final v in ['5', '10', '0.0001']) {
+      await tester.enterText(find.byKey(const Key('live.keypad')), v);
+      await tester.tap(find.byKey(const Key('live.keypad.set')));
+      await tester.pumpAndSettle();
+    }
+    expect(find.textContaining('That range does not work'), findsOneWidget);
+    expect(before, greaterThan(0));
+  });
+
+  testWidgets('weights rows only for loaded kit; pairs only on dumbbells', (
+    tester,
+  ) async {
+    // No exercise in today's catalog loads kettlebells or the condo's bench
+    // with overhead cable, so neither gets a row that would change nothing.
+    final g = engine.gymFromPreset('condo').toggle('kettlebells');
+    engine.saveGym(g);
+    await pumpRoot(tester);
+    await tester.tap(find.text('Gyms'));
+    await tester.pumpAndSettle();
+    final dumb = find.bySemanticsLabel(RegExp(r'^Dumbbells, \d'));
+    await tester.scrollUntilVisible(
+      dumb,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(tester.getSemantics(dumb).label, contains('pairs'));
+    expect(find.bySemanticsLabel(RegExp(r'^Kettlebells, \d')), findsNothing);
+    expect(
+      find.bySemanticsLabel(RegExp(r'^Bench with overhead cable, \d')),
+      findsNothing,
+    );
+  });
 }
