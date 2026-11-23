@@ -236,6 +236,14 @@ void main() {
       );
     });
 
+    test('Ricki 23-Nov: equal volume, lighter load, more reps = behind', () {
+      // Load wins ties. 20 x 9 = 180 kg-reps = 22.5 x 8 last time.
+      final l = compareSet(ghost: g, setOrdinal: 2, loadG: 20000, reps: 9);
+      expect(l.verdict, GhostVerdict.behind);
+      expect(l.loadDeltaG, -2500);
+      expect(l.repsDelta, 1);
+    });
+
     test('an extra set beyond last time is new', () {
       final l = compareSet(ghost: g, setOrdinal: 3, loadG: 22500, reps: 8);
       expect(l.verdict, GhostVerdict.newSet);
