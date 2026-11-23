@@ -1,0 +1,68 @@
+{
+  "made_by": "v0.1.0-dogfood (4c9f1a6), packages/gym_engine/tool/make_v01_fixture.dart",
+  "gyms": [
+    {
+      "id": "0548ddf3-3ca4-432d-927c-3455693ea8d2",
+      "name": "Hotel gym – 2nd floor",
+      "kit": 5
+    },
+    {
+      "id": "1c65be15-925e-4a17-bbd4-77b6d81ae550",
+      "name": "Condo",
+      "kit": 5
+    }
+  ],
+  "settings": {
+    "bodyweight_g": 82500,
+    "default_minutes": 40,
+    "rest_compound_s": 110,
+    "rest_isolation_s": 70
+  },
+  "sessions_total": 4,
+  "history": [
+    {
+      "uuid": "82a0189c-4262-4d4c-9b53-92139a07ed39",
+      "started_at_ms": 1795939919000,
+      "tz_offset_min": -300,
+      "gym_id": "1c65be15-925e-4a17-bbd4-77b6d81ae550",
+      "gym_name": "Condo",
+      "type_id": "push",
+      "duration_ms": 1167000,
+      "volume_kg": 897.5,
+      "set_count": 9
+    },
+    {
+      "uuid": "29b8340d-10c4-450f-9bfd-38f82ab4c357",
+      "started_at_ms": 1795679552000,
+      "tz_offset_min": 480,
+      "gym_id": "0548ddf3-3ca4-432d-927c-3455693ea8d2",
+      "gym_name": "Hotel gym – 2nd floor",
+      "type_id": null,
+      "duration_ms": 1167000,
+      "volume_kg": 770.0,
+      "set_count": 9
+    },
+    {
+      "uuid": "903953d0-62cf-46eb-ac83-ac73a6960f27",
+      "started_at_ms": 1795505090000,
+      "tz_offset_min": -300,
+      "gym_id": "1c65be15-925e-4a17-bbd4-77b6d81ae550",
+      "gym_name": "Condo",
+      "type_id": "pull",
+      "duration_ms": 1662000,
+      "volume_kg": 1810.0,
+      "set_count": 12
+    },
+    {
+      "uuid": "4a0215ee-6321-47dc-b0e6-c468e3a54323",
+      "started_at_ms": 1795417200000,
+      "tz_offset_min": 480,
+      "gym_id": "1c65be15-925e-4a17-bbd4-77b6d81ae550",
+      "gym_name": "Condo",
+      "type_id": "push",
+      "duration_ms": 1490000,
+      "volume_kg": 662.5,
+      "set_count": 10
+    }
+  ]
+}
