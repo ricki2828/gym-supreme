@@ -4,6 +4,7 @@ import 'package:gym_supreme/screens/body_screen.dart';
 import 'package:gym_supreme/screens/history_screen.dart';
 import 'package:gym_supreme/screens/post_workout_screen.dart';
 import 'package:gym_supreme/screens/view_models.dart';
+import 'package:gym_supreme/screens/workout_detail_screen.dart';
 import 'package:gym_supreme/widgets/body_map.dart';
 
 import 'fixtures.dart';
@@ -163,6 +164,41 @@ void main() {
         ),
       );
       expect(find.text('NEW'), findsOneWidget);
+    });
+  });
+
+  group('workout detail', () {
+    testWidgets('lifts in order with each set', (tester) async {
+      phone(tester);
+      await tester.pumpWidget(app(WorkoutDetailScreen(view: pushDetail)));
+      expect(find.text('PUSH'), findsOneWidget);
+      expect(find.text('Tue 24 Nov · Condo gym'), findsOneWidget);
+      expect(find.text('7,220 KG'), findsOneWidget);
+      expect(find.text('5'), findsWidgets, reason: '5 sets, skipped left out');
+      expect(find.text('10 × 22 KG EA'), findsNWidgets(2));
+      expect(find.text('8 × 22 KG EA'), findsOneWidget);
+      expect(find.text('SKIPPED'), findsOneWidget);
+      expect(find.text('0:45'), findsOneWidget);
+    });
+
+    testWidgets('a workout with no sets says so', (tester) async {
+      phone(tester);
+      await tester.pumpWidget(
+        app(
+          WorkoutDetailScreen(
+            view: WorkoutDetailView(
+              type: null,
+              startedAt: DateTime(2026, 11, 24),
+              gymName: 'Condo gym',
+              durationS: 60,
+              volumeKg: 0,
+              lifts: const [],
+            ),
+          ),
+        ),
+      );
+      expect(find.text('MIXED'), findsOneWidget);
+      expect(find.textContaining('No sets were logged'), findsOneWidget);
     });
   });
 }

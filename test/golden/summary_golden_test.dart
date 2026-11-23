@@ -5,6 +5,7 @@ import 'package:gym_supreme/screens/diagnostics_panel.dart';
 import 'package:gym_supreme/screens/history_screen.dart';
 import 'package:gym_supreme/screens/post_workout_screen.dart';
 import 'package:gym_supreme/screens/view_models.dart';
+import 'package:gym_supreme/screens/workout_detail_screen.dart';
 import 'package:supreme_ui/supreme_ui.dart';
 
 import '../screens/diagnostics_fixtures.dart' as diag;
@@ -96,5 +97,9 @@ void main() {
         ),
       ),
     ),
+  );
+  testWidgets(
+    'workout detail',
+    (t) => shot(t, 'workout_detail', WorkoutDetailScreen(view: pushDetail)),
   );
 }

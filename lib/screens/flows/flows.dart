@@ -24,6 +24,7 @@ import '../picker_screen.dart';
 import '../post_workout_screen.dart';
 import '../view_models.dart';
 import '../weight_list_screen.dart';
+import '../workout_detail_screen.dart';
 import '../../widgets/lit_widgets.dart';
 
 /// What every flow needs. Built once by the app shell (lib/app, t5t).
@@ -470,7 +471,15 @@ class _Today extends StatelessWidget {
               style: LitType.body(15, Lit.inkSecondary),
             )
           else
-            for (final r in rows) HistoryRowTile(row: r),
+            for (final r in rows)
+              HistoryRowTile(
+                row: r,
+                // Opens the workout's lifts and sets (review P2). Needs the
+                // store; without it the row stays read-only.
+                onOpen: deps.store == null
+                    ? null
+                    : (uuid) => _openDetail(context, uuid),
+              ),
           if (onOpenDiagnostics != null) ...[
             const SizedBox(height: 24),
             Center(
@@ -485,6 +494,22 @@ class _Today extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  void _openDetail(BuildContext context, String uuid) {
+    final w = deps.store!.workout(uuid);
+    final row = deps.engine
+        .history(limit: 500)
+        .where((r) => r.uuid == uuid)
+        .firstOrNull;
+    if (w == null || row == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => WorkoutDetailScreen(
+          view: workoutDetailOf(w, row: row, catalog: deps.catalog),
+        ),
       ),
     );
   }
