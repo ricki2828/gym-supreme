@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_supreme/app/workout_port.dart';
 
 String snap(String uuid, {int rev = 0}) =>
-    jsonEncode({'workout_uuid': uuid, 'rev': rev});
+    jsonEncode({'workout_uuid': uuid, 'rev': rev, 'state': 'active'});
 
 Matcher refused(String code) =>
     throwsA(isA<WorkoutPortException>().having((e) => e.code, 'code', code));
@@ -92,7 +92,12 @@ void main() {
 
     final p2 = StubWorkoutPort();
     await p2.startSession(snap('w2'));
-    final fin = jsonEncode({'workout_uuid': 'w2', 'rev': 1, 'finished': true});
+    final fin = jsonEncode({
+      'workout_uuid': 'w2',
+      'rev': 1,
+      'state': 'active',
+      'finished': true,
+    });
     expect(await p2.submitSnapshot(fin, 0), 1);
     expect(p2.running, isFalse);
     expect(await p2.finishSession(), fin);

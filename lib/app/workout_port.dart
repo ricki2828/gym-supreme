@@ -122,6 +122,7 @@ class StubWorkoutPort implements WorkoutPort {
       );
     }
     _uuidOf(snapshotJson);
+    _checkState(snapshotJson);
     _checkRev(snapshotJson, 0);
     _rev = 0;
     _running = true;
@@ -144,6 +145,7 @@ class StubWorkoutPort implements WorkoutPort {
     if (baseRev != _rev) {
       throw StaleRevException('base $baseRev, current $_rev');
     }
+    _checkState(snapshotJson);
     _checkRev(snapshotJson, _rev + 1);
     _rev++;
     // A paused or finished snapshot stops the service; an active one starts it.
@@ -238,6 +240,14 @@ class StubWorkoutPort implements WorkoutPort {
 
   /// The snapshot's `workout_uuid` (contracts/session_snapshot.md); a missing
   /// or non-string id is `bad_snapshot`, so null never matches null.
+  /// `state` is required (schema 1): active or paused.
+  static void _checkState(String json) {
+    final state = (jsonDecode(json) as Map<String, dynamic>)['state'];
+    if (state != 'active' && state != 'paused') {
+      throw WorkoutPortException('bad_snapshot', 'state $state');
+    }
+  }
+
   static String _uuidOf(String json) {
     final Object? id;
     try {
