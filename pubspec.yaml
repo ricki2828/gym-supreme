@@ -15,6 +15,9 @@ dependencies:
     path: packages/gym_engine
   supreme_ui:
     path: packages/supreme_ui
+  # SQLite is the source of truth (plan 7). 3.x bundles the native library through build
+  # hooks (sqlite3_flutter_libs is EOL); CI proves it loads on every emulator API level.
+  sqlite3: ^3.9.2
 
 dev_dependencies:
   flutter_test:
