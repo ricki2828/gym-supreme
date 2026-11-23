@@ -56,11 +56,29 @@ class AppServices {
   /// WAL checkpoint plus the backup snapshot (plan 7, B6). Called on
   /// pause/hide and before export. Both return false when the db is busy;
   /// the next pause retries.
+  ///
+  /// Never throws: a failure is counted (persist_failed) and the next pause
+  /// retries. Never writes an EMPTY database over a backup that was set
+  /// aside (refused or unrestored): the next Auto Backup would replace his
+  /// real cloud copy with nothing.
   void persist() {
-    store.checkpoint();
-    final snap = snapshotPath;
-    if (snap != null) store.writeSnapshot(snap);
+    try {
+      store.checkpoint();
+      final snap = snapshotPath;
+      if (snap == null) return;
+      if (engine.counters().sessionsTotal == 0 && hasSetAsideBackup(snap)) {
+        return;
+      }
+      store.writeSnapshot(snap);
+    } on Object catch (e) {
+      persistFailed++;
+      // ignore: avoid_print
+      print('GymSupreme/persist failed: $e');
+    }
   }
+
+  /// Failed persist() calls this launch (Diagnostics, export).
+  int persistFailed = 0;
 
   /// Native counters plus the app-side ones, for Diagnostics and export.
   Map<String, int> withAppCounters(Map<String, int> native) => {
@@ -68,6 +86,7 @@ class AppServices {
     'restore_failed': restoreFailed,
     'restore_pending': restorePending ? 1 : 0,
     'restore_gave_up': restoreGaveUp,
+    'persist_failed': persistFailed,
   };
 }
 
@@ -92,6 +111,18 @@ int _counter(String supportDir, String name, {required bool bump}) {
     f.writeAsStringSync('$n\n', flush: true);
   }
   return n;
+}
+
+/// True while a backup that could not be restored is kept aside: the
+/// snapshot moved to `backup/gym-snapshot.db.unrestored-<ms>` (give-up) or
+/// the engine moved it to `gym.db.refused-snapshot-<ms>` (refused).
+bool hasSetAsideBackup(String snapshotPath) {
+  final backupDir = File(snapshotPath).parent;
+  final filesDir = backupDir.parent;
+  bool any(Directory d, String marker) =>
+      d.existsSync() &&
+      d.listSync().any((f) => f.path.split('/').last.contains(marker));
+  return any(backupDir, '.unrestored-') || any(filesDir, '.refused-snapshot');
 }
 
 const int maxRestoreRetries = 3;
@@ -153,7 +184,8 @@ Future<AppServices> bootstrap() async {
   final host = GymHostApi();
   var versionCode = '?';
   try {
-    versionCode = '${(await host.getHostInfo()).versionCode}';
+    final info = await host.getHostInfo().timeout(const Duration(seconds: 2));
+    versionCode = '${info.versionCode}';
   } on Object {
     // Diagnostics still opens; the version line just shows '?'.
   }

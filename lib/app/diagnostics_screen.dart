@@ -64,14 +64,22 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
   }
 
   Future<void> _export({required bool csv}) async {
-    s.persist();
-    final files = s.engine.export(appVersion: s.appVersion, native: _native);
-    final stamp = DateTime.now().toUtc().toIso8601String().substring(0, 10);
-    await s.port.shareFile(
-      'gym-supreme-$stamp.${csv ? 'csv' : 'json'}',
-      csv ? eng.ExportFiles.csvMime : eng.ExportFiles.jsonMime,
-      csv ? files.csv : files.json,
-    );
+    s.persist(); // never throws; export must work even if the backup is broken
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final files = s.engine.export(
+        appVersion: s.appVersion,
+        native: s.withAppCounters(_native),
+      );
+      final stamp = DateTime.now().toUtc().toIso8601String().substring(0, 10);
+      await s.port.shareFile(
+        'gym-supreme-$stamp.${csv ? 'csv' : 'json'}',
+        csv ? eng.ExportFiles.csvMime : eng.ExportFiles.jsonMime,
+        csv ? files.csv : files.json,
+      );
+    } on Object catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
+    }
   }
 
   @override

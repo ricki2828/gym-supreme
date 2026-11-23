@@ -148,4 +148,62 @@ void main() {
     expect(restoreRetries(dir.path, pending: true), isFalse);
     expect(restoreRetries(dir.path, pending: true), isFalse);
   });
+
+  test('persist never writes an empty db over a set-aside backup', () {
+    final dir = Directory.systemTemp.createTempSync('gs-guard');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final snap = snapshotPath(dir.path);
+    File('$snap.unrestored-1')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('his real data');
+    final store = SqliteStore.open(databasePath(dir.path));
+    addTearDown(store.close);
+    final catalog = realCatalog();
+    final s = AppServices(
+      catalog: catalog,
+      store: store,
+      engine: eng.GymEngine(catalog: catalog, store: store),
+      port: StubWorkoutPort(),
+      appVersion: 't',
+      snapshotPath: snap,
+    );
+    expect(hasSetAsideBackup(snap), isTrue);
+    s.persist();
+    expect(
+      File(snap).existsSync(),
+      isFalse,
+      reason: 'empty db must not be snapshotted',
+    );
+    expect(s.persistFailed, 0);
+  });
+
+  test('persist failures are counted, never thrown', () {
+    final store = SqliteStore.inMemory();
+    final catalog = realCatalog();
+    final s = AppServices(
+      catalog: catalog,
+      store: store,
+      engine: eng.GymEngine(catalog: catalog, store: store),
+      port: StubWorkoutPort(),
+      appVersion: 't',
+      snapshotPath: '/nonexistent/dir/backup/gym-snapshot.db',
+    );
+    store.close();
+    s.persist();
+    expect(s.persistFailed, 1);
+    expect(s.withAppCounters(const {})['persist_failed'], 1);
+  });
+
+  testWidgets('a failed boot shows an error screen, not a blank app', (
+    tester,
+  ) async {
+    final port = StubWorkoutPort();
+    await tester.pumpWidget(
+      BootErrorApp(error: 'StateError: boom', port: port),
+    );
+    expect(find.byKey(const Key('boot.error')), findsOneWidget);
+    await tester.tap(find.text('Share error'));
+    await tester.pump();
+    expect(port.shared.single.$3, contains('boom'));
+  });
 }
