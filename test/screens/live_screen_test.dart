@@ -261,4 +261,39 @@ void main() {
       expect(find.text('SEC'), findsOneWidget);
     },
   );
+
+  testWidgets('rest before a timer block names the block, not 0:00', (
+    tester,
+  ) async {
+    phone(tester);
+    final b = liveView(restLeftS: 40, unit: LoadUnit.timed, reps: 0);
+    await tester.pumpWidget(
+      app(
+        LiveScreen(
+          view: LiveView(
+            type: b.type,
+            exerciseName: 'Wall balls',
+            lift: b.lift,
+            lifts: b.lifts,
+            set: b.set,
+            sets: b.sets,
+            rail: b.rail,
+            reps: 0,
+            loadG: null,
+            unit: LoadUnit.timed,
+            targetReps: 0,
+            targetLoadG: null,
+            restS: b.restS,
+            upNext: b.upNext,
+            elapsedS: 125, // header clock 2:05, so '0:00' would be the line
+            restLeftS: 40,
+            timerBlock: true,
+            blockTitle: 'EMOM 20 × 1:00',
+          ),
+        ),
+      ),
+    );
+    expect(find.text('EMOM 20 × 1:00'), findsOneWidget);
+    expect(find.text('0:00'), findsNothing);
+  });
 }

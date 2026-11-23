@@ -1,3 +1,4 @@
+import 'package:gym_engine/cut2.dart' as c2;
 import 'package:gym_engine/gym_engine.dart' as eng;
 
 import 'body_screen.dart';
@@ -167,6 +168,7 @@ LiveView? liveViewOf(
     paused: s.state == eng.SessionState.paused,
     // Only a cut-2 timer block carries a block; a plank (timed) does not.
     timerBlock: set.block != null,
+    blockTitle: c2.TimerSession.blockOf(s, set.setId)?.title,
   );
 }
 
