@@ -20,7 +20,6 @@ void main() {
           kit: condo.kit,
           equipment: equipmentFixture,
           presets: presetsFixture,
-          dumbbellMaxG: 25000,
           firstRun: true,
         ),
       ),

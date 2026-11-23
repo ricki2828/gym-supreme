@@ -3,6 +3,7 @@ import 'package:supreme_ui/supreme_ui.dart';
 
 import '../widgets/lit_widgets.dart';
 import 'view_models.dart';
+import 'weight_list_screen.dart';
 
 /// Kit ids by section, in display order (b-gym.png). Bodyweight is implied
 /// at every gym and never listed. Unknown ids from the catalog fall into
@@ -68,13 +69,13 @@ class GymSetupScreen extends StatelessWidget {
     required this.kit,
     required this.equipment,
     required this.presets,
-    required this.dumbbellMaxG,
+    this.weights = const [],
     this.firstRun = false,
     this.onPickGym,
     this.onAddGym,
     this.onPreset,
     this.onToggle,
-    this.onDumbbellMax,
+    this.onEditWeights,
     this.onSave,
   });
 
@@ -88,9 +89,9 @@ class GymSetupScreen extends StatelessWidget {
   final List<KitItem> equipment;
   final List<PresetView> presets;
 
-  /// Heaviest dumbbell pair at this gym, in grams (Q14: range unknown, so
-  /// first run asks).
-  final int dumbbellMaxG;
+  /// The ticked loaded items (dumbbells, cable and stack machines) and the
+  /// weights each really has (P1-2).
+  final List<WeightRow> weights;
   final bool firstRun;
 
   final ValueChanged<String>? onPickGym;
@@ -98,8 +99,8 @@ class GymSetupScreen extends StatelessWidget {
   final ValueChanged<String>? onPreset;
   final ValueChanged<String>? onToggle;
 
-  /// +1 or -1 step of 2.5 kg.
-  final ValueChanged<int>? onDumbbellMax;
+  /// Opens the weight list editor for a kit id.
+  final ValueChanged<String>? onEditWeights;
   final VoidCallback? onSave;
 
   @override
@@ -162,9 +163,7 @@ class GymSetupScreen extends StatelessWidget {
                         children: [
                           for (final item in s.value)
                             _KitPill(
-                              label: item.id == 'dumbbells'
-                                  ? 'Dumbbells to ${kg(dumbbellMaxG)} kg'
-                                  : item.name,
+                              label: item.name,
                               on: kit.contains(item.id),
                               onTap: onToggle == null
                                   ? null
@@ -172,15 +171,25 @@ class GymSetupScreen extends StatelessWidget {
                             ),
                         ],
                       ),
-                      if (s.key == 'Free weights' &&
-                          kit.contains('dumbbells')) ...[
-                        const SizedBox(height: 12),
-                        _DumbbellRange(
-                          maxG: dumbbellMaxG,
-                          onStep: onDumbbellMax,
-                        ),
-                      ],
                     ],
+                  if (weights.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    Text('WEIGHTS', style: LitType.display(30)),
+                    const SizedBox(height: 4),
+                    Text(
+                      'What each one really has. +/- and progression only '
+                      'use these.',
+                      style: LitType.body(14, Lit.inkSecondary),
+                    ),
+                    const SizedBox(height: 6),
+                    for (final w in weights)
+                      _WeightTile(
+                        row: w,
+                        onTap: onEditWeights == null
+                            ? null
+                            : () => onEditWeights!(w.id),
+                      ),
+                  ],
                   const SizedBox(height: 14),
                   Text(
                     'Tap to add or drop. Plans only use what is lit.',
@@ -399,71 +408,52 @@ class _KitPill extends StatelessWidget {
   }
 }
 
-class _DumbbellRange extends StatelessWidget {
-  const _DumbbellRange({required this.maxG, this.onStep});
-  final int maxG;
-  final ValueChanged<int>? onStep;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.fromLTRB(16, 6, 6, 6),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      border: Border.all(color: Lit.hair, width: 2),
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            'Heaviest dumbbell pair',
-            style: LitType.body(15, Lit.ink, FontWeight.w600),
-          ),
-        ),
-        _Step(
-          icon: Icons.remove,
-          label: 'Lighter',
-          onTap: onStep == null ? null : () => onStep!(-1),
-        ),
-        SizedBox(
-          width: 84,
-          child: Text(
-            '${kg(maxG)} KG',
-            textAlign: TextAlign.center,
-            style: LitType.display(28),
-          ),
-        ),
-        _Step(
-          icon: Icons.add,
-          label: 'Heavier',
-          onTap: onStep == null ? null : () => onStep!(1),
-        ),
-      ],
-    ),
-  );
-}
-
-class _Step extends StatelessWidget {
-  const _Step({required this.icon, required this.label, this.onTap});
-  final IconData icon;
-  final String label;
+class _WeightTile extends StatelessWidget {
+  const _WeightTile({required this.row, this.onTap});
+  final WeightRow row;
   final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: label,
+    button: onTap != null,
+    label:
+        '${row.name}, ${row.summary}'
+        '${row.fromDefaults ? ', app guesses' : ''}',
+    onTapHint: 'edit weights',
     excludeSemantics: true,
     onTap: onTap,
-    child: Material(
-      color: Lit.ink,
-      shape: const CircleBorder(),
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: SizedBox(
-          width: 48,
-          height: 48,
-          child: Icon(icon, color: Colors.white),
+    child: InkWell(
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 56),
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Lit.hair)),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    row.name,
+                    style: LitType.body(16, Lit.ink, FontWeight.w700),
+                  ),
+                  Text(
+                    row.fromDefaults
+                        ? '${row.summary} · app guesses, set yours'
+                        : row.summary,
+                    style: LitType.body(
+                      14,
+                      row.fromDefaults ? Lit.inkQuiet : Lit.inkSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text('Edit', style: LitType.body(15, Lit.ink, FontWeight.w800)),
+            const Icon(Icons.chevron_right, color: Lit.ink),
+          ],
         ),
       ),
     ),
