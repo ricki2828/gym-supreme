@@ -1,0 +1,42 @@
+{
+  "made_by": "v0.1.0-dogfood (4c9f1a6), packages/gym_engine/tool/make_v01_fixture.dart",
+  "gyms": [
+    {
+      "id": "1c65be15-925e-4a17-bbd4-77b6d81ae550",
+      "name": "Condo"
+    }
+  ],
+  "sessions_total": 3,
+  "history": [
+    {
+      "uuid": "69713c14-2e72-4fb3-9689-fc0db376c67a",
+      "started_at_ms": 1795765080000,
+      "tz_offset_min": 480,
+      "gym_id": "1c65be15-925e-4a17-bbd4-77b6d81ae550",
+      "type_id": null,
+      "duration_ms": 1140000,
+      "volume_kg": 750.0,
+      "set_count": 9
+    },
+    {
+      "uuid": "a473ff7b-b3cd-4899-a04d-ea0fbd30a72e",
+      "started_at_ms": 1795591140000,
+      "tz_offset_min": 480,
+      "gym_id": "1c65be15-925e-4a17-bbd4-77b6d81ae550",
+      "type_id": null,
+      "duration_ms": 1140000,
+      "volume_kg": 1125.0,
+      "set_count": 9
+    },
+    {
+      "uuid": "8f011cb3-7ec7-4e09-9969-f72228b8337e",
+      "started_at_ms": 1795417200000,
+      "tz_offset_min": 480,
+      "gym_id": "1c65be15-925e-4a17-bbd4-77b6d81ae550",
+      "type_id": null,
+      "duration_ms": 1140000,
+      "volume_kg": 750.0,
+      "set_count": 9
+    }
+  ]
+}
