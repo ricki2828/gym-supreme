@@ -450,12 +450,9 @@ void main() {
     await tester.tap(find.byType(ListTile).first);
     await tester.pumpAndSettle();
     expect(port.rev, before + 1, reason: 'one submit for the swap');
-    // Pause is in the header, which scrolled up with the list.
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('live.pause')),
-      -200,
-      scrollable: find.byType(Scrollable).first,
-    );
+    // Pause is in the header, which scrolled up with the list: back to top.
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 3000));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('live.pause')));
     await tester.pumpAndSettle();
   });

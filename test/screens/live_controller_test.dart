@@ -477,7 +477,10 @@ void main() {
       await startPush();
       await c.setLoad(12000);
       await c.done();
-      expect(c.view()!.undoLabel, contains('12 kg ea'));
+      expect(
+        c.view()!.undoLabel,
+        contains('× 12 kg'),
+      ); // ea or not: #42 may lead with a stack
       expect(c.view()!.restLeftS, isNotNull);
       await c.undoLast();
       final first = c.snapshot!.exercises.first.sets.first;
