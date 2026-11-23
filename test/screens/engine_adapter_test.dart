@@ -138,4 +138,18 @@ void main() {
     expect(dayOfWindow(first, tue, tzOffsetMin: 480), 2);
     expect(dayOfWindow(first, first + 13 * 86400000, tzOffsetMin: 480), 14);
   });
+
+  test('timerBlock follows the set block, not the timed unit', () {
+    final plan = engine.suggest(gymId: gym.id, muscleIds: const ['chest']);
+    final s = eng.Session.start(plan, nowMs: now, tzOffsetMin: 480);
+    expect(liveViewOf(s, nowMs: now)!.timerBlock, isFalse);
+    final c = s.current!;
+    final ex = s.exercises[c.exercise];
+    final sets = [...ex.sets];
+    sets[c.set] = sets[c.set].copyWith(block: {'type': 'emom'});
+    final withBlock = s.copyWith(
+      exercises: [...s.exercises]..[c.exercise] = ex.withSets(sets),
+    );
+    expect(liveViewOf(withBlock, nowMs: now)!.timerBlock, isTrue);
+  });
 }
