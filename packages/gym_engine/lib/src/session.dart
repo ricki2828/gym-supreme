@@ -160,11 +160,24 @@ class Session {
     );
     final next = _replaceSet(s, at.e, at.s, back);
     final clears = s.rest?.setId == setId;
+    // Restore readiness when this set was the last thing logged: it owns the
+    // running rest, or nothing is running and no done set ended after it.
+    var latest = true;
+    for (final e in s.exercises) {
+      for (final x in e.sets) {
+        if (x.state == SetState.done &&
+            x.setId != setId &&
+            (x.endedAtMs ?? 0) > (set.endedAtMs ?? 0)) {
+          latest = false;
+        }
+      }
+    }
+    final restore = clears || (s.rest == null && latest);
     return next.copyWith(
       rev: s.rev + 1,
       rest: clears ? null : s.rest,
       // The undone set is ready again from when it first started.
-      setReadyAtMs: clears
+      setReadyAtMs: restore
           ? (set.startedAtMs ?? s.setReadyAtMs)
           : s.setReadyAtMs,
     );

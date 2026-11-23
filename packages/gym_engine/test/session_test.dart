@@ -170,6 +170,18 @@ void main() {
     expect(s.exercises[0].sets[1].startedAtMs, t0 + 150000);
   });
 
+  test('undo of the final set (no rest running) restores its start', () {
+    var s = start();
+    s = Session.done(s, 'u:0', nowMs: t0 + 60000);
+    s = Session.done(s, 'u:1', nowMs: t0 + 200000);
+    s = Session.done(s, 'u:2', nowMs: t0 + 300000);
+    expect(s.rest, isNull);
+    final began = s.exercises[1].sets[0].startedAtMs;
+    s = Session.undo(s, 'u:2');
+    s = Session.done(s, 'u:2', nowMs: t0 + 320000);
+    expect(s.exercises[1].sets[0].startedAtMs, began);
+  });
+
   test('double tap on the same set logs one set (no-op, same rev)', () {
     final a = Session.done(start(), 'u:0', nowMs: t0 + 1);
     final b = Session.done(a, 'u:0', nowMs: t0 + 2);
@@ -346,7 +358,7 @@ void main() {
     );
   });
 
-  test('undo restores the set start; cold start beats lock screen', () {
+  test('undo restores the set start', () {
     var s = Session.done(start(), 'u:0', nowMs: t0 + 60000);
     s = Session.done(s, 'u:1', nowMs: t0 + 200000);
     s = Session.undo(s, 'u:1');
