@@ -246,6 +246,29 @@ class GymHostApi {
     )
     ;
   }
+
+  /// CI e2e (phase-1 exit): the `gym_e2e` string extra of the latest launch
+  /// intent (onCreate or onNewIntent), returned once and then cleared. Dogfood
+  /// and debug builds only; always null on play. Dart calls it on start and on
+  /// every resume.
+  Future<String?> takeLaunchCommand() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.GymHostApi.takeLaunchCommand$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+    return pigeonVar_replyValue as String?;
+  }
 }
 
 /// Cut-1 live workout contract (t3x decision 23-Nov, integration doc ruling 1).
