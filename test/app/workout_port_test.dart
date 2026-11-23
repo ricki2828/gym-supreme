@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_supreme/app/workout_port.dart';
 
 String snap(String uuid, {int rev = 0}) =>
-    jsonEncode({'uuid': uuid, 'rev': rev});
+    jsonEncode({'workout_uuid': uuid, 'rev': rev});
 
 Matcher refused(String code) =>
     throwsA(isA<WorkoutPortException>().having((e) => e.code, 'code', code));
@@ -92,7 +92,7 @@ void main() {
 
     final p2 = StubWorkoutPort();
     await p2.startSession(snap('w2'));
-    final fin = jsonEncode({'uuid': 'w2', 'rev': 1, 'finished': true});
+    final fin = jsonEncode({'workout_uuid': 'w2', 'rev': 1, 'finished': true});
     expect(await p2.submitSnapshot(fin, 0), 1);
     expect(p2.running, isFalse);
     expect(await p2.finishSession(), fin);
@@ -102,7 +102,11 @@ void main() {
   test('a paused snapshot stops the service; delete then allowed', () async {
     final port = StubWorkoutPort();
     await port.startSession(snap('w1'));
-    final paused = jsonEncode({'uuid': 'w1', 'rev': 1, 'state': 'paused'});
+    final paused = jsonEncode({
+      'workout_uuid': 'w1',
+      'rev': 1,
+      'state': 'paused',
+    });
     await port.submitSnapshot(paused, 0);
     expect(port.running, isFalse);
     await port.pauseSession();
@@ -160,6 +164,25 @@ void main() {
       expect(StubWorkoutPort().pauseSession, refused('not_running'));
       await other.deleteJournal('w2');
       expect(await other.readPendingJournal(), isNull);
+    },
+  );
+
+  test(
+    'workout_uuid is the key (schema 1); a missing id is bad_snapshot',
+    () async {
+      final port = StubWorkoutPort();
+      expect(
+        () => port.startSession(jsonEncode({'uuid': 'w1', 'rev': 0})),
+        refused('bad_snapshot'),
+      );
+      await port.startSession(snap('w1'));
+      expect(
+        () => port.submitSnapshot(jsonEncode({'rev': 1}), 0),
+        refused('bad_snapshot'),
+      );
+      await port.finishSession();
+      await port.deleteJournal('w1'); // B1 finish order completes
+      expect(await port.readPendingJournal(), isNull);
     },
   );
 }

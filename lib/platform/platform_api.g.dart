@@ -249,6 +249,9 @@ class GymHostApi {
 /// [WorkoutEvents.snapshots] either way.
 /// [pauseSession] is idempotent while an unfinished journal exists;
 /// `not_running` when there is none or it is finished.
+/// Snapshots are listened to by rev: the preferred finish path emits the
+/// finished snapshot twice (submit, then finishSession), so ignore a rev
+/// already seen. `state` is required (schema 1).
 /// [deleteJournal] on a paused, unfinished journal discards that workout;
 /// `still_running` only while the service is active for that uuid.
 class WorkoutApi {

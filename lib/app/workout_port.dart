@@ -121,6 +121,7 @@ class StubWorkoutPort implements WorkoutPort {
         pending['finished'] == true ? 'finish_pending' : 'already_running',
       );
     }
+    _uuidOf(snapshotJson);
     _checkRev(snapshotJson, 0);
     _rev = 0;
     _running = true;
@@ -137,7 +138,7 @@ class StubWorkoutPort implements WorkoutPort {
     final head = _journalMap();
     if (head == null) throw WorkoutPortException('not_running');
     if (head['finished'] == true) throw WorkoutPortException('finished');
-    if (_uuidOf(snapshotJson) != head['uuid']) {
+    if (_uuidOf(snapshotJson) != head['workout_uuid']) {
       throw WorkoutPortException('wrong_workout');
     }
     if (baseRev != _rev) {
@@ -191,7 +192,9 @@ class StubWorkoutPort implements WorkoutPort {
     if (_running) throw WorkoutPortException('still_running');
     final map = _journalMap();
     if (map == null) return;
-    if (map['uuid'] != workoutUuid) throw WorkoutPortException('wrong_workout');
+    if (map['workout_uuid'] != workoutUuid) {
+      throw WorkoutPortException('wrong_workout');
+    }
     _journal = null;
   }
 
@@ -233,12 +236,19 @@ class StubWorkoutPort implements WorkoutPort {
     }
   }
 
-  static Object? _uuidOf(String json) {
+  /// The snapshot's `workout_uuid` (contracts/session_snapshot.md); a missing
+  /// or non-string id is `bad_snapshot`, so null never matches null.
+  static String _uuidOf(String json) {
+    final Object? id;
     try {
-      return (jsonDecode(json) as Map<String, dynamic>)['uuid'];
+      id = (jsonDecode(json) as Map<String, dynamic>)['workout_uuid'];
     } on Object {
       throw WorkoutPortException('bad_snapshot');
     }
+    if (id is! String || id.isEmpty) {
+      throw WorkoutPortException('bad_snapshot', 'no workout_uuid');
+    }
+    return id;
   }
 
   Future<void> dispose() => _controller.close();
