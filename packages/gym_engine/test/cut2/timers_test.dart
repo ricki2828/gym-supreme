@@ -156,6 +156,82 @@ void main() {
       }
     });
 
+    test('corrupt json throws FormatException, never TypeError', () {
+      for (final bad in <Map<String, Object?>>[
+        {},
+        {'type': 7},
+        {'type': 'emom', 'rounds': '20'},
+        {'type': 'emom', 'rounds': 20.5},
+      ]) {
+        expect(
+          () => TimerBlock.fromJson(bad),
+          throwsFormatException,
+          reason: '$bad',
+        );
+      }
+      expect(() => TimerCue.fromJson({'index': 0}), throwsFormatException);
+      expect(
+        () => TimedResult.fromJson({'round_marks_ms': {}}),
+        throwsFormatException,
+      );
+      expect(
+        () => TimedResult.fromJson({
+          'round_marks_ms': ['x'],
+        }),
+        throwsFormatException,
+      );
+      expect(
+        () => TimedResult.fromJson({'amrap_rounds': 2.0}),
+        throwsFormatException,
+      );
+    });
+
+    test('fields the type ignores must be 0', () {
+      expect(
+        () => TimerBlock.fromJson({
+          'type': 'emom',
+          'work_ms': 60000,
+          'rounds': 3,
+          'rest_ms': -5,
+        }),
+        throwsArgumentError,
+      );
+      expect(
+        () => TimerBlock.fromJson({
+          'type': 'amrap',
+          'cap_ms': 60000,
+          'rounds': -4,
+        }),
+        throwsArgumentError,
+      );
+      expect(
+        () => TimerBlock.fromJson({
+          'type': 'interval',
+          'work_ms': 20000,
+          'rounds': 2,
+          'cap_ms': 9000,
+        }),
+        throwsArgumentError,
+      );
+    });
+
+    test('whole seconds only', () {
+      expect(
+        () => TimerBlock.emom(rounds: 3, periodMs: 5001),
+        throwsArgumentError,
+      );
+      expect(
+        () => TimerBlock.amrap(capMs: 60000, warnMs: 500),
+        throwsArgumentError,
+      );
+    });
+
+    test('AMRAP done state keeps round 1', () {
+      final b = TimerBlock.amrap(capMs: 60000, warnMs: 0);
+      expect(b.stateAt(60000).phase, TimerPhase.done);
+      expect(b.stateAt(60000).round, 1);
+    });
+
     test('fromJson re-validates and rejects unknown types', () {
       expect(
         () => TimerBlock.fromJson({
@@ -224,10 +300,33 @@ void main() {
       },
     );
 
-    test('a cue exactly at the pause point counts as fired', () {
+    test('a cue at or just before the pause point is resent at 0', () {
+      // Kotlin may not have fired it yet (clock skew); its set_id + index
+      // dedup makes the resend harmless.
       final j = TimerBlock.emom(rounds: 3)
+          .toSnapshotBlock(elapsedBeforeMs: 60500);
+      expect(j['cues'], [
+        {'index': 1, 'at_ms': 0, 'kind': 'emom_minute', 'label': 'EMOM 2 of 3'},
+        {
+          'index': 2,
+          'at_ms': 59500,
+          'kind': 'emom_minute',
+          'label': 'EMOM 3 of 3',
+        },
+        {'index': 3, 'at_ms': 119500, 'kind': 'block_end', 'label': 'Done'},
+      ]);
+      // More than the grace behind: dropped.
+      final k = TimerBlock.emom(rounds: 3)
+          .toSnapshotBlock(elapsedBeforeMs: 61001);
+      expect([for (final c in k['cues'] as List) (c as Map)['index']], [2, 3]);
+    });
+
+    test('block_end is never lost, even paused exactly at the end', () {
+      final j = TimerBlock.emom(rounds: 1)
           .toSnapshotBlock(elapsedBeforeMs: 60000);
-      expect([for (final c in j['cues'] as List) (c as Map)['index']], [2, 3]);
+      expect(j['cues'], [
+        {'index': 1, 'at_ms': 0, 'kind': 'block_end', 'label': 'Done'},
+      ]);
     });
 
     test('elapsedBeforeMs outside the block is rejected', () {
@@ -286,6 +385,17 @@ void main() {
         isNotEmpty,
       );
       expect(const TimedResult(stoppedAtMs: 30000).problems(amrap), isEmpty);
+      expect(
+        const TimedResult(
+          roundMarksMs: [40000],
+          stoppedAtMs: 30000,
+        ).problems(amrap),
+        contains('mark after stop'),
+      );
+      expect(
+        const TimedResult(amrapExtraReps: 3).problems(amrap),
+        contains('extra reps without rounds'),
+      );
     });
   });
 

@@ -79,10 +79,10 @@ class TimerCue {
   };
 
   factory TimerCue.fromJson(Map<String, Object?> j) => TimerCue(
-    j['index'] as int,
-    TimerCueKind.fromWire(j['kind'] as String),
-    j['at_ms'] as int,
-    j['label'] as String,
+    _reqInt(j, 'index'),
+    TimerCueKind.fromWire(_reqString(j, 'kind')),
+    _reqInt(j, 'at_ms'),
+    _reqString(j, 'label'),
   );
 
   @override
@@ -231,6 +231,16 @@ class TimerBlock {
       leadInMs >= 0 && leadInMs <= TimerLimits.maxLeadInMs,
       'lead-in $leadInMs',
     );
+    // Whole seconds only: titles, labels and the countdown show seconds.
+    for (final (name, v) in [
+      ('work', workMs),
+      ('rest', restMs),
+      ('cap', capMs),
+      ('lead-in', leadInMs),
+      ('warn', warnMs),
+    ]) {
+      check(v % 1000 == 0, '$name $v not whole seconds');
+    }
     switch (type) {
       case TimerType.emom:
         check(
@@ -239,6 +249,7 @@ class TimerBlock {
           'period $workMs',
         );
         check(rounds >= 1 && rounds <= TimerLimits.maxRounds, 'rounds $rounds');
+        check(restMs == 0 && capMs == 0 && warnMs == 0, 'emom extra fields');
       case TimerType.interval:
         check(
           workMs >= TimerLimits.minPeriodMs &&
@@ -250,12 +261,14 @@ class TimerBlock {
           'rest $restMs',
         );
         check(rounds >= 1 && rounds <= TimerLimits.maxRounds, 'rounds $rounds');
+        check(capMs == 0 && warnMs == 0, 'interval extra fields');
       case TimerType.amrap:
         check(
           capMs >= TimerLimits.minCapMs && capMs <= TimerLimits.maxBlockMs,
           'cap $capMs',
         );
         check(warnMs >= 0 && warnMs < capMs, 'warn $warnMs');
+        check(workMs == 0 && restMs == 0 && rounds == 0, 'amrap extra fields');
     }
     final b = TimerBlock._(
       type: type,
@@ -362,7 +375,7 @@ class TimerBlock {
     if (t >= total) {
       return TimerState(
         phase: TimerPhase.done,
-        round: rounds,
+        round: type == TimerType.amrap ? 1 : rounds,
         rounds: rounds,
         phaseRemainingMs: 0,
         totalRemainingMs: 0,
@@ -418,10 +431,15 @@ class TimerBlock {
   ///
   /// [startedAtWallMs] is null until he taps Start. On a resume after pause,
   /// pass the new wall-clock anchor and [elapsedBeforeMs] (block time already
-  /// run, lead-in included): cues already behind are dropped and the rest are
-  /// re-based so `at_ms` is again an offset from [startedAtWallMs]. Each cue
+  /// run, lead-in included): cues more than [resumeGraceMs] behind are
+  /// dropped; a cue near the pause point is resent at 0 (Dart's wall clock
+  /// and Kotlin's elapsedRealtime disagree by a few ms, and Kotlin's set_id +
+  /// index dedup makes a resend harmless, so `block_end` is never lost); the
+  /// rest are re-based so `at_ms` is again an offset from [startedAtWallMs]. Each cue
   /// keeps its original `index`, so Kotlin's set_id + index key never fires a
   /// cue twice across a pause.
+  static const int resumeGraceMs = 1000;
+
   Map<String, Object?> toSnapshotBlock({
     int? startedAtWallMs,
     int elapsedBeforeMs = 0,
@@ -435,10 +453,10 @@ class TimerBlock {
       'elapsed_before_ms': elapsedBeforeMs,
       'cues': [
         for (final c in cues())
-          if (c.atMs > elapsedBeforeMs || (elapsedBeforeMs == 0 && c.atMs == 0))
+          if (c.atMs >= elapsedBeforeMs - resumeGraceMs)
             {
               'index': c.index,
-              'at_ms': c.atMs - elapsedBeforeMs,
+              'at_ms': c.atMs > elapsedBeforeMs ? c.atMs - elapsedBeforeMs : 0,
               'kind': c.kind.wire,
               'label': c.label,
             },
@@ -459,9 +477,9 @@ class TimerBlock {
   /// Decodes and re-validates; a bad block throws (ArgumentError or
   /// FormatException) rather than producing a cue list the service can't run.
   factory TimerBlock.fromJson(Map<String, Object?> j) {
-    int i(String k) => (j[k] as int?) ?? 0;
+    int i(String k) => _optInt(j, k) ?? 0;
     return TimerBlock._validated(
-      type: TimerType.fromWire(j['type'] as String),
+      type: TimerType.fromWire(_reqString(j, 'type')),
       workMs: i('work_ms'),
       restMs: i('rest_ms'),
       rounds: i('rounds'),
@@ -534,6 +552,10 @@ class TimedResult {
     }
     final s = stoppedAtMs;
     if (s != null && (s < 0 || s > block.blockMs)) p.add('stop $s outside');
+    if (s != null && roundMarksMs.any((m) => m > s)) p.add('mark after stop');
+    if (amrapExtraReps != null && amrapRounds == null) {
+      p.add('extra reps without rounds');
+    }
     return p;
   }
 
@@ -544,14 +566,21 @@ class TimedResult {
     'stopped_at_ms': stoppedAtMs,
   };
 
-  factory TimedResult.fromJson(Map<String, Object?> j) => TimedResult(
-    roundMarksMs: [
-      for (final m in (j['round_marks_ms'] as List? ?? const [])) m as int,
-    ],
-    amrapRounds: j['amrap_rounds'] as int?,
-    amrapExtraReps: j['amrap_extra_reps'] as int?,
-    stoppedAtMs: j['stopped_at_ms'] as int?,
-  );
+  factory TimedResult.fromJson(Map<String, Object?> j) {
+    final marks = j['round_marks_ms'];
+    if (marks != null && marks is! List) {
+      throw FormatException('round_marks_ms: $marks');
+    }
+    return TimedResult(
+      roundMarksMs: [
+        for (final m in (marks as List?) ?? const [])
+          m is int ? m : throw FormatException('round mark: $m'),
+      ],
+      amrapRounds: _optInt(j, 'amrap_rounds'),
+      amrapExtraReps: _optInt(j, 'amrap_extra_reps'),
+      stoppedAtMs: _optInt(j, 'stopped_at_ms'),
+    );
+  }
 
   @override
   bool operator ==(Object other) =>
@@ -604,6 +633,22 @@ String formatClock(int ms) {
   final ss = (s % 60).toString().padLeft(2, '0');
   if (h > 0) return '$h:${m.toString().padLeft(2, '0')}:$ss';
   return '$m:$ss';
+}
+
+int? _optInt(Map<String, Object?> j, String k) {
+  final v = j[k];
+  if (v == null) return null;
+  if (v is! int) throw FormatException('$k: $v');
+  return v;
+}
+
+int _reqInt(Map<String, Object?> j, String k) =>
+    _optInt(j, k) ?? (throw FormatException('missing $k'));
+
+String _reqString(Map<String, Object?> j, String k) {
+  final v = j[k];
+  if (v is! String) throw FormatException('$k: $v');
+  return v;
 }
 
 bool _intListEq(List<int> a, List<int> b) {
