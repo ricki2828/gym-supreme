@@ -1,36 +1,104 @@
 import 'package:flutter/material.dart';
-import 'package:supreme_ui/supreme_ui.dart';
+import 'package:gym_engine/gym_engine.dart' as eng;
 
+import '../screens/diagnostics_panel.dart';
+import '../screens/engine_adapter.dart';
 import '../spike/spike_screen.dart';
 import 'flavor.dart';
+import 'services.dart';
 
-/// Dogfood and debug only. Keeps the phase-0 spike checklist (S1-S4) reachable
-/// from 0.1 on (t3x, 23-Nov).
-class DiagnosticsScreen extends StatelessWidget {
-  const DiagnosticsScreen({super.key});
+/// Hosts the UI lane's DiagnosticsPanel: gate counters, native counters,
+/// device facts, export, and (dogfood/debug only) the spike checklist.
+class DiagnosticsScreen extends StatefulWidget {
+  const DiagnosticsScreen({super.key, required this.services});
+
+  final AppServices services;
+
+  @override
+  State<DiagnosticsScreen> createState() => _DiagnosticsScreenState();
+}
+
+class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
+  Map<String, int> _native = const {};
+  DeviceView? _device;
+
+  AppServices get s => widget.services;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    Map<String, int> native = const {};
+    DeviceView? device;
+    try {
+      native = s.withAppCounters(await s.port.nativeCounters());
+    } on Object {
+      // The panel still renders the gate rows.
+      native = s.withAppCounters(const {});
+    }
+    final host = s.host;
+    if (host != null) {
+      try {
+        final h = await host.getHostInfo();
+        device = DeviceView(
+          model: h.model,
+          sdkInt: h.sdkInt,
+          release: h.release,
+          versionCode: h.versionCode,
+          notificationsEnabled: h.notificationsEnabled,
+          batterySaver: h.batterySaver,
+        );
+      } on Object {
+        device = null;
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _native = native;
+        _device = device;
+      });
+    }
+  }
+
+  Future<void> _export({required bool csv}) async {
+    s.persist();
+    final files = s.engine.export(appVersion: s.appVersion, native: _native);
+    final stamp = DateTime.now().toUtc().toIso8601String().substring(0, 10);
+    await s.port.shareFile(
+      'gym-supreme-$stamp.${csv ? 'csv' : 'json'}',
+      csv ? eng.ExportFiles.csvMime : eng.ExportFiles.jsonMime,
+      csv ? files.csv : files.json,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final host = s.host;
     return Scaffold(
       appBar: AppBar(title: const Text('Diagnostics')),
-      body: ListView(
-        children: [
-          ListTile(
-            title: const Text('Build'),
-            subtitle: Text('$flavor · $buildLabel'),
-          ),
-          ListTile(
-            key: const Key('diagnostics.spike'),
-            title: const Text('Spike checklist (S1-S4)'),
-            subtitle: const Text('Rest alert, EMOM, strap, install-over'),
-            trailing: Icon(Icons.chevron_right, color: Lit.inkQuiet),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => SpikeScreen(buildLabel: buildLabel),
-              ),
-            ),
-          ),
-        ],
+      body: DiagnosticsPanel(
+        appVersion: s.appVersion,
+        gate: gateViewOf(
+          s.engine.counters(),
+          nowMs: DateTime.now().millisecondsSinceEpoch,
+        ),
+        native: _native,
+        device: _device,
+        onExportJson: () => _export(csv: false),
+        onExportCsv: () => _export(csv: true),
+        onOpenNotificationSettings: host == null
+            ? null
+            : () => host.openNotificationSettings(),
+        onOpenSpike: showDiagnostics
+            ? () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => SpikeScreen(buildLabel: buildLabel),
+                ),
+              )
+            : null,
       ),
     );
   }
