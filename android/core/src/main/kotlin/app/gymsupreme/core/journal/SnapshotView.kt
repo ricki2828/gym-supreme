@@ -61,7 +61,7 @@ data class SnapshotView(
                     } else if (current == null) {
                         current = Current(
                             exerciseName = e.str("name"),
-                            setNumber = i + 1,
+                            setNumber = (set.longOrNull("set_ordinal") ?: (i + 1).toLong()).toInt(),
                             setCount = sets.size,
                             loadG = set.longOrNull("target_load_g"),
                             reps = set.longOrNull("target_reps"),

@@ -2,6 +2,7 @@ package app.gymsupreme.workout
 
 import android.content.Context
 import android.content.SharedPreferences
+import app.gymsupreme.core.journal.FinishStamp
 import app.gymsupreme.core.journal.Journal
 import app.gymsupreme.core.journal.SnapshotView
 import app.gymsupreme.core.json.Json
@@ -108,12 +109,7 @@ class LiveSession private constructor(private val context: Context) {
             WorkoutService.instance?.endSession("finish")
             return line
         }
-        val snap = LinkedHashMap(Json.parseObject(line))
-        snap[Journal.F_REV] = cur.rev + 1
-        snap[Journal.F_FINISHED] = true
-        if (snap["ended_at_ms"] == null) snap["ended_at_ms"] = System.currentTimeMillis()
-        snap["rest"] = null
-        val out = JsonWriter.write(snap)
+        val out = JsonWriter.write(FinishStamp.stamp(Json.parseObject(line), System.currentTimeMillis()))
         val r = Journal.submit(out, cur.rev, cur, isStart = false)
         if (r is Journal.Submit.Rejected) throw Refused(r.code, r.message)
         store.append(out)
