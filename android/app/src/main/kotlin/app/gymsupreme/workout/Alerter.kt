@@ -23,8 +23,9 @@ import android.os.VibratorManager
  *   would beep out loud in the gym ~20 times a session; media goes to the headset only. Media
  *   volume 0 means no tone (logged); the buzz still fires. DND set to block media (or Total
  *   Silence) also mutes it; the buzz still fires. Played at [HEADSET_TONE_VOLUME], not full scale,
- *   since a 0 dBFS sine in the ears is much louder than music at the same volume. An idle
- *   Bluetooth link takes a few hundred ms to wake, so the tone is lengthened there. The
+ *   since a 0 dBFS sine in the ears is much louder than music at the same volume. Known risk, not
+ *   handled: an idle Bluetooth link can take a few hundred ms to wake and clip the short beep
+ *   (TONE_PROP_BEEP2 has a fixed length, so a longer duration does not help). Device check. The
  * vibration is tagged as an alarm so Android 13+ does not drop it while the screen is off.
  * [fire] returns how each part went ("ok", "skipped:<why>" or "error:<what>"); the spike logs
  * both. Runs on the service's cue thread; focus is given back on that thread after the tone.
@@ -41,15 +42,14 @@ class Alerter(context: Context, private val handler: Handler) {
     fun fire(long: Boolean): Result {
         val v = vibrate(if (long) longArrayOf(0, 400, 150, 400) else longArrayOf(0, 300))
         val headset = headsetType()
-        val wake = if ((headset == "bt_a2dp" || headset == "ble_headset") && !audio.isMusicActive) BT_WAKE_MS else 0
-        val ms = (if (long) TONE_LONG_MS else TONE_MS) + wake
+        val ms = if (long) TONE_LONG_MS else TONE_MS
         if (headset != null && audio.getStreamVolume(AudioManager.STREAM_MUSIC) == 0) {
             return Result("skipped:media_volume_0", "$METHOD_HEADSET:$headset", v, "none")
         }
         val stream = if (headset != null) AudioManager.STREAM_MUSIC else AudioManager.STREAM_ALARM
         val f = requestFocus(if (headset != null) HEADSET_ATTRS else ALARM_ATTRS)
         val a = playTone(stream, ms)
-        handler.postDelayed({ abandonFocus() }, ms + 250L + wake)
+        handler.postDelayed({ abandonFocus() }, ms + 250L)
         val method = if (headset != null) "$METHOD_HEADSET:$headset" else METHOD
         return Result(a, method, v, f)
     }
@@ -171,11 +171,8 @@ class Alerter(context: Context, private val handler: Handler) {
         const val METHOD = "tonegen:stream_alarm+focus:transient_may_duck"
         const val METHOD_HEADSET = "tonegen:stream_music+focus:transient_may_duck"
 
-        /** Percent of media volume on the headset path (alarm path stays at max). */
-        const val HEADSET_TONE_VOLUME = 60
-
-        /** Extra tone length on an idle Bluetooth link (A2DP/LE wake-up can clip the start). */
-        private const val BT_WAKE_MS = 300
+        /** ToneGenerator volume on the headset path (log scale, ~0.5 dB a step: 80 is about -10 dB). */
+        const val HEADSET_TONE_VOLUME = 80
 
         /** AudioDeviceInfo.TYPE_BLE_HEADSET (API 31); a literal so minSdk 29 lint stays quiet. */
         private const val TYPE_BLE_HEADSET = 26
