@@ -33,11 +33,28 @@ Rotation loadRotation(HistoryStore store) {
 void saveRotation(HistoryStore store, Rotation r) =>
     store.saveSetting(rotationSettingKey, jsonEncode(r.toJson()));
 
+/// Setting key holding the uuid of the last workout the rotation advanced
+/// for, so a retry (recovery on open, a second finish call) never advances
+/// twice.
+const String rotationLastSettingKey = 'rotation_last_uuid';
+
 /// Call after a workout is stored: advances past [typeId] (null or a type
-/// outside the rotation changes nothing, and nothing is written).
-Rotation rotationAfterFinish(HistoryStore store, String? typeId) {
+/// outside the rotation changes nothing, and nothing is written). With
+/// [workoutUuid], idempotent per workout.
+Rotation rotationAfterFinish(
+  HistoryStore store,
+  String? typeId, {
+  String? workoutUuid,
+}) {
   final before = loadRotation(store);
+  if (workoutUuid != null &&
+      store.setting(rotationLastSettingKey) == jsonEncode(workoutUuid)) {
+    return before;
+  }
   final after = before.completed(typeId);
   if (after != before) saveRotation(store, after);
+  if (workoutUuid != null) {
+    store.saveSetting(rotationLastSettingKey, jsonEncode(workoutUuid));
+  }
   return after;
 }

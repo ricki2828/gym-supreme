@@ -46,4 +46,13 @@ void main() {
     saveRotation(store, Rotation.defaults().onReorder(0, 3));
     expect(loadRotation(store).order, ['pull', 'legs', 'push']);
   });
+
+  test('per-workout idempotent: a retry never advances twice', () {
+    final store = MemoryStore();
+    rotationAfterFinish(store, 'push', workoutUuid: 'w1');
+    rotationAfterFinish(store, 'push', workoutUuid: 'w1'); // recovery retry
+    expect(loadRotation(store).nextId, 'pull');
+    rotationAfterFinish(store, 'pull', workoutUuid: 'w2');
+    expect(loadRotation(store).nextId, 'legs');
+  });
 }

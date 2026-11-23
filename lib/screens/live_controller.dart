@@ -103,8 +103,9 @@ class LiveController extends ChangeNotifier {
   /// Done on a timer block logs the block (TimerSession.finish); any other
   /// set is a plain Done.
   Future<void> done() => _onCurrent((s, set) {
-    final f = c2.TimerSession.finish(s, set.setId, nowMs: nowMs());
-    return identical(f, s) ? eng.Session.done(s, set.setId, nowMs: nowMs()) : f;
+    final now = nowMs();
+    final f = c2.TimerSession.finish(s, set.setId, nowMs: now);
+    return identical(f, s) ? eng.Session.done(s, set.setId, nowMs: now) : f;
   });
 
   /// One path for skip (and undo): the TimerSession versions stop or re-arm a
@@ -119,7 +120,7 @@ class LiveController extends ChangeNotifier {
   /// so it is the current set now. Lights that exercise's muscles (R4).
   Future<void> addTimer(c2.TimerBlock block) => _transition((s) {
     final cur = s.current;
-    if (cur == null) return s;
+    if (cur == null || s.state == eng.SessionState.paused) return s;
     final ex = s.exercises[cur.exercise];
     final added = eng.Session.addExercise(
       s,
@@ -173,13 +174,16 @@ class LiveController extends ChangeNotifier {
 
   Future<void> finishTimer({int? amrapRounds, int? amrapExtraReps}) =>
       _onCurrent(
-        (s, set) => c2.TimerSession.finish(
-          s,
-          set.setId,
-          nowMs: nowMs(),
-          amrapRounds: amrapRounds,
-          amrapExtraReps: amrapExtraReps,
-        ),
+        // Paused (a Pause raced the dialog): never resume the session here.
+        (s, set) => s.state == eng.SessionState.paused
+            ? s
+            : c2.TimerSession.finish(
+                s,
+                set.setId,
+                nowMs: nowMs(),
+                amrapRounds: amrapRounds,
+                amrapExtraReps: amrapExtraReps,
+              ),
       );
 
   // ---- cut 2: ghost (gated by Features.ghost) ------------------------------
@@ -289,7 +293,7 @@ class LiveController extends ChangeNotifier {
     final st = store;
     if (Features.rotation && st != null) {
       try {
-        c2.rotationAfterFinish(st, done.typeId);
+        c2.rotationAfterFinish(st, done.typeId, workoutUuid: done.workoutUuid);
       } on Object {
         // Cosmetic: the workout is stored; only the rotation pointer is
         // stale, and the next finish moves it again. No error banner.

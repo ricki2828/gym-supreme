@@ -101,6 +101,20 @@ class _GymRootState extends State<GymRoot> {
           // The workout is stored either way; a failed delete only leaves a
           // journal that the next open deletes. Not a restore failure.
           final uuid = r.snapshot?.workoutUuid;
+          // Cut 2: a workout finished while the app was dead (lock screen)
+          // still moves the rotation; idempotent per workout uuid.
+          final st = widget.deps.store;
+          final snap = r.snapshot;
+          if (Features.rotation &&
+              st != null &&
+              snap != null &&
+              snap.finished) {
+            try {
+              c2.rotationAfterFinish(st, snap.typeId, workoutUuid: uuid);
+            } on Object {
+              // Cosmetic pointer; next finish moves it.
+            }
+          }
           if (uuid != null) {
             try {
               await port.deleteJournal(uuid);
@@ -647,19 +661,32 @@ class _LiveFlowState extends State<LiveFlow> {
     return null;
   }
 
+  /// DONE on a timer set: start an armed block, else log it (AMRAP asks for
+  /// rounds). Any other set: a plain Done.
+  Future<void> _onDone() async {
+    final block = c.currentTimer;
+    if (block == null) return c.done();
+    if (!c.timerRunning && c.timerElapsedMs(c.nowMs()) == 0) {
+      return c.startTimer();
+    }
+    return _finishTimer(block);
+  }
+
   Future<void> _addTimer() async {
+    if (_leaving) return;
     final block = await Navigator.of(context).push(
       MaterialPageRoute<c2.TimerBlock>(
         builder: (_) => const TimerPickerScreen(),
       ),
     );
-    if (block != null && mounted) await c.addTimer(block);
+    if (block != null && mounted && !_leaving) await c.addTimer(block);
   }
 
   Future<void> _finishTimer(c2.TimerBlock block) async {
+    if (_leaving) return;
     if (block.type == c2.TimerType.amrap) {
       final r = await askAmrapResult(context);
-      if (r == null || !mounted) return;
+      if (r == null || !mounted || _leaving) return;
       await c.finishTimer(amrapRounds: r.rounds, amrapExtraReps: r.extraReps);
     } else {
       await c.finishTimer();
@@ -694,7 +721,7 @@ class _LiveFlowState extends State<LiveFlow> {
             view: v,
             onReps: c.reps,
             onLoad: c.load,
-            onDone: c.done,
+            onDone: _onDone,
             onSkipSet: c.skipSet,
             onRestDelta: c.restDelta,
             onSkipRest: c.skipRest,
@@ -703,7 +730,9 @@ class _LiveFlowState extends State<LiveFlow> {
             onFinish: _finish,
             setExtra: _setExtra(),
             actions: [
-              if (Features.timers && c.view() != null && c.currentTimer == null)
+              if (Features.timers &&
+                  c.snapshot?.currentSet != null &&
+                  c.currentTimer == null)
                 BigButton(
                   label: 'ADD TIMER',
                   colour: Lit.ink.withValues(alpha: 0.12),
