@@ -198,7 +198,7 @@ void engineTests() {
       muscleIds: ['chest'],
       minutes: 20,
     );
-    final id = first.items.first.exerciseId;
+    final id = first.items.firstWhere((i) => i.unit == LoadUnit.ea).exerciseId;
     final e = Rig.catalog.exercise(id)!;
     final (lo, hi) = r.engine.repRange(e);
     r.run(first, reps: lo, coldLoadG: 20000);
@@ -223,7 +223,7 @@ void engineTests() {
       muscleIds: ['chest'],
       minutes: 20,
     );
-    final id = first.items.first.exerciseId;
+    final id = first.items.firstWhere((i) => i.unit == LoadUnit.ea).exerciseId;
     final (_, hi) = r.engine.repRange(Rig.catalog.exercise(id)!);
     r.run(first, reps: hi, coldLoadG: 25000);
     r.now += 3 * day;
@@ -245,7 +245,7 @@ void engineTests() {
       muscleIds: ['chest'],
       minutes: 20,
     );
-    final id = first.items.first.exerciseId;
+    final id = first.items.firstWhere((i) => i.unit == LoadUnit.ea).exerciseId;
     r.run(first, reps: 9, coldLoadG: 23000); // typed a weight the gym lacks
     r.now += 3 * day;
     final item = r.engine

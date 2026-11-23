@@ -1,83 +1,199 @@
-## push 30min est=30 uncovered=[]
-dumbbell-bench-press 2x10 rest=120 ea
+## push 30min est=29 uncovered=[]
+standing-cable-chest-press 2x10 rest=120 kg
 incline-dumbbell-press 2x10 rest=120 ea
-pushups 2x10 rest=120 bodyweight
-arnold-dumbbell-press 2x10 rest=120 ea
+standing-dumbbell-press 2x10 rest=120 ea
+dumbbell-flyes 2x12 rest=75 ea
 cable-seated-lateral-raise 2x12 rest=75 kg
-seated-side-lateral-raise 2x12 rest=75 ea
+triceps-pushdown 2x12 rest=75 kg
 ## push 45min est=45 uncovered=[]
-dumbbell-bench-press 3x10 rest=120 ea
+standing-cable-chest-press 3x10 rest=120 kg
 incline-dumbbell-press 3x10 rest=120 ea
-pushups 3x10 rest=120 bodyweight
-arnold-dumbbell-press 3x10 rest=120 ea
+standing-dumbbell-press 3x10 rest=120 ea
+dumbbell-flyes 4x12 rest=75 ea
 cable-seated-lateral-raise 3x12 rest=75 kg
-seated-side-lateral-raise 3x12 rest=75 ea
-## push 60min est=45 uncovered=[]
-dumbbell-bench-press 3x10 rest=120 ea
+triceps-pushdown 3x12 rest=75 kg
+## push 60min est=60 uncovered=[]
+standing-cable-chest-press 4x10 rest=120 kg
 incline-dumbbell-press 3x10 rest=120 ea
-pushups 3x10 rest=120 bodyweight
-arnold-dumbbell-press 3x10 rest=120 ea
+standing-dumbbell-press 3x10 rest=120 ea
+dumbbell-flyes 4x12 rest=75 ea
 cable-seated-lateral-raise 3x12 rest=75 kg
-seated-side-lateral-raise 3x12 rest=75 ea
-## pull 30min est=29 uncovered=[]
-bent-over-two-dumbbell-row 2x10 rest=120 ea
+side-lateral-raise 3x12 rest=75 ea
+triceps-pushdown 3x12 rest=75 kg
+incline-dumbbell-flyes 3x12 rest=75 ea
+## pull 30min est=30 uncovered=[]
+seated-cable-rows 3x10 rest=120 kg
 dumbbell-incline-row 2x10 rest=120 ea
-one-arm-dumbbell-row 2x10 rest=120 ea
-cable-rear-delt-fly 2x12 rest=75 kg
-cable-hammer-curls-rope-attachment 2x12 rest=75 kg
+straight-arm-pulldown 2x12 rest=75 kg
+reverse-flyes 2x12 rest=75 ea
+high-cable-curls 2x12 rest=75 kg
 palms-down-dumbbell-wrist-curl-over-a-bench 2x12 rest=75 ea
 ## pull 45min est=45 uncovered=[]
-bent-over-two-dumbbell-row 3x10 rest=120 ea
+seated-cable-rows 3x10 rest=120 kg
 dumbbell-incline-row 3x10 rest=120 ea
-one-arm-dumbbell-row 3x10 rest=120 ea
-cable-rear-delt-fly 3x12 rest=75 kg
-cable-hammer-curls-rope-attachment 3x12 rest=75 kg
-palms-down-dumbbell-wrist-curl-over-a-bench 2x12 rest=75 ea
-palms-up-dumbbell-wrist-curl-over-a-bench 2x12 rest=75 ea
-## pull 60min est=49 uncovered=[]
-bent-over-two-dumbbell-row 3x10 rest=120 ea
-dumbbell-incline-row 3x10 rest=120 ea
-one-arm-dumbbell-row 3x10 rest=120 ea
-cable-rear-delt-fly 3x12 rest=75 kg
-cable-hammer-curls-rope-attachment 3x12 rest=75 kg
-palms-down-dumbbell-wrist-curl-over-a-bench 3x12 rest=75 ea
-palms-up-dumbbell-wrist-curl-over-a-bench 3x12 rest=75 ea
-## legs 30min est=29 uncovered=[]
-bodyweight-squat 3x10 rest=120 bodyweight
-dumbbell-lunges 2x10 rest=120 ea
-dumbbell-rear-lunge 2x10 rest=120 ea
+straight-arm-pulldown 4x12 rest=75 kg
+reverse-flyes 3x12 rest=75 ea
+high-cable-curls 3x12 rest=75 kg
+palms-down-dumbbell-wrist-curl-over-a-bench 4x12 rest=75 ea
+## pull 60min est=60 uncovered=[]
+seated-cable-rows 4x10 rest=120 kg
+dumbbell-incline-row 4x10 rest=120 ea
+straight-arm-pulldown 3x12 rest=75 kg
+reverse-flyes 3x12 rest=75 ea
+high-cable-curls 3x12 rest=75 kg
+palms-down-dumbbell-wrist-curl-over-a-bench 4x12 rest=75 ea
+face-pull 3x12 rest=75 kg
+hammer-curls 3x12 rest=75 ea
+## legs 30min est=30 uncovered=[]
+dumbbell-squat-to-a-bench 2x10 rest=120 ea
+dumbbell-step-ups 2x10 rest=120 ea
 stiff-legged-dumbbell-deadlift 2x10 rest=120 ea
+pull-through 2x10 rest=120 kg
+leg-extensions 2x12 rest=75 kg
 dumbbell-seated-one-leg-calf-raise 2x12 rest=75 ea
-## legs 45min est=39 uncovered=[]
-bodyweight-squat 3x10 rest=120 bodyweight
-dumbbell-lunges 3x10 rest=120 ea
-dumbbell-rear-lunge 3x10 rest=120 ea
+## legs 45min est=45 uncovered=[]
+dumbbell-squat-to-a-bench 3x10 rest=120 ea
+dumbbell-step-ups 3x10 rest=120 ea
 stiff-legged-dumbbell-deadlift 3x10 rest=120 ea
+pull-through 3x10 rest=120 kg
+leg-extensions 3x12 rest=75 kg
 dumbbell-seated-one-leg-calf-raise 3x12 rest=75 ea
-## legs 60min est=39 uncovered=[]
-bodyweight-squat 3x10 rest=120 bodyweight
-dumbbell-lunges 3x10 rest=120 ea
-dumbbell-rear-lunge 3x10 rest=120 ea
+## legs 60min est=60 uncovered=[]
+dumbbell-squat-to-a-bench 4x10 rest=120 ea
+dumbbell-step-ups 3x10 rest=120 ea
 stiff-legged-dumbbell-deadlift 3x10 rest=120 ea
+pull-through 3x10 rest=120 kg
+leg-extensions 3x12 rest=75 kg
 dumbbell-seated-one-leg-calf-raise 3x12 rest=75 ea
+one-legged-cable-kickback 3x12 rest=75 kg
+butt-lift-bridge 3x12 rest=75 bodyweight
 ## core 30min est=29 uncovered=[]
-hyperextensions-with-no-hyperextension-bench 3x10 rest=120 bodyweight
-cable-crunch 2x12 rest=75 kg
-crunches 2x12 rest=75 bodyweight
-dead-bug 2x12 rest=75 bodyweight
-cable-russian-twists 2x12 rest=75 kg
-dumbbell-side-bend 2x12 rest=75 ea
-## core 45min est=39 uncovered=[]
-hyperextensions-with-no-hyperextension-bench 3x10 rest=120 bodyweight
+hyperextensions-with-no-hyperextension-bench 4x10 rest=120 bodyweight
 cable-crunch 3x12 rest=75 kg
-crunches 3x12 rest=75 bodyweight
 dead-bug 3x12 rest=75 bodyweight
-cable-russian-twists 3x12 rest=75 kg
 dumbbell-side-bend 3x12 rest=75 ea
-## core 60min est=39 uncovered=[]
+## core 45min est=43 uncovered=[]
+hyperextensions-with-no-hyperextension-bench 4x10 rest=120 bodyweight
+cable-crunch 4x12 rest=75 kg
+dead-bug 4x12 rest=75 bodyweight
+dumbbell-side-bend 4x12 rest=75 ea
+pallof-press 4x12 rest=75 kg
+## core 60min est=59 uncovered=[]
+hyperextensions-with-no-hyperextension-bench 4x10 rest=120 bodyweight
+cable-crunch 4x12 rest=75 kg
+dead-bug 4x12 rest=75 bodyweight
+dumbbell-side-bend 4x12 rest=75 ea
+pallof-press 4x12 rest=75 kg
+reverse-crunch 4x12 rest=75 bodyweight
+standing-cable-wood-chop 4x12 rest=75 kg
+## rows:chest+shoulders+triceps 30min est=29 uncovered=[]
+standing-cable-chest-press 2x10 rest=120 kg
+incline-dumbbell-press 2x10 rest=120 ea
+standing-dumbbell-press 2x10 rest=120 ea
+cable-seated-lateral-raise 2x12 rest=75 kg
+reverse-flyes 2x12 rest=75 ea
+triceps-pushdown 2x12 rest=75 kg
+## rows:chest+shoulders+triceps 45min est=45 uncovered=[]
+standing-cable-chest-press 3x10 rest=120 kg
+incline-dumbbell-press 3x10 rest=120 ea
+standing-dumbbell-press 3x10 rest=120 ea
+dumbbell-flyes 3x12 rest=75 ea
+cable-seated-lateral-raise 3x12 rest=75 kg
+reverse-flyes 2x12 rest=75 ea
+triceps-pushdown 2x12 rest=75 kg
+## rows:chest+shoulders+triceps 60min est=60 uncovered=[]
+standing-cable-chest-press 4x10 rest=120 kg
+incline-dumbbell-press 3x10 rest=120 ea
+standing-dumbbell-press 3x10 rest=120 ea
+dumbbell-flyes 4x12 rest=75 ea
+cable-seated-lateral-raise 3x12 rest=75 kg
+side-lateral-raise 3x12 rest=75 ea
+reverse-flyes 3x12 rest=75 ea
+triceps-pushdown 3x12 rest=75 kg
+## rows:shoulders 30min est=29 uncovered=[]
+standing-dumbbell-press 4x10 rest=120 ea
+front-dumbbell-raise 3x12 rest=75 ea
+cable-seated-lateral-raise 3x12 rest=75 kg
+reverse-flyes 3x12 rest=75 ea
+## rows:shoulders 45min est=45 uncovered=[]
+standing-dumbbell-press 4x10 rest=120 ea
+front-dumbbell-raise 4x12 rest=75 ea
+cable-seated-lateral-raise 4x12 rest=75 kg
+side-lateral-raise 3x12 rest=75 ea
+reverse-flyes 3x12 rest=75 ea
+face-pull 3x12 rest=75 kg
+## rows:shoulders 60min est=51 uncovered=[]
+standing-dumbbell-press 4x10 rest=120 ea
+front-dumbbell-raise 4x12 rest=75 ea
+cable-seated-lateral-raise 4x12 rest=75 kg
+side-lateral-raise 4x12 rest=75 ea
+reverse-flyes 4x12 rest=75 ea
+face-pull 4x12 rest=75 kg
+## rows:back+biceps 30min est=29 uncovered=[]
+seated-cable-rows 2x10 rest=120 kg
+dumbbell-incline-row 2x10 rest=120 ea
+hyperextensions-with-no-hyperextension-bench 2x10 rest=120 bodyweight
+straight-arm-pulldown 2x12 rest=75 kg
+high-cable-curls 2x12 rest=75 kg
+palms-down-dumbbell-wrist-curl-over-a-bench 2x12 rest=75 ea
+## rows:back+biceps 45min est=45 uncovered=[]
+seated-cable-rows 3x10 rest=120 kg
+dumbbell-incline-row 3x10 rest=120 ea
 hyperextensions-with-no-hyperextension-bench 3x10 rest=120 bodyweight
-cable-crunch 3x12 rest=75 kg
-crunches 3x12 rest=75 bodyweight
-dead-bug 3x12 rest=75 bodyweight
-cable-russian-twists 3x12 rest=75 kg
-dumbbell-side-bend 3x12 rest=75 ea
+straight-arm-pulldown 4x12 rest=75 kg
+high-cable-curls 3x12 rest=75 kg
+palms-down-dumbbell-wrist-curl-over-a-bench 3x12 rest=75 ea
+## rows:back+biceps 60min est=59 uncovered=[]
+seated-cable-rows 4x10 rest=120 kg
+dumbbell-incline-row 3x10 rest=120 ea
+hyperextensions-with-no-hyperextension-bench 4x10 rest=120 bodyweight
+standing-dumbbell-upright-row 3x10 rest=120 ea
+straight-arm-pulldown 3x12 rest=75 kg
+high-cable-curls 3x12 rest=75 kg
+palms-down-dumbbell-wrist-curl-over-a-bench 4x12 rest=75 ea
+## rows:quads+glutes 30min est=30 uncovered=[]
+dumbbell-squat-to-a-bench 2x10 rest=120 ea
+dumbbell-step-ups 2x10 rest=120 ea
+pull-through 2x10 rest=120 kg
+stiff-legged-dumbbell-deadlift 2x10 rest=120 ea
+leg-extensions 2x12 rest=75 kg
+dumbbell-seated-one-leg-calf-raise 2x12 rest=75 ea
+## rows:quads+glutes 45min est=45 uncovered=[]
+dumbbell-squat-to-a-bench 3x10 rest=120 ea
+dumbbell-step-ups 3x10 rest=120 ea
+pull-through 3x10 rest=120 kg
+stiff-legged-dumbbell-deadlift 3x10 rest=120 ea
+leg-extensions 3x12 rest=75 kg
+dumbbell-seated-one-leg-calf-raise 3x12 rest=75 ea
+## rows:quads+glutes 60min est=60 uncovered=[]
+dumbbell-squat-to-a-bench 4x10 rest=120 ea
+dumbbell-step-ups 3x10 rest=120 ea
+pull-through 3x10 rest=120 kg
+stiff-legged-dumbbell-deadlift 3x10 rest=120 ea
+leg-extensions 3x12 rest=75 kg
+dumbbell-seated-one-leg-calf-raise 3x12 rest=75 ea
+one-legged-cable-kickback 3x12 rest=75 kg
+butt-lift-bridge 3x12 rest=75 bodyweight
+## push seed=7 30min est=29 uncovered=[]
+standing-cable-chest-press 2x10 rest=120 kg
+incline-dumbbell-press 2x10 rest=120 ea
+seated-dumbbell-press 2x10 rest=120 ea
+incline-dumbbell-flyes 2x12 rest=75 ea
+seated-side-lateral-raise 2x12 rest=75 ea
+cable-rope-overhead-triceps-extension 2x12 rest=75 kg
+## push seed=7 45min est=45 uncovered=[]
+standing-cable-chest-press 3x10 rest=120 kg
+incline-dumbbell-press 3x10 rest=120 ea
+seated-dumbbell-press 3x10 rest=120 ea
+incline-dumbbell-flyes 4x12 rest=75 ea
+seated-side-lateral-raise 3x12 rest=75 ea
+cable-rope-overhead-triceps-extension 3x12 rest=75 kg
+## push seed=7 60min est=60 uncovered=[]
+standing-cable-chest-press 4x10 rest=120 kg
+incline-dumbbell-press 3x10 rest=120 ea
+seated-dumbbell-press 3x10 rest=120 ea
+incline-dumbbell-flyes 4x12 rest=75 ea
+seated-side-lateral-raise 3x12 rest=75 ea
+cable-seated-lateral-raise 3x12 rest=75 kg
+cable-rope-overhead-triceps-extension 3x12 rest=75 kg
+dumbbell-flyes 3x12 rest=75 ea

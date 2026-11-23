@@ -28,16 +28,49 @@ void main() {
     engine.saveGym(gym);
 
     final out = StringBuffer();
-    for (final t in workoutTypes.where((t) => t.muscles.isNotEmpty)) {
+    // The four types, then picker-row picks (review P1-3/P1-4): Chest +
+    // Shoulders + Triceps, Shoulders alone, Back + Biceps, Legs rows; and
+    // one non-zero seed.
+    final picks = <(String, List<String>, String?, int)>[
+      for (final t in workoutTypes.where((t) => t.muscles.isNotEmpty))
+        (t.id, t.muscles, t.id, 0),
+      (
+        'rows:chest+shoulders+triceps',
+        const ['chest', 'front-delts', 'side-delts', 'rear-delts', 'triceps'],
+        'push',
+        0,
+      ),
+      (
+        'rows:shoulders',
+        const ['front-delts', 'side-delts', 'rear-delts'],
+        'push',
+        0,
+      ),
+      (
+        'rows:back+biceps',
+        const ['lats', 'traps', 'lower-back', 'biceps', 'forearms'],
+        'pull',
+        0,
+      ),
+      (
+        'rows:quads+glutes',
+        const ['quads', 'calves', 'glutes', 'hamstrings'],
+        'legs',
+        0,
+      ),
+      ('push seed=7', workoutTypes.first.muscles, 'push', 7),
+    ];
+    for (final (name, muscles, typeId, seed) in picks) {
       for (final minutes in [30, 45, 60]) {
         final p = engine.suggest(
           gymId: gym.id,
-          muscleIds: t.muscles,
+          muscleIds: muscles,
           minutes: minutes,
-          typeId: t.id,
+          typeId: typeId,
+          seed: seed,
         );
         out.writeln(
-          '## ${t.id} ${minutes}min est=${p.estimatedMinutes} '
+          '## $name ${minutes}min est=${p.estimatedMinutes} '
           'uncovered=${p.uncovered}',
         );
         for (final i in p.items) {
@@ -80,10 +113,11 @@ void main() {
     ]);
     engine.saveGym(gym);
 
-    // Session 1: cold start, first exercise at 24 kg (top of range), the
+    // Session 1: cold start, the first dumbbell lift at 24 kg (top of range), the
     // rest at 20 kg mid-range. Session 2 (3 days later) shows progression:
     // 24 → 25 kg; then session 3 at 25 kg top → ceiling (more reps).
     final out = StringBuffer();
+    String? ceilingId;
     for (var round = 0; round < 3; round++) {
       final p = engine.suggest(
         gymId: gym.id,
@@ -91,6 +125,7 @@ void main() {
         minutes: 45,
         typeId: 'push',
       );
+      ceilingId ??= p.items.firstWhere((i) => i.unit == LoadUnit.ea).exerciseId;
       out.writeln('## session ${round + 1}');
       for (final i in p.items) {
         out.writeln(
@@ -108,7 +143,8 @@ void main() {
         final ex = s.exercises[e];
         for (final x in ex.sets) {
           now += 120000;
-          final first = e == 0;
+          // The first dumbbell lift is driven to the ceiling (B7).
+          final first = ex.exerciseId == ceilingId;
           final load =
               x.targetLoadG ??
               (ex.loadKind == 'bodyweight' ? null : (first ? 24000 : 20000));
@@ -129,5 +165,6 @@ void main() {
     expect(out.toString(), text);
     expect(text, contains('25000x8'));
     expect(text, contains('Top weight here'));
+    expect(text, contains('$ceilingId 25000x13'));
   });
 }
