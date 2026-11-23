@@ -354,6 +354,48 @@ jobs:
             if [ "$INSTALL_OVER" = "true" ]; then tools/emulator_install_over.sh apk/prev-x86_64-dogfood.apk apk/app-x86_64-dogfood-release.apk "$DOGFOOD_PKG"; else echo "install-over not run on this job (API ${{ matrix.api-level }}, has_prev=${{ needs.build-dogfood.outputs.has_prev }})"; fi
             tools/emulator_smoke.sh apk/app-x86_64-dogfood-release.apk "$DOGFOOD_PKG"
 
+  ui-e2e:
+    # Widget-driven flow on a real device (t60's integration_test/ui_flow_test.dart): picker tap
+    # path and post-workout screen over the real WorkoutService and SQLite store. One API level
+    # (34) to bound minutes; the headless e2e in tools/emulator_smoke.sh covers all four.
+    name: UI flow e2e (API 34, integration_test)
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift
+          df -h /
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      - name: Boot API 34 and run the UI flow
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: BUILD_SHA=${{ github.sha }} tools/ui_e2e.sh emulator-5554
+
   artifact-cleanup:
     name: trim old CI releases
     needs: [build-dogfood, emulator]
@@ -374,7 +416,7 @@ jobs:
     # The one required status check. Passes only when every job succeeded or was skipped by the
     # docs-only filter; a failed or cancelled job fails it.
     name: ci-gate
-    needs: [changes, secret-scan, flutter, core, build-apk, build-dogfood, emulator]
+    needs: [changes, secret-scan, flutter, core, build-apk, build-dogfood, emulator, ui-e2e]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
