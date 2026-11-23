@@ -217,99 +217,6 @@ void main() {
     expect(find.textContaining('could not be restored'), findsOneWidget);
   });
 
-  testWidgets('gym setup: heavier dumbbells add one pair, keep his own', (
-    tester,
-  ) async {
-    final g = engine.gymFromPreset('condo').withWeights('dumbbells', [
-      for (var kg = 2; kg <= 24; kg += 2) kg * 1000,
-    ]);
-    engine.saveGym(g);
-    await pumpRoot(tester);
-    await tester.tap(find.text('Gyms'));
-    await tester.pumpAndSettle();
-    expect(find.text('Dumbbells to 24 kg'), findsOneWidget);
-    // Centre the dumbbell row, clear of the Save bar pinned under the list.
-    // The Heavier step is the last + (the first is Add gym).
-    await tester.runAsync(
-      () => Scrollable.ensureVisible(
-        tester.element(find.text('Heaviest dumbbell pair')),
-        alignment: 0.5,
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.add).last);
-    await tester.pumpAndSettle();
-    expect(find.text('Dumbbells to 25 kg'), findsOneWidget);
-    await tapText(tester, 'SAVE · 5 ON THE FLOOR');
-    expect(engine.gym(g.id)!.kit['dumbbells']!.weightsG, [
-      for (var kg = 2; kg <= 24; kg += 2) kg * 1000,
-      25000,
-    ]);
-  });
-
-  testWidgets('gym setup: down then up gives his own top pair back', (
-    tester,
-  ) async {
-    final own = [for (var kg = 2; kg <= 24; kg += 2) kg * 1000];
-    final g = engine.gymFromPreset('condo').withWeights('dumbbells', own);
-    engine.saveGym(g);
-    await pumpRoot(tester);
-    await tester.tap(find.text('Gyms'));
-    await tester.pumpAndSettle();
-    await tester.runAsync(
-      () => Scrollable.ensureVisible(
-        tester.element(find.text('Heaviest dumbbell pair')),
-        alignment: 0.5,
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.remove).last);
-    await tester.pumpAndSettle();
-    expect(find.text('Dumbbells to 22 kg'), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.add).last);
-    await tester.pumpAndSettle();
-    expect(find.text('Dumbbells to 24 kg'), findsOneWidget);
-    await tapText(tester, 'SAVE · 5 ON THE FLOOR');
-    expect(engine.gym(g.id)!.kit['dumbbells']!.weightsG, own);
-  });
-
-  testWidgets('switching gyms in setup never carries dumbbell pairs over', (
-    tester,
-  ) async {
-    // Pairs that are not in the engine's default list, so a leak shows.
-    final condoGym = engine.gymFromPreset('condo').withWeights(
-      'dumbbells',
-      const [3000, 9000, 26000],
-    );
-    engine.saveGym(condoGym);
-    await pumpRoot(tester);
-    await tester.tap(find.text('Gyms'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.bySemanticsLabel('Add a gym'));
-    await tester.pumpAndSettle();
-    await tester.runAsync(
-      () => Scrollable.ensureVisible(
-        tester.element(find.text('Heaviest dumbbell pair')),
-        alignment: 0.5,
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.add).last);
-    await tester.pumpAndSettle();
-    await tapText(tester, 'SAVE · 5 ON THE FLOOR');
-    final added = engine.gyms().firstWhere((g) => g.id != condoGym.id);
-    final w = added.kit['dumbbells']!.weightsG;
-    expect(
-      w.any(const [3000, 9000, 26000].contains),
-      isFalse,
-      reason: "condo's own pairs leaked",
-    );
-    expect(
-      w.every(eng.defaultWeightsG['dumbbell']!.followedBy([27500]).contains),
-      isTrue,
-    );
-  });
-
   testWidgets('a preset adds its kit and keeps his dumbbell pairs', (
     tester,
   ) async {
@@ -379,4 +286,85 @@ void main() {
     );
     expect(find.text(expected.items.first.name), findsOneWidget);
   });
+
+  testWidgets('weights editor: drop a pair, add one, save to the gym', (
+    tester,
+  ) async {
+    final g = engine.gymFromPreset('condo').withWeights('dumbbells', const [
+      2000,
+      4000,
+      24000,
+    ]);
+    engine.saveGym(g);
+    await pumpRoot(tester);
+    await tester.tap(find.text('Gyms'));
+    await tester.pumpAndSettle();
+    final row = find.bySemanticsLabel(RegExp(r'^Dumbbells, 2–24 kg ea'));
+    await tester.scrollUntilVisible(
+      row,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.runAsync(
+      () => Scrollable.ensureVisible(tester.element(row), alignment: 0.5),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('4 kg ea. Tap to remove'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add one'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('live.keypad')), '13.5');
+    await tester.tap(find.byKey(const Key('live.keypad.set')));
+    await tester.pumpAndSettle();
+    await tapText(tester, 'SAVE · 3');
+    await tapText(tester, 'SAVE · 5 ON THE FLOOR');
+    expect(engine.gym(g.id)!.kit['dumbbells']!.weightsG, const [
+      2000,
+      13500,
+      24000,
+    ]);
+  });
+
+  testWidgets('weights editor: fill a range for the cable stack', (
+    tester,
+  ) async {
+    engine.saveGym(engine.gymFromPreset('condo'));
+    await pumpRoot(tester);
+    await tester.tap(find.text('Gyms'));
+    await tester.pumpAndSettle();
+    final row = find.bySemanticsLabel(RegExp(r'^Cable stack, .*app guesses'));
+    await tester.scrollUntilVisible(
+      row,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.runAsync(
+      () => Scrollable.ensureVisible(tester.element(row), alignment: 0.5),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    await tapText(tester, 'Clear all');
+    await tester.tap(find.text('Fill a range'));
+    await tester.pumpAndSettle();
+    for (final v in ['4.5', '9', '2.25']) {
+      await tester.enterText(find.byKey(const Key('live.keypad')), v);
+      await tester.tap(find.byKey(const Key('live.keypad.set')));
+      await tester.pumpAndSettle();
+    }
+    await tapText(tester, 'SAVE · 3');
+    await tapText(tester, 'SAVE · 5 ON THE FLOOR');
+    final gym = engine.gyms().single;
+    expect(gym.kit['cable-stack']!.weightsG, const [4500, 6750, 9000]);
+    expect(
+      engine
+          .loadSteps(gymId: gym.id, exerciseId: 'cable-crossover')
+          .loadsG
+          .contains(6750),
+      isTrue,
+      reason: 'the engine steps along his list now',
+    );
+  }, skip: false);
 }

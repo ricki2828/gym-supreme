@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_supreme/screens/gym_setup_screen.dart';
+import 'package:gym_supreme/screens/weight_list_screen.dart';
 
 import 'fixtures.dart';
 import 'gym_setup_fixtures.dart';
@@ -9,7 +10,8 @@ void main() {
   Widget screen({
     Set<String>? kit,
     ValueChanged<String>? onToggle,
-    ValueChanged<int>? onStep,
+    ValueChanged<String>? onEdit,
+    List<WeightRow> weights = const [],
     VoidCallback? onSave,
     ValueChanged<String>? onPreset,
   }) => MaterialApp(
@@ -19,10 +21,10 @@ void main() {
       kit: kit ?? condo.kit,
       equipment: equipmentFixture,
       presets: presetsFixture,
-      dumbbellMaxG: 25000,
+      weights: weights,
       firstRun: true,
       onToggle: onToggle,
-      onDumbbellMax: onStep,
+      onEditWeights: onEdit,
       onSave: onSave,
       onPreset: onPreset,
     ),
@@ -49,17 +51,55 @@ void main() {
     expect(got, ['adjustable-bench', 'kettlebells']);
   });
 
-  testWidgets('dumbbell range steps and shows only with dumbbells', (
-    tester,
-  ) async {
+  testWidgets('weights rows summarise and open the editor', (tester) async {
     phone(tester);
-    final steps = <int>[];
-    await tester.pumpWidget(screen(onStep: steps.add));
-    await tester.tap(find.bySemanticsLabel('Heavier'));
-    await tester.tap(find.bySemanticsLabel('Lighter'));
-    expect(steps, [1, -1]);
-    await tester.pumpWidget(screen(kit: {'cable-stack'}));
-    expect(find.text('Heaviest dumbbell pair'), findsNothing);
+    final opened = <String>[];
+    await tester.pumpWidget(
+      screen(
+        onEdit: opened.add,
+        weights: const [
+          WeightRow(
+            id: 'dumbbells',
+            name: 'Dumbbells',
+            weightsG: [2000, 4000, 24000],
+            perHand: true,
+          ),
+          WeightRow(
+            id: 'cable-stack',
+            name: 'Cable stack',
+            weightsG: [5000, 100000],
+            fromDefaults: true,
+          ),
+        ],
+      ),
+    );
+    final dumb = find.bySemanticsLabel('Dumbbells, 2–24 kg ea · 3 pairs. Edit');
+    await tester.scrollUntilVisible(
+      dumb,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    // Centre it: at the viewport edge it sits under the pinned Save bar.
+    await tester.runAsync(
+      () => Scrollable.ensureVisible(tester.element(dumb), alignment: 0.5),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(dumb);
+    final cable = find.bySemanticsLabel(
+      'Cable stack, 5–100 kg · 2 weights, app guesses. Edit',
+    );
+    await tester.scrollUntilVisible(
+      cable,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    // Centre it: at the viewport edge it sits under the pinned Save bar.
+    await tester.runAsync(
+      () => Scrollable.ensureVisible(tester.element(cable), alignment: 0.5),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(cable);
+    expect(opened, ['dumbbells', 'cable-stack']);
   });
 
   testWidgets('presets and save fire; empty kit cannot save', (tester) async {

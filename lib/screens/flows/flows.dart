@@ -23,6 +23,7 @@ import '../notification_access.dart';
 import '../picker_screen.dart';
 import '../post_workout_screen.dart';
 import '../view_models.dart';
+import '../weight_list_screen.dart';
 import '../../widgets/lit_widgets.dart';
 
 /// What every flow needs. Built once by the app shell (lib/app, t5t).
@@ -948,19 +949,7 @@ class GymFlow extends StatefulWidget {
 class _GymFlowState extends State<GymFlow> {
   late eng.Gym _gym;
 
-  /// Max candidates when the gym has not told us its pairs: a 2.5 kg grid.
-  static final List<int> _grid = [for (var g = 2500; g <= 50000; g += 2500) g];
-
-  /// His pairs as the screen opened, so stepping down then up gives them
-  /// back instead of grid values.
-  /// Reset whenever the working gym is replaced (pick, add, preset), so one
-  /// gym's pairs never leak into another.
-  List<int> _own = const [];
-
-  void _use(eng.Gym g) {
-    _gym = g;
-    _own = [...?g.kit['dumbbells']?.weightsG];
-  }
+  void _use(eng.Gym g) => _gym = g;
 
   @override
   void initState() {
@@ -968,35 +957,37 @@ class _GymFlowState extends State<GymFlow> {
     _use(widget.gym ?? widget.deps.engine.gymFromPreset('condo'));
   }
 
-  /// The gym's own pairs, or the engine's fallback list until it has some.
-  List<int> get _dbWeights {
-    final w = _gym.kit['dumbbells']?.weightsG ?? const <int>[];
-    return w.isNotEmpty ? w : eng.defaultWeightsG['dumbbell']!;
+  /// Loads with a weight list he can edit (P1-2), by catalog load kind.
+  static const _listed = {'dumbbell', 'stack'};
+
+  List<WeightRow> _weightRows() {
+    final cat = widget.deps.catalog;
+    return [
+      for (final e in cat.equipment)
+        if (_listed.contains(e.load) && _gym.has(e.id))
+          () {
+            final own = _gym.kit[e.id]?.weightsG ?? const <int>[];
+            return WeightRow(
+              id: e.id,
+              name: e.name,
+              weightsG: own.isNotEmpty
+                  ? own
+                  : (eng.defaultWeightsG[e.load] ?? const <int>[]),
+              perHand: e.load == 'dumbbell',
+              fromDefaults: own.isEmpty,
+            );
+          }(),
+    ];
   }
 
-  int get _dbMax => _dbWeights.last;
-
-  /// Moves only the heaviest pair, 2.5 kg at a time. Lighter pairs the gym
-  /// already has are kept as they are (never replaced by defaults); a new
-  /// top adds just that pair.
-  void _stepDumbbells(int dir) => setState(() {
-    final cur = _dbMax;
-    final own = {..._own, ..._dbWeights};
-    // Within his range, his own pairs; above his own top, a 2.5 kg grid.
-    final top = own.reduce((a, b) => a > b ? a : b);
-    final candidates = ({...own, ..._grid.where((g) => g > top)}.toList()
-      ..sort());
-    final next = dir > 0
-        ? candidates.where((g) => g > cur).firstOrNull
-        : candidates.where((g) => g < cur).lastOrNull;
-    if (next == null) return;
-    final keep = [
-      for (final w in own)
-        if (w <= next) w,
-      if (!own.contains(next)) next,
-    ]..sort();
-    _gym = _gym.withWeights('dumbbells', keep);
-  });
+  Future<void> _editWeights(String id) async {
+    final row = _weightRows().firstWhere((r) => r.id == id);
+    final list = await Navigator.of(context).push<List<int>>(
+      MaterialPageRoute(builder: (_) => WeightListScreen(row: row)),
+    );
+    if (list == null || list.isEmpty || !mounted) return;
+    setState(() => _gym = _gym.withWeights(id, list));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1015,7 +1006,7 @@ class _GymFlowState extends State<GymFlow> {
           if (e.id != eng.bodyweight) KitItem(e.id, e.name),
       ],
       presets: [for (final p in cat.presets) PresetView(p.id, p.name)],
-      dumbbellMaxG: _dbMax,
+      weights: _weightRows(),
       firstRun: widget.firstRun,
       onToggle: (id) => setState(() => _gym = _gym.toggle(id)),
       // A preset only pre-ticks (plan 4.3): it adds its kit, and everything
@@ -1024,7 +1015,7 @@ class _GymFlowState extends State<GymFlow> {
         final fresh = widget.deps.engine.gymFromPreset(id);
         _use(_gym.copyWith(kit: {...fresh.kit, ..._gym.kit}));
       }),
-      onDumbbellMax: _stepDumbbells,
+      onEditWeights: _editWeights,
       onPickGym: (id) => setState(() {
         _use(widget.deps.engine.gym(id) ?? _gym);
       }),
