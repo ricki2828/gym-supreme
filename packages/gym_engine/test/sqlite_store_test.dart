@@ -265,7 +265,8 @@ void main() {
         SqliteStore.restoreSnapshotIfMissing(dbPath, snapPath),
         RestoreResult.refused,
       );
-      expect(File(snapPath).existsSync(), isFalse); // discarded
+      expect(File(snapPath).existsSync(), isFalse); // moved, not deleted
+      expect(File('$dbPath.refused-snapshot').existsSync(), isTrue);
       expect(File(dbPath).existsSync(), isFalse);
       expect(File('$dbPath.restore').existsSync(), isFalse);
 
@@ -274,6 +275,43 @@ void main() {
         SqliteStore.restoreSnapshotIfMissing(dbPath, snapPath),
         RestoreResult.refused,
       );
+      expect(File(dbPath).existsSync(), isFalse);
+    });
+
+    test('a snapshot from a newer build is refused, not opened', () {
+      final dbPath = '${dir.path}/gym.db';
+      final snapPath = '${dir.path}/snap.db';
+      final a = SqliteStore.open('${dir.path}/src.db');
+      expect(a.writeSnapshot(snapPath), isTrue);
+      a.close();
+      sqlite3.open(snapPath)
+        ..execute('PRAGMA user_version = 99')
+        ..close();
+      expect(
+        SqliteStore.restoreSnapshotIfMissing(dbPath, snapPath),
+        RestoreResult.refused,
+      );
+      expect(File(dbPath).existsSync(), isFalse);
+    });
+
+    test('an unreadable snapshot is kept for a retry (not deleted)', () {
+      final dbPath = '${dir.path}/gym.db';
+      final snapDir = Directory('${dir.path}/snapdir')..createSync();
+      // A directory where the file should be: copy fails → retryLater.
+      expect(
+        SqliteStore.restoreSnapshotIfMissing(dbPath, snapDir.path),
+        RestoreResult.notNeeded, // not a file: nothing to restore
+      );
+      final snapPath = '${dir.path}/snap.db';
+      final a = SqliteStore.open('${dir.path}/src.db');
+      expect(a.writeSnapshot(snapPath), isTrue);
+      a.close();
+      Directory('$dbPath.restore').createSync(); // blocks the tmp copy
+      expect(
+        SqliteStore.restoreSnapshotIfMissing(dbPath, snapPath),
+        RestoreResult.retryLater,
+      );
+      expect(File(snapPath).existsSync(), isTrue);
       expect(File(dbPath).existsSync(), isFalse);
     });
 

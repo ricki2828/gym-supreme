@@ -91,9 +91,17 @@ enum RestoreResult {
   /// The snapshot passed quick_check and is now the db.
   restored,
 
-  /// The snapshot failed quick_check and was deleted. Open a fresh db and
-  /// count `restore_failed` for the export.
+  /// The snapshot is definitely bad (corrupt or from a newer build). It was
+  /// moved to `<dbPath>.refused-snapshot` (outside backup/, kept for a
+  /// manual look). Open a fresh db and count `restore_failed`.
   refused,
+
+  /// Could not tell (I/O, busy, out of memory). Nothing changed and the
+  /// snapshot is kept. DANGER for the caller: do not create a fresh db at
+  /// dbPath and do not writeSnapshot this launch, or the next pause
+  /// overwrites the only backup with an empty db. Retry, or run this launch
+  /// on an in-memory store and try again next launch.
+  retryLater,
 }
 
 class SqliteStore implements HistoryStore {
@@ -184,11 +192,16 @@ class SqliteStore implements HistoryStore {
 
   /// Before [SqliteStore.open]: if [dbPath] is missing and [snapshotPath]
   /// exists (a fresh install restored by Auto Backup), put the snapshot in
-  /// place, but only if `PRAGMA quick_check` says ok. Stray `-wal`/`-shm`
-  /// files of the missing db are deleted first so they cannot be replayed
-  /// onto the snapshot. The snapshot is kept after a restore. A snapshot
-  /// that fails the check is deleted and [RestoreResult.refused] returned:
-  /// the app opens a fresh empty db and bumps `restore_failed`.
+  /// place, but only after `PRAGMA integrity_check` says ok and its schema
+  /// is one this build can open. Stray `-wal`/`-shm`/`-journal` files of the
+  /// missing db are deleted first so they cannot be replayed onto it. The
+  /// snapshot is kept after a restore.
+  ///
+  /// The snapshot may be the user's only copy, so it is never deleted:
+  /// definite corruption (check failed, SQLITE_CORRUPT/NOTADB, or a newer
+  /// schema) moves it to `<dbPath>.refused-snapshot` and returns
+  /// [RestoreResult.refused]; any other error keeps it and returns
+  /// [RestoreResult.retryLater].
   static RestoreResult restoreSnapshotIfMissing(
     String dbPath,
     String snapshotPath,
@@ -202,24 +215,33 @@ class SqliteStore implements HistoryStore {
     }
     final tmp = File('$dbPath.restore');
     if (tmp.existsSync()) tmp.deleteSync();
-    snap.copySync(tmp.path);
-    var ok = false;
+    try {
+      snap.copySync(tmp.path);
+    } on FileSystemException {
+      return RestoreResult.retryLater;
+    }
+    bool? ok; // null = could not tell
     try {
       final check = sqlite3.open(tmp.path, mode: OpenMode.readOnly);
       try {
-        final r = check.select('PRAGMA quick_check');
-        ok = r.length == 1 && r.first.columnAt(0) == 'ok';
+        final r = check.select('PRAGMA integrity_check');
         final v = check.select('PRAGMA user_version').first.columnAt(0) as int;
-        ok = ok && v >= 1;
+        ok =
+            r.length == 1 &&
+            r.first.columnAt(0) == 'ok' &&
+            v >= 1 &&
+            v <= latestSchemaVersion;
       } finally {
         check.close();
       }
-    } on SqliteException {
-      ok = false;
+    } on SqliteException catch (e) {
+      final code = e.resultCode & 0xff;
+      ok = (code == 11 || code == 26) ? false : null; // CORRUPT, NOTADB
     }
-    if (!ok) {
+    if (ok != true) {
       tmp.deleteSync();
-      snap.deleteSync();
+      if (ok == null) return RestoreResult.retryLater;
+      snap.renameSync('$dbPath.refused-snapshot');
       return RestoreResult.refused;
     }
     final raf = tmp.openSync(mode: FileMode.append);

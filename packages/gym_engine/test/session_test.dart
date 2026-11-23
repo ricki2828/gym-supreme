@@ -429,15 +429,33 @@ void main() {
     });
   });
 
-  test('undo keeps a set block', () {
+  test('undo keeps the block definition and resets run state + results', () {
     var s = Session.replaceSet(
       start(),
       'u:2',
-      (x) => x.copyWith(block: const {'type': 'amrap', 'cap_ms': 600000}),
+      (x) => x.copyWith(
+        block: const {
+          'type': 'amrap',
+          'cap_ms': 600000,
+          'started_at_wall_ms': 5,
+          'elapsed_before_ms': 1000,
+          'cues': [
+            {'index': 0, 'at_ms': 0, 'kind': 'go', 'label': 'Go'},
+          ],
+          'amrap_rounds': 7,
+          'round_marks_ms': [60000],
+        },
+      ),
     );
     s = Session.done(s, 'u:2', nowMs: t0 + 1);
     s = Session.undo(s, 'u:2');
-    expect(s.exercises[1].sets[0].block, {'type': 'amrap', 'cap_ms': 600000});
+    expect(s.exercises[1].sets[0].block, {
+      'type': 'amrap',
+      'cap_ms': 600000,
+      'started_at_wall_ms': null,
+      'elapsed_before_ms': 0,
+      'cues': <Object?>[],
+    });
   });
 
   test('uuidV4 shape', () {

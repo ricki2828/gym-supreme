@@ -157,7 +157,9 @@ class Session {
       planReps: set.planReps,
       targetLoadG: set.targetLoadG,
       targetReps: set.targetReps,
-      block: set.block, // timer definition survives; cut 2 re-arms it
+      // The timer definition survives; run state and results do not, so a
+      // redo starts clean (cut 2 re-arms it).
+      block: _definitionOnly(set.block),
     );
     final next = _replaceSet(s, at.e, at.s, back);
     final clears = s.rest?.setId == setId;
@@ -433,6 +435,29 @@ class Session {
 }
 
 const Object _keep = Object();
+
+/// Block keys that define a timer (contract); everything else is run state
+/// or results.
+const _blockDefinitionKeys = {
+  'type',
+  'work_ms',
+  'rest_ms',
+  'rounds',
+  'cap_ms',
+  'lead_in_ms',
+  'warn_ms',
+};
+
+Map<String, Object?>? _definitionOnly(Map<String, Object?>? block) {
+  if (block == null) return null;
+  return {
+    for (final e in block.entries)
+      if (_blockDefinitionKeys.contains(e.key)) e.key: e.value,
+    if (block.containsKey('started_at_wall_ms')) 'started_at_wall_ms': null,
+    if (block.containsKey('elapsed_before_ms')) 'elapsed_before_ms': 0,
+    if (block.containsKey('cues')) 'cues': const <Object?>[],
+  };
+}
 
 String _unitKind(LoadUnit u) => switch (u) {
   LoadUnit.kg => 'stack',
