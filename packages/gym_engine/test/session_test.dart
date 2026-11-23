@@ -65,13 +65,79 @@ void main() {
     expect(s.currentSet!.setId, 'u:1');
   });
 
-  test('done with changed values is adjusted; cold start when no target', () {
+  test('done with changed values is adjusted; bodyweight null load is tap', () {
     var s = Session.done(start(), 'u:0', nowMs: t0 + 1, reps: 9);
     expect(s.exercises[0].sets[0].completion, Completion.adjusted);
     s = Session.done(s, 'u:2', nowMs: t0 + 2, reps: 12);
-    // bodyweight target load null but target reps set: unchanged reps → tap.
     expect(s.exercises[1].sets[0].completion, Completion.tapUnchanged);
   });
+
+  test('+/- via retarget then Done is adjusted, not tap_unchanged (B4)', () {
+    var s = Session.retarget(start(), 'u:0', loadG: 22000);
+    expect(s.exercises[0].sets[0].planLoadG, 20000);
+    s = Session.done(s, 'u:0', nowMs: t0 + 1);
+    expect(s.exercises[0].sets[0].loadG, 22000);
+    expect(s.exercises[0].sets[0].completion, Completion.adjusted);
+  });
+
+  test('cold start: loaded exercise with no planned load', () {
+    const cold = SessionPlan(
+      gymId: 'g',
+      muscles: ['chest'],
+      estimatedMinutes: 5,
+      uncovered: [],
+      items: [
+        PlannedItem(
+          exerciseId: 'a',
+          name: 'A',
+          unit: LoadUnit.ea,
+          sets: [PlannedSet(loadG: null, reps: 10)],
+          repLo: 8,
+          repHi: 12,
+          restS: 90,
+          reason: '',
+          primary: ['chest'],
+        ),
+      ],
+    );
+    var s = Session.start(cold, nowMs: t0, tzOffsetMin: 0, workoutUuid: 'u');
+    s = Session.done(s, 'u:0', nowMs: t0 + 1, loadG: 12000);
+    expect(s.exercises[0].sets[0].completion, Completion.coldStart);
+  });
+
+  test('lock-screen Done counts as tap_unchanged (R3)', () {
+    var s = Session.retarget(start(), 'u:0', reps: 8);
+    s = Session.done(s, 'u:0', nowMs: t0 + 1, source: SetSource.lockscreen);
+    expect(s.exercises[0].sets[0].completion, Completion.tapUnchanged);
+    expect(s.exercises[0].sets[0].reps, 8);
+  });
+
+  test(
+    'journal reader: mid-file junk, wrong uuid, non-rising rev are corrupt',
+    () {
+      final a = start();
+      final b = Session.done(a, 'u:0', nowMs: t0 + 1);
+      final other = Session.start(
+        plan(),
+        nowMs: t0,
+        tzOffsetMin: 0,
+        workoutUuid: 'v',
+      );
+      final r = readJournal(
+        [
+          a.encode(),
+          '{"x',
+          other.encode(),
+          b.encode(),
+          a.encode(),
+          '',
+        ].join('\n'),
+      );
+      expect(r.last!.rev, b.rev);
+      expect(r.corruptLines, 3);
+      expect(r.tornTail, isFalse);
+    },
+  );
 
   test('next set starts when the rest ended, or now if earlier', () {
     var s = Session.done(start(), 'u:0', nowMs: t0 + 60000);

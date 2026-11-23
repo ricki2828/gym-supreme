@@ -67,6 +67,8 @@ class Session {
                   kind: item.unit == LoadUnit.timed
                       ? SetKind.timed
                       : SetKind.reps,
+                  planLoadG: item.sets[i].loadG,
+                  planReps: item.sets[i].reps,
                   targetLoadG: item.sets[i].loadG,
                   targetReps: item.sets[i].reps,
                 ),
@@ -77,8 +79,10 @@ class Session {
   }
 
   /// Logs a set. Values default to the targets. Starts the exercise's rest
-  /// unless nothing is left to do. [completion] defaults to tap_unchanged
-  /// when the values equal the targets, else adjusted.
+  /// unless nothing is left to do. [completion] defaults to: `cold_start`
+  /// when a loaded exercise had no planned load; `tap_unchanged` when the
+  /// values equal the PLAN (not the target, which +/- may have moved) or the
+  /// Done came from the lock screen (R3); else `adjusted`.
   static SessionSnapshot done(
     SessionSnapshot s,
     String setId, {
@@ -98,11 +102,14 @@ class Session {
     final live = s.state == SessionState.paused ? _resumed(s, nowMs) : s;
     final load = loadG ?? set.targetLoadG;
     final r = reps ?? set.targetReps;
+    final loaded = const {'dumbbell', 'stack', 'barbell'}.contains(ex.loadKind);
     final how =
         completion ??
-        (set.targetLoadG == null && set.targetReps == null
+        (source == SetSource.lockscreen
+            ? Completion.tapUnchanged
+            : (loaded && set.planLoadG == null)
             ? Completion.coldStart
-            : (load == set.targetLoadG && r == set.targetReps)
+            : (load == set.planLoadG && r == set.planReps)
             ? Completion.tapUnchanged
             : Completion.adjusted);
     final started = _setStart(live, nowMs);
@@ -139,6 +146,8 @@ class Session {
       setId: set.setId,
       setOrdinal: set.setOrdinal,
       kind: set.kind,
+      planLoadG: set.planLoadG,
+      planReps: set.planReps,
       targetLoadG: set.targetLoadG,
       targetReps: set.targetReps,
     );
@@ -168,7 +177,9 @@ class Session {
     ).copyWith(rev: s.rev + 1);
   }
 
-  /// Changes what Done will log for a pending set (+/- before the tap).
+  /// Changes what Done (and a lock-screen Done) will log for a pending set.
+  /// The plan values stay, so a later Done is still judged against the plan:
+  /// +/- then Done is `adjusted`, not `tap_unchanged`.
   static SessionSnapshot retarget(
     SessionSnapshot s,
     String setId, {
@@ -204,6 +215,8 @@ class Session {
       setId: '${s.workoutUuid}:${_nextSetNumber(s)}',
       setOrdinal: ex.sets.length + 1,
       kind: last?.kind ?? SetKind.reps,
+      planLoadG: last?.loadG ?? last?.targetLoadG,
+      planReps: last?.reps ?? last?.targetReps,
       targetLoadG: last?.loadG ?? last?.targetLoadG,
       targetReps: last?.reps ?? last?.targetReps,
     );
@@ -268,6 +281,8 @@ class Session {
             setId: '${s.workoutUuid}:${n++}',
             setOrdinal: i + 1,
             kind: item.unit == LoadUnit.timed ? SetKind.timed : SetKind.reps,
+            planLoadG: item.sets[i].loadG,
+            planReps: item.sets[i].reps,
             targetLoadG: item.sets[i].loadG,
             targetReps: item.sets[i].reps,
           ),

@@ -37,14 +37,15 @@ void main() {
     }
   });
 
-  test('torn journal: last whole line wins, torn tail counted', () {
+  test('torn journal: last whole line wins; half line is a torn tail', () {
     final r = readJournal(
       File('${dir.path}/journal_v1_torn_tail.jsonl').readAsStringSync(),
     );
     final midSet = File('${dir.path}/snapshot_v1_mid_set.json')
         .readAsStringSync();
     expect(r.last!.encode(), midSet.trim());
-    expect(r.corruptLines, 1);
+    expect(r.tornTail, isTrue);
+    expect(r.corruptLines, 0);
   });
 
   test('fixture states are what their names say', () {

@@ -22,6 +22,8 @@ class SnapshotSet {
     required this.setId,
     required this.setOrdinal,
     this.kind = SetKind.reps,
+    this.planLoadG,
+    this.planReps,
     this.targetLoadG,
     this.targetReps,
     this.state = SetState.pending,
@@ -38,6 +40,11 @@ class SnapshotSet {
   final String setId;
   final int setOrdinal;
   final SetKind kind;
+
+  /// The engine's prefill, fixed at plan time. Completion is judged against
+  /// it: Done with exactly these values is `tap_unchanged`.
+  final int? planLoadG;
+  final int? planReps;
 
   /// What Done will log if he does not touch it. Null load = cold start or
   /// bodyweight with nothing added.
@@ -72,6 +79,8 @@ class SnapshotSet {
     setId: setId,
     setOrdinal: setOrdinal ?? this.setOrdinal,
     kind: kind,
+    planLoadG: planLoadG,
+    planReps: planReps,
     targetLoadG: _pick(targetLoadG, this.targetLoadG),
     targetReps: _pick(targetReps, this.targetReps),
     state: state ?? this.state,
@@ -89,6 +98,8 @@ class SnapshotSet {
     'set_id': setId,
     'set_ordinal': setOrdinal,
     'kind': kind.name,
+    'plan_load_g': planLoadG,
+    'plan_reps': planReps,
     'target_load_g': targetLoadG,
     'target_reps': targetReps,
     'state': state.name,
@@ -106,6 +117,8 @@ class SnapshotSet {
     setId: j['set_id'] as String,
     setOrdinal: j['set_ordinal'] as int,
     kind: SetKind.values.byName(j['kind'] as String? ?? 'reps'),
+    planLoadG: j['plan_load_g'] as int?,
+    planReps: j['plan_reps'] as int?,
     targetLoadG: j['target_load_g'] as int?,
     targetReps: j['target_reps'] as int?,
     state: SetState.values.byName(j['state'] as String),
@@ -413,21 +426,44 @@ class SessionSnapshot {
   }
 }
 
-/// Reads a journal file's text: one snapshot per line. Returns the last line
-/// that decodes; a torn or corrupt tail is ignored. Null if none decodes.
-/// [corruptLines] counts lines that failed (for the export's counters).
-({SessionSnapshot? last, int corruptLines}) readJournal(String text) {
+/// Reads a journal file's text: one snapshot per line. FOR TESTS AND
+/// TOOLS: Kotlin is the journal reader of record (`readPendingJournal`
+/// returns its last good line).
+///
+/// Returns the last good line. A half last line is a torn tail (normal after
+/// a crash), not corruption. Corrupt = a line before the last that does not
+/// decode, or a line with another uuid or a rev that does not rise; those
+/// are skipped.
+({SessionSnapshot? last, bool tornTail, int corruptLines}) readJournal(
+  String text,
+) {
   SessionSnapshot? last;
   var bad = 0;
-  for (final line in const LineSplitter().convert(text)) {
-    if (line.trim().isEmpty) continue;
+  var torn = false;
+  final lines = [
+    for (final l in const LineSplitter().convert(text))
+      if (l.trim().isNotEmpty) l,
+  ];
+  for (var i = 0; i < lines.length; i++) {
+    final SessionSnapshot s;
     try {
-      last = SessionSnapshot.decode(line);
+      s = SessionSnapshot.decode(lines[i]);
     } on FormatException {
-      bad++;
+      if (i == lines.length - 1) {
+        torn = true;
+      } else {
+        bad++;
+      }
+      continue;
     }
+    if (last != null &&
+        (s.workoutUuid != last.workoutUuid || s.rev <= last.rev)) {
+      bad++;
+      continue;
+    }
+    last = s;
   }
-  return (last: last, corruptLines: bad);
+  return (last: last, tornTail: torn, corruptLines: bad);
 }
 
 const Object _keep = _Keep();
