@@ -1,21 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Auto Backup, API 29-30 (plan 7, B6). The database (files/gym.db) and the native gate
-     counters are backed up; the live journal, exports, spike evidence, device-specific strap
-     state and the install marker are not (the marker must never be restored, or install-over
-     checks read fresh=false). gym.db-wal is backed up too (a backup between checkpoints would
-     otherwise miss the last writes; SQLite ignores a stale WAL by salt); -shm is not. The app
-     checkpoints on pause, after a finish and before export. Same lists as data_extraction_rules.xml (API 31+). -->
+<!-- Auto Backup, API 29-30 (plan 7, B6). Backs up ONLY a consistent database snapshot and the
+     native gate counters. The live files/gym.db (+ -wal/-shm) are never copied: Auto Backup copies
+     files one by one, and a checkpoint between copies would restore a silently corrupt database.
+     The app writes files/backup/gym-snapshot.db with VACUUM INTO (tmp, fsync, rename) on pause,
+     after a finish and before export; on first open with no gym.db it restores the snapshot and
+     runs PRAGMA quick_check. Includes are an allowlist: the journal, exports, spike evidence, strap
+     state and the install marker are never backed up. Same list as data_extraction_rules.xml. -->
 <full-backup-content>
-    <include domain="file" path="gym.db" />
+    <include domain="file" path="backup/gym-snapshot.db" />
     <include domain="sharedpref" path="gymsupreme.counters.xml" />
-    <exclude domain="file" path="journal/" />
-    <exclude domain="file" path="export/" />
-    <exclude domain="file" path="spike/" />
-    <exclude domain="file" path="ble-trail.log" />
-    <exclude domain="file" path="install_marker.txt" />
-    <!-- WAL kept: a backup between checkpoints would miss the last writes; SQLite ignores a stale WAL (salt). -->
-    <include domain="file" path="gym.db-wal" />
-    <exclude domain="file" path="gym.db-shm" />
-    <exclude domain="sharedpref" path="gymsupreme.journal.xml" />
-    <exclude domain="sharedpref" path="gymsupreme.ble.xml" />
 </full-backup-content>
