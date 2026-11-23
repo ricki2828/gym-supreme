@@ -440,7 +440,13 @@ class _Header extends StatelessWidget {
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
           child: Text(
-            'LIFT ${view.lift} OF ${view.lifts} · SET ${view.set} OF ${view.sets}',
+            // Narrow phones keep the set count, which he needs mid-set, at a
+            // readable size rather than shrinking the whole line.
+            _narrowHeader(context)
+                ? 'SET ${view.set} OF ${view.sets}'
+                : 'LIFT ${view.lift} OF ${view.lifts} · SET ${view.set} OF ${view.sets}',
+            semanticsLabel:
+                'Lift ${view.lift} of ${view.lifts}, set ${view.set} of ${view.sets}',
             style: LitType.cap(14, ink),
           ),
         ),
@@ -1028,4 +1034,11 @@ class _AllDone extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Short live header: narrow phones (320 dp) at any text size, and 360 dp
+/// phones at large text, where the full line would shrink to ~0.6x.
+bool _narrowHeader(BuildContext context) {
+  final w = MediaQuery.sizeOf(context).width;
+  return w < 360 || w / MediaQuery.textScalerOf(context).scale(1) < 300;
 }
