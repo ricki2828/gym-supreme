@@ -409,9 +409,24 @@ void main() {
         ),
       ),
     );
+    // Large text: the budget is on the page itself, live.
+    final chip = find.byKey(const Key('picker.minutes.30'));
+    await tester.scrollUntilVisible(
+      chip,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(chip, findsOneWidget);
     await tester.tap(find.text('Swipe up or tap to see them'));
     await tester.pumpAndSettle();
     expect(find.text('Reorder once you start.'), findsOneWidget);
-    expect(find.byKey(const Key('picker.minutes.30')), findsNothing);
+    // ...but never inside the read-only peek.
+    expect(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.byKey(const Key('picker.minutes.30')),
+      ),
+      findsNothing,
+    );
   });
 }

@@ -163,6 +163,16 @@ class PickerScreen extends StatelessWidget {
                     Center(child: body),
                     const SizedBox(height: 12),
                     rows,
+                    // Large text has only the read-only peek, so the time
+                    // budget lives here, in the live page (rebuilds with it).
+                    if (onMinutes != null && minutes != null) ...[
+                      const SizedBox(height: 12),
+                      _MinutesChips(
+                        value: minutes!,
+                        onChanged: onMinutes!,
+                        dark: false,
+                      ),
+                    ],
                   ] else
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -518,9 +528,16 @@ class _GroupRow extends StatelessWidget {
 
 /// 30 / 45 / 60 minutes (review P1-4, t61 item 4: suggest(minutes:)).
 class _MinutesChips extends StatelessWidget {
-  const _MinutesChips({required this.value, required this.onChanged});
+  const _MinutesChips({
+    required this.value,
+    required this.onChanged,
+    this.dark = true,
+  });
   final int value;
   final ValueChanged<int> onChanged;
+
+  /// On the ink sheet (true) or the light page (false).
+  final bool dark;
   static const options = [30, 45, 60];
 
   @override
@@ -532,7 +549,11 @@ class _MinutesChips extends StatelessWidget {
     children: [
       Text(
         'Time',
-        style: LitType.body(13, const Color(0xFFA5A9B1), FontWeight.w700),
+        style: LitType.body(
+          13,
+          dark ? const Color(0xFFA5A9B1) : Lit.inkSecondary,
+          FontWeight.w700,
+        ),
       ),
       for (final m in options)
         Semantics(
@@ -550,17 +571,26 @@ class _MinutesChips extends StatelessWidget {
               alignment: Alignment.center,
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: ShapeDecoration(
-                color: m == value ? Colors.white : Colors.transparent,
+                color: m == value
+                    ? (dark ? Colors.white : Lit.ink)
+                    : Colors.transparent,
                 shape: StadiumBorder(
                   side: BorderSide(
-                    color: m == value ? Colors.white : const Color(0xFF5F646D),
+                    color: m == value
+                        ? (dark ? Colors.white : Lit.ink)
+                        : (dark ? const Color(0xFF5F646D) : Lit.inkQuiet),
                     width: 1.5,
                   ),
                 ),
               ),
               child: Text(
                 '$m MIN',
-                style: LitType.display(20, m == value ? Lit.ink : Colors.white),
+                style: LitType.display(
+                  20,
+                  dark
+                      ? (m == value ? Lit.ink : Colors.white)
+                      : (m == value ? Colors.white : Lit.ink),
+                ),
               ),
             ),
           ),
