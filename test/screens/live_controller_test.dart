@@ -89,8 +89,8 @@ void main() {
 
   test('same-snapshot transitions send nothing', () async {
     await startPush();
-    await c.load(-1); // nothing below null
     await c.skipRest(); // no rest running
+    await c.reps(-100); // below 1
     expect(port.rev, 0);
   });
 
@@ -306,5 +306,62 @@ void main() {
     now += 60000;
     expect(c.view()!.elapsedS, at, reason: 'finished clock stops');
     expect(await c.finish(), fin.workoutUuid);
+  });
+
+  test('first weight starts mid-list, either direction (P1-1)', () async {
+    await startPush();
+    final steps = engine.loadSteps(
+      gymId: gymId,
+      exerciseId: c.snapshot!.exercises.first.exerciseId,
+    );
+    final mid = steps.loadsG[(steps.loadsG.length - 1) ~/ 2];
+    await c.load(-1);
+    expect(c.view()!.loadG, mid);
+    expect(mid, greaterThan(steps.loadsG.first));
+  });
+
+  test(
+    'typed values log as typed; a first-time set stays cold start',
+    () async {
+      await startPush();
+      await c.setLoad(13250); // not on the list: he logs what he lifted
+      expect(c.view()!.loadG, 13250);
+      await c.done();
+      final first = c.snapshot!.exercises.first.sets.first;
+      expect(first.loadG, 13250);
+      expect(first.completion, eng.Completion.coldStart);
+    },
+  );
+
+  test('typed reps on a prefilled set log as typed', () async {
+    // A second session: the first one gives this lift a plan load.
+    await startPush();
+    await c.load(1);
+    for (var i = 0; i < 3; i++) {
+      await c.done();
+      await c.skipRest();
+    }
+    await c.finish();
+    final c2 = LiveController(
+      engine: engine,
+      port: port,
+      nowMs: () => now,
+      tzOffsetMin: 480,
+      tick: const Duration(days: 1),
+    );
+    now += 3 * 86400000;
+    final plan = engine.suggest(
+      gymId: gymId,
+      muscleIds: const ['chest', 'front-delts', 'side-delts', 'triceps'],
+      typeId: 'push',
+    );
+    await c2.start(plan);
+    final set = c2.snapshot!.currentSet!;
+    expect(set.planLoadG, isNotNull, reason: 'prefilled from last time');
+    await c2.setReps((set.targetReps ?? 8) + 2);
+    await c2.done();
+    final logged = c2.snapshot!.exercises.first.sets.first;
+    expect(logged.completion, eng.Completion.typed);
+    c2.dispose();
   });
 }

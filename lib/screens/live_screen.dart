@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supreme_ui/supreme_ui.dart';
 
@@ -94,6 +96,8 @@ class LiveScreen extends StatelessWidget {
     required this.view,
     this.onReps,
     this.onLoad,
+    this.onTypeReps,
+    this.onTypeLoad,
     this.onDone,
     this.onSkipSet,
     this.onRestDelta,
@@ -118,6 +122,12 @@ class LiveScreen extends StatelessWidget {
 
   /// +1 / -1 step along the gym's weight list.
   final ValueChanged<int>? onLoad;
+
+  /// A typed rep count (seconds on a timed set).
+  final ValueChanged<int>? onTypeReps;
+
+  /// A typed load in grams (any value, on the gym's list or not).
+  final ValueChanged<int>? onTypeLoad;
   final VoidCallback? onDone;
   final VoidCallback? onSkipSet;
 
@@ -181,6 +191,19 @@ class LiveScreen extends StatelessWidget {
                           ? null
                           : () => onReps!(-1),
                       onPlus: onReps == null ? null : () => onReps!(1),
+                      onEdit: onTypeReps == null
+                          ? null
+                          : () async {
+                              final timed = view.unit == LoadUnit.timed;
+                              final v = await askNumber(
+                                context,
+                                title: timed ? 'Seconds' : 'Reps',
+                                unit: timed ? 'sec' : 'reps',
+                                initial: view.reps,
+                                max: timed ? 3600 : 200,
+                              );
+                              if (v != null && v >= 1) onTypeReps!(v.round());
+                            },
                     ),
                     if (view.unit == LoadUnit.kg ||
                         view.unit == LoadUnit.kgEach) ...[
@@ -198,6 +221,22 @@ class LiveScreen extends StatelessWidget {
                         onPlus: onLoad == null || !view.canLoadUp
                             ? null
                             : () => onLoad!(1),
+                        onEdit: onTypeLoad == null
+                            ? null
+                            : () async {
+                                final v = await askNumber(
+                                  context,
+                                  title: view.unit == LoadUnit.kgEach
+                                      ? 'Kilograms, each'
+                                      : 'Kilograms',
+                                  unit: 'kg',
+                                  initial: view.loadG == null
+                                      ? null
+                                      : view.loadG! / 1000,
+                                  decimals: true,
+                                );
+                                if (v != null) onTypeLoad!((v * 1000).round());
+                              },
                       ),
                     ],
                     const SizedBox(height: 10),
@@ -318,6 +357,7 @@ class _Stepper extends StatelessWidget {
     required this.label,
     this.onMinus,
     this.onPlus,
+    this.onEdit,
   });
   final String value;
   final String unit;
@@ -328,33 +368,44 @@ class _Stepper extends StatelessWidget {
   final VoidCallback? onMinus;
   final VoidCallback? onPlus;
 
+  /// Tap the number to type it (P1-1).
+  final VoidCallback? onEdit;
+
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: '$value $label',
-    child: Row(
-      children: [
-        _Round(icon: Icons.remove, tip: 'Less', bg: bg, onTap: onMinus),
-        Expanded(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(value, style: LitType.display(size, ink)),
-                const SizedBox(width: 8),
-                Text(unit, style: LitType.display(size * 0.42, ink)),
-              ],
+  Widget build(BuildContext context) => Row(
+    children: [
+      _Round(icon: Icons.remove, tip: 'Less $label', bg: bg, onTap: onMinus),
+      Expanded(
+        child: Semantics(
+          button: onEdit != null,
+          label: '$value $label${onEdit == null ? '' : '. Tap to type'}',
+          excludeSemantics: true,
+          child: InkWell(
+            onTap: onEdit,
+            borderRadius: BorderRadius.circular(16),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(value, style: LitType.display(size, ink)),
+                  const SizedBox(width: 8),
+                  Text(unit, style: LitType.display(size * 0.42, ink)),
+                ],
+              ),
             ),
           ),
         ),
-        _Round(icon: Icons.add, tip: 'More', bg: bg, onTap: onPlus),
-      ],
-    ),
+      ),
+      _Round(icon: Icons.add, tip: 'More $label', bg: bg, onTap: onPlus),
+    ],
   );
 }
 
-class _Round extends StatelessWidget {
+/// A 60 dp round +/- button. Hold it to repeat (P1-1): one step at once,
+/// then about 8 a second until released or the end of the range.
+class _Round extends StatefulWidget {
   const _Round({
     required this.icon,
     required this.tip,
@@ -365,27 +416,126 @@ class _Round extends StatelessWidget {
   final String tip;
   final Color bg;
   final VoidCallback? onTap;
+
+  @override
+  State<_Round> createState() => _RoundState();
+}
+
+class _RoundState extends State<_Round> {
+  Timer? _repeat;
+
+  void _start() {
+    final tap = widget.onTap;
+    if (tap == null) return;
+    tap();
+    _repeat = Timer.periodic(const Duration(milliseconds: 120), (_) {
+      final t = widget.onTap;
+      if (t == null) {
+        _stop();
+      } else {
+        t();
+      }
+    });
+  }
+
+  void _stop() {
+    _repeat?.cancel();
+    _repeat = null;
+  }
+
+  @override
+  void dispose() {
+    _stop();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
-    enabled: onTap != null,
-    label: tip,
+    enabled: widget.onTap != null,
+    label: widget.tip,
     excludeSemantics: true,
-    child: Material(
-      color: onTap == null ? Lit.ink.withValues(alpha: 0.35) : Lit.ink,
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: SizedBox(
-          width: 60,
-          height: 60,
-          child: Icon(icon, size: 30, color: bg),
+    child: GestureDetector(
+      onLongPressStart: (_) => _start(),
+      onLongPressEnd: (_) => _stop(),
+      onLongPressCancel: _stop,
+      child: Material(
+        color: widget.onTap == null ? Lit.ink.withValues(alpha: 0.35) : Lit.ink,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: widget.onTap,
+          child: SizedBox(
+            width: 60,
+            height: 60,
+            child: Icon(widget.icon, size: 30, color: widget.bg),
+          ),
         ),
       ),
     ),
   );
 }
+
+/// The number pad for a typed value. Null on cancel or a value out of range.
+Future<num?> askNumber(
+  BuildContext context, {
+  required String title,
+  required String unit,
+  num? initial,
+  bool decimals = false,
+  num max = 500,
+}) {
+  final text = TextEditingController(
+    text: initial == null
+        ? ''
+        : (decimals ? _trimNum(initial.toDouble()) : '${initial.round()}'),
+  );
+  num? parse() {
+    final v = num.tryParse(text.text.trim().replaceAll(',', '.'));
+    if (v == null || v < 0 || v > max) return null;
+    return decimals ? v : v.round();
+  }
+
+  return showDialog<num>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        key: const Key('live.keypad'),
+        controller: text,
+        autofocus: true,
+        keyboardType: TextInputType.numberWithOptions(decimal: decimals),
+        style: LitType.display(48),
+        decoration: InputDecoration(suffixText: unit),
+        onSubmitted: (_) {
+          final v = parse();
+          if (v != null) Navigator.of(ctx).pop(v);
+        },
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          key: const Key('live.keypad.set'),
+          onPressed: () {
+            final v = parse();
+            if (v != null) Navigator.of(ctx).pop(v);
+          },
+          child: const Text('Set'),
+        ),
+      ],
+    ),
+  );
+}
+
+String _trimNum(double v) => v == v.roundToDouble()
+    ? v.toStringAsFixed(0)
+    : v
+          .toStringAsFixed(3)
+          .replaceFirst(RegExp(r'0+$'), '')
+          .replaceFirst(RegExp(r'\.$'), '');
 
 class _RestPanel extends StatelessWidget {
   const _RestPanel({required this.seconds, required this.ink, this.onDelta});

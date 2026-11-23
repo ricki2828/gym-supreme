@@ -89,23 +89,66 @@ class LiveController extends ChangeNotifier {
     return eng.Session.retarget(s, set.setId, reps: r);
   });
 
-  /// Steps along the gym's real weight list (plan 5.6); never invents a load.
+  /// Steps along the gym's real weight list (plan 5.6). A lift with no weight
+  /// yet (first time here) starts mid-list, not at the lightest pair: about
+  /// 12 kg on the dumbbell list instead of a dozen taps up from 2 kg (P1-1).
   Future<void> load(int delta) => _onCurrent((s, set) {
     final steps = _stepsFor(s);
-    if (steps == null) return s;
-    final next = delta > 0
-        ? steps.next(set.targetLoadG)
-        : steps.prev(set.targetLoadG);
+    if (steps == null || steps.loadsG.isEmpty) return s;
+    final int? next;
+    if (set.targetLoadG == null) {
+      next = steps.loadsG[(steps.loadsG.length - 1) ~/ 2];
+    } else {
+      next = delta > 0
+          ? steps.next(set.targetLoadG)
+          : steps.prev(set.targetLoadG);
+    }
     if (next == null) return s;
     return eng.Session.retarget(s, set.setId, loadG: next);
   });
+
+  /// Set ids whose value he typed; their Done is logged as `typed` (B4).
+  final Set<String> _typed = {};
+
+  /// A typed rep count (or seconds on a timed set). Any value from 1 up.
+  Future<void> setReps(int reps) => _onCurrent((s, set) {
+    if (reps < 1 || reps == set.targetReps) return s;
+    _typed.add(set.setId);
+    return eng.Session.retarget(s, set.setId, reps: reps);
+  });
+
+  /// A typed load in grams. Any value, on the gym's list or not: he logs
+  /// what he lifted (P1-2); the list only drives +/- and progression.
+  Future<void> setLoad(int grams) => _onCurrent((s, set) {
+    if (grams < 0 || grams == set.targetLoadG) return s;
+    _typed.add(set.setId);
+    return eng.Session.retarget(s, set.setId, loadG: grams);
+  });
+
+  /// `typed` when he typed this set's value, except a first-time set, which
+  /// stays a cold start (the one-tap rate leaves those out).
+  eng.Completion? _completionFor(eng.SessionSnapshot s, eng.SnapshotSet set) {
+    if (!_typed.contains(set.setId)) return null;
+    final c = s.current;
+    final kind = c == null ? '' : s.exercises[c.exercise].loadKind;
+    final loaded = const {'dumbbell', 'stack', 'barbell'}.contains(kind);
+    if (loaded && set.planLoadG == null) return null;
+    return eng.Completion.typed;
+  }
 
   /// Done on a timer block logs the block (TimerSession.finish); any other
   /// set is a plain Done.
   Future<void> done() => _onCurrent((s, set) {
     final now = nowMs();
     final f = c2.TimerSession.finish(s, set.setId, nowMs: now);
-    return identical(f, s) ? eng.Session.done(s, set.setId, nowMs: now) : f;
+    return identical(f, s)
+        ? eng.Session.done(
+            s,
+            set.setId,
+            nowMs: now,
+            completion: _completionFor(s, set),
+          )
+        : f;
   });
 
   /// One path for skip (and undo): the TimerSession versions stop or re-arm a
