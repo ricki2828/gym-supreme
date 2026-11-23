@@ -354,7 +354,9 @@ class PickerScreen extends StatelessWidget {
         children: [
           ?sheetExtra,
           _sheetHead('${p.items.length} LIFTS · ${p.minutes} MIN'),
-          if (onMinutes != null && minutes != null) ...[
+          // Not in the read-only peek: it shows a plan captured when it
+          // opened, so a new budget there would start the old plan.
+          if (!readOnly && onMinutes != null && minutes != null) ...[
             const SizedBox(height: 8),
             _MinutesChips(value: minutes!, onChanged: onMinutes!),
           ],
@@ -522,19 +524,23 @@ class _MinutesChips extends StatelessWidget {
   static const options = [30, 45, 60];
 
   @override
-  Widget build(BuildContext context) => Row(
+  Widget build(BuildContext context) => Wrap(
+    // Wraps on a narrow phone at large text instead of overflowing.
+    crossAxisAlignment: WrapCrossAlignment.center,
+    spacing: 8,
+    runSpacing: 6,
     children: [
       Text(
         'Time',
         style: LitType.body(13, const Color(0xFFA5A9B1), FontWeight.w700),
       ),
-      const SizedBox(width: 10),
-      for (final m in options) ...[
+      for (final m in options)
         Semantics(
           button: true,
           selected: m == value,
           label: '$m minutes',
           excludeSemantics: true,
+          onTap: () => onChanged(m),
           child: InkWell(
             key: Key('picker.minutes.$m'),
             onTap: () => onChanged(m),
@@ -559,8 +565,6 @@ class _MinutesChips extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 8),
-      ],
     ],
   );
 }

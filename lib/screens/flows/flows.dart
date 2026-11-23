@@ -541,7 +541,14 @@ class _PickerFlowState extends State<PickerFlow> {
   List<String>? _order;
 
   /// Time budget; starts at his default (settings), 45 unless changed.
-  late int _minutes = _engine.settings().defaultMinutes;
+  late int _minutes = _nearestBudget(_engine.settings().defaultMinutes);
+
+  /// The chip closest to his default, so one is always selected.
+  static int _nearestBudget(int m) => const [
+    30,
+    45,
+    60,
+  ].reduce((a, b) => (a - m).abs() <= (b - m).abs() ? a : b);
 
   /// Variety seed (t61, item 4): the stored workout count + 1, fixed while
   /// this picker is open so the list never reshuffles on a tap. It only

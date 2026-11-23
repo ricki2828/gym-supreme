@@ -336,7 +336,7 @@ void main() {
     await tapText(tester, 'LIGHT SOMETHING UP');
     await tester.tap(find.bySemanticsLabel(RegExp(r'^Chest, ')));
     await tester.pumpAndSettle();
-    final at45 = engine.suggest(
+    final at30 = engine.suggest(
       gymId: engine.gyms().single.id,
       muscleIds: const ['chest'],
       minutes: 30,
@@ -344,10 +344,11 @@ void main() {
     await tester.tap(find.byKey(const Key('picker.minutes.30')));
     await tester.pumpAndSettle();
     expect(
-      find.text('${at45.items.length} LIFTS · ${at45.estimatedMinutes} MIN'),
+      find.text('${at30.items.length} LIFTS · ${at30.estimatedMinutes} MIN'),
       findsOneWidget,
       reason: 'the sheet shows the 30-minute plan',
     );
+    expect(at30.estimatedMinutes, lessThanOrEqualTo(30));
   });
 
   testWidgets('the picker passes a fixed seed: same list across taps', (

@@ -391,4 +391,27 @@ void main() {
     );
     expect(find.byKey(const Key('picker.minutes.60')), findsNothing);
   });
+
+  testWidgets('the read-only peek never shows the minutes chips', (
+    tester,
+  ) async {
+    phone(tester, textScale: 1.3);
+    await tester.pumpWidget(
+      app(
+        PickerScreen(
+          gym: condo,
+          days: storyDays,
+          selected: pushSelection,
+          plan: pushPlan,
+          minutes: 45,
+          onMinutes: (_) {},
+          onStart: () {},
+        ),
+      ),
+    );
+    await tester.tap(find.text('Swipe up or tap to see them'));
+    await tester.pumpAndSettle();
+    expect(find.text('Reorder once you start.'), findsOneWidget);
+    expect(find.byKey(const Key('picker.minutes.30')), findsNothing);
+  });
 }
