@@ -285,6 +285,13 @@ interface GymHostApi {
   fun getHostInfo(): HostInfo
   /** Opens this app's notification settings (the banner's "Turn on"). */
   fun openNotificationSettings()
+  /**
+   * CI e2e (phase-1 exit): the `gym_e2e` string extra of the latest launch
+   * intent (onCreate or onNewIntent), returned once and then cleared. Dogfood
+   * and debug builds only; always null on play. Dart calls it on start and on
+   * every resume.
+   */
+  fun takeLaunchCommand(): String?
 
   companion object {
     /** The codec used by GymHostApi. */
@@ -317,6 +324,21 @@ interface GymHostApi {
             val wrapped: List<Any?> = try {
               api.openNotificationSettings()
               listOf(null)
+            } catch (exception: Throwable) {
+              PlatformApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.gym_supreme.GymHostApi.takeLaunchCommand$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.takeLaunchCommand())
             } catch (exception: Throwable) {
               PlatformApiPigeonUtils.wrapError(exception)
             }
