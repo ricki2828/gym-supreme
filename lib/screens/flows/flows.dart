@@ -732,6 +732,7 @@ class _LiveFlowState extends State<LiveFlow> {
             setExtra: _setExtra(),
             actions: [
               if (Features.timers &&
+                  c.active &&
                   c.snapshot?.currentSet != null &&
                   c.currentTimer == null)
                 BigButton(
