@@ -83,10 +83,14 @@ class Session {
   /// Logs a set. Values default to the targets. A Done while paused resumes
   /// first, so that set is logged as starting at the Done (zero length):
   /// paused time is never set time. Starts the exercise's rest
-  /// unless nothing is left to do. [completion] defaults to: `cold_start`
-  /// when a loaded exercise had no planned load; `tap_unchanged` when the
-  /// values equal the PLAN (not the target, which +/- may have moved) or the
-  /// Done came from the lock screen (R3); else `adjusted`.
+  /// unless nothing is left to do. [completion] defaults to (judged against
+  /// what was shown, t5t 0.2): `cold_start` when a loaded exercise had no
+  /// planned load and no earlier logged set of the lift had one;
+  /// `tap_unchanged` when each value equals the PLAN or the value carried
+  /// from the lift's last logged set (a +/- on this set alone is not), or
+  /// the Done came from the lock screen (R3); else `adjusted`. Known edge: a
+  /// +/- on this set that lands exactly on the last logged value counts as
+  /// shown.
   static SessionSnapshot done(
     SessionSnapshot s,
     String setId, {
@@ -109,13 +113,19 @@ class Session {
     final load = identical(loadG, _keep) ? set.targetLoadG : loadG as int?;
     final r = identical(reps, _keep) ? set.targetReps : reps as int?;
     final loaded = const {'dumbbell', 'stack', 'barbell'}.contains(ex.loadKind);
+    // Judged against what was SHOWN (t5t, 0.2): the plan, or the value
+    // carried forward from the lift's last logged set (see _carryForward).
+    final prev = _lastLogged(ex, at.s);
+    final loadShown =
+        load == set.planLoadG || (prev != null && load == prev.loadG);
+    final repsShown = r == set.planReps || (prev != null && r == prev.reps);
     final how =
         completion ??
-        ((loaded && set.planLoadG == null)
+        ((loaded && set.planLoadG == null && prev?.loadG == null)
             ? Completion.coldStart
             : source == SetSource.lockscreen
             ? Completion.tapUnchanged
-            : (load == set.planLoadG && r == set.planReps)
+            : (loadShown && repsShown)
             ? Completion.tapUnchanged
             : Completion.adjusted);
     final started = _setStart(live, nowMs);
@@ -547,6 +557,16 @@ SessionSnapshot _replaceExercise(
   int e,
   SnapshotExercise ex,
 ) => s.copyWith(exercises: [...s.exercises]..[e] = ex);
+
+/// The closest earlier done set of the same kind in [ex] before index [i].
+SnapshotSet? _lastLogged(SnapshotExercise ex, int i) {
+  final kind = ex.sets[i].kind;
+  for (var k = i - 1; k >= 0; k--) {
+    final x = ex.sets[k];
+    if (x.kind == kind && x.state == SetState.done) return x;
+  }
+  return null;
+}
 
 /// Carry-forward (0.2, P1-1): when set [i] of exercise [e] moves from one
 /// load (or reps) to another, every LATER pending set of the same kind whose

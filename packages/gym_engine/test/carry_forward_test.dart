@@ -148,8 +148,48 @@ void main() {
     s = Session.undo(s, 'u:0');
     expect(s.exercises[0].sets[0].state, SetState.pending);
     expect(loads(s, 0), [16000, 16000, 16000]);
-    // Completion is still judged against the (empty) plan: cold start.
+  });
+
+  test('completion is judged against what was shown (t5t ruling)', () {
+    // First-time lift: set 1 entered = cold start; sets 2-3 accepted as
+    // carried = tap_unchanged; a +/- on set 3 itself = adjusted.
+    var s = start([item('a', three)]);
+    s = Session.retarget(s, 'u:0', loadG: 16000);
+    s = Session.done(s, 'u:0', nowMs: t0 + 1);
     s = Session.done(s, 'u:1', nowMs: t0 + 2);
-    expect(s.exercises[0].sets[1].completion, Completion.coldStart);
+    s = Session.retarget(s, 'u:2', loadG: 18000);
+    s = Session.done(s, 'u:2', nowMs: t0 + 3);
+    final c = [for (final x in s.exercises[0].sets) x.completion];
+    expect(c, [
+      Completion.coldStart,
+      Completion.tapUnchanged,
+      Completion.adjusted, // 16 kg was shown; he changed it
+    ]);
+    // Plan values never move (ghost and progression keep the plan).
+    expect(s.exercises[0].sets[2].planLoadG, isNull);
+  });
+
+  test('planned lift: carried drop is tap on the next set; own +/- is '
+      'adjusted', () {
+    const p = [
+      PlannedSet(loadG: 22000, reps: 10),
+      PlannedSet(loadG: 22000, reps: 10),
+      PlannedSet(loadG: 22000, reps: 10),
+    ];
+    var s = start([item('a', p)]);
+    s = Session.retarget(s, 'u:0', loadG: 20000);
+    s = Session.done(s, 'u:0', nowMs: t0 + 1);
+    s = Session.done(s, 'u:1', nowMs: t0 + 2);
+    s = Session.retarget(s, 'u:2', reps: 8);
+    s = Session.done(s, 'u:2', nowMs: t0 + 3);
+    expect(
+      [for (final x in s.exercises[0].sets) x.completion],
+      [
+        Completion.adjusted, // B4: +/- on the set itself
+        Completion.tapUnchanged, // carried 20 kg accepted
+        Completion.adjusted, // own reps change
+      ],
+    );
+    expect(s.exercises[0].sets[1].planLoadG, 22000);
   });
 }
