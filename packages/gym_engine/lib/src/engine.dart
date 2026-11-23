@@ -209,7 +209,7 @@ class GymEngine implements GymApi {
     final settings = store.settings();
     final budgetS = (minutes ?? settings.defaultMinutes) * 60;
     final picked = [
-      for (final m in muscleIds)
+      for (final m in {...muscleIds})
         if (catalog.muscles.any((x) => x.id == m)) m,
     ];
     final status = muscleStatus(gymId: gymId);
@@ -283,7 +283,8 @@ class GymEngine implements GymApi {
       credit(e, 3);
     }
 
-    bool fresh(Exercise e) => isFreshPattern(e, chosen);
+    Exercise? rotatedOut; // the seed rotation's lift stays out, fill too
+    bool fresh(Exercise e) => e != rotatedOut && isFreshPattern(e, chosen);
 
     for (final m in picked) {
       while ((need[m] ?? 0) > 0) {
@@ -331,6 +332,7 @@ class GymEngine implements GymApi {
             e,
       ];
       if (alt.isNotEmpty) {
+        rotatedOut = out;
         chosen[slot] = alt.first;
         setsOf[alt.first.id] = setsOf.remove(out.id)!;
       }
@@ -442,6 +444,7 @@ class GymEngine implements GymApi {
           if (!chosen.contains(e) &&
               !e.isCompound &&
               3 * setCost(e) <= room &&
+              fresh(e) &&
               chosen.where((x) => _samePrimary(x, e)).length < 2) {
             extra = e;
             break;
@@ -466,6 +469,7 @@ class GymEngine implements GymApi {
       for (final m in byNeed.where(_coreMuscles.contains)) {
         for (final e in poolFor(m)) {
           if (!chosen.contains(e) &&
+              e != rotatedOut &&
               3 * setCost(e) <= room &&
               chosen.where((x) => _samePrimary(x, e)).length < 3) {
             core = e;

@@ -84,6 +84,18 @@ void main() {
         }
       });
 
+      test('no two isolations of the same movement (core excepted)', () {
+        for (final m in [30, 45, 60]) {
+          final iso = [
+            for (final e in lifts(plan(m, seed: 3)))
+              if (!e.isCompound &&
+                  !e.primary.any(const {'abs', 'obliques'}.contains))
+                '${movementGroup(e)}/${movementVariant(e)}',
+          ];
+          expect(iso.toSet().length, iso.length, reason: '$iso at $m min');
+        }
+      });
+
       test('a bodyweight lift only when no loaded one of its kind is free', () {
         final p = plan(45);
         final chosen = lifts(p);
@@ -189,5 +201,25 @@ void main() {
       p.items.map((i) => i.exerciseId),
       isNot(contains('bodyweight-squat')),
     );
+  });
+
+  test('forearms alone: one wrist curl, never both (review P2)', () {
+    for (final m in [30, 45, 60]) {
+      final ids = engine
+          .suggest(gymId: gym.id, muscleIds: const ['forearms'], minutes: m)
+          .items
+          .map((i) => i.exerciseId)
+          .where((id) => id.contains('wrist-curl'));
+      expect(ids.length, lessThanOrEqualTo(1), reason: '$ids at $m min');
+    }
+  });
+
+  test('a repeated muscle id counts once', () {
+    final a = engine.suggest(gymId: gym.id, muscleIds: const ['chest']);
+    final b = engine.suggest(
+      gymId: gym.id,
+      muscleIds: const ['chest', 'chest'],
+    );
+    expect(b.items.map((i) => i.exerciseId), a.items.map((i) => i.exerciseId));
   });
 }
