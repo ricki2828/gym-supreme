@@ -121,7 +121,7 @@ class Session {
     final repsShown = r == set.planReps || (prev != null && r == prev.reps);
     final how =
         completion ??
-        ((loaded && set.planLoadG == null && prev?.loadG == null)
+        ((loaded && set.planLoadG == null && !_anyLoggedLoad(ex, at.s))
             ? Completion.coldStart
             : source == SetSource.lockscreen
             ? Completion.tapUnchanged
@@ -255,9 +255,10 @@ class Session {
   }
 
   /// Changes what Done (and a lock-screen Done) will log for a pending set.
-  /// The plan values stay, so a later Done is still judged against the plan:
-  /// +/- then Done is `adjusted`, not `tap_unchanged`. A changed value also
-  /// carries forward to the lift's later pending sets (see [_carryForward]).
+  /// The plan values stay. A +/- on this set and then Done is `adjusted`
+  /// (B4). A changed value also carries forward to the lift's later pending
+  /// sets ([_carryForward]); Done on those is judged against the carried
+  /// value (see [done]). No-op when nothing changes.
   static SessionSnapshot retarget(
     SessionSnapshot s,
     String setId, {
@@ -271,6 +272,7 @@ class Session {
     if (set.state != SetState.pending) return s;
     final load = identical(loadG, _keep) ? set.targetLoadG : loadG as int?;
     final r = identical(reps, _keep) ? set.targetReps : reps as int?;
+    if (load == set.targetLoadG && r == set.targetReps) return s;
     return _carryForward(
       _replaceSet(
         s,
@@ -558,6 +560,18 @@ SessionSnapshot _replaceExercise(
   SnapshotExercise ex,
 ) => s.copyWith(exercises: [...s.exercises]..[e] = ex);
 
+/// Whether any earlier done set of the same kind in [ex] logged a load.
+bool _anyLoggedLoad(SnapshotExercise ex, int i) {
+  final kind = ex.sets[i].kind;
+  for (var k = 0; k < i; k++) {
+    final x = ex.sets[k];
+    if (x.kind == kind && x.state == SetState.done && x.loadG != null) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /// The closest earlier done set of the same kind in [ex] before index [i].
 SnapshotSet? _lastLogged(SnapshotExercise ex, int i) {
   final kind = ex.sets[i].kind;
@@ -569,11 +583,13 @@ SnapshotSet? _lastLogged(SnapshotExercise ex, int i) {
 }
 
 /// Carry-forward (0.2, P1-1): when set [i] of exercise [e] moves from one
-/// load (or reps) to another, every LATER pending set of the same kind whose
-/// target still equals the old value takes the new one. Sets the lifter
-/// already changed on their own, a planned pyramid (different targets) and
-/// timed sets are left alone, and a cleared (null) value never carries; plan values never change, so completion is
-/// still judged against the plan. Each field carries independently.
+/// load (or reps) to another, every LATER pending set of the same kind that
+/// was planned the same as set [i] and whose target still equals the old
+/// value takes the new one. Sets the lifter changed on their own, a planned
+/// pyramid (different plans, even when +/- steps through their values),
+/// timed sets and a cleared (null) value are left alone. Plan values never
+/// change. Each field carries independently. A set made by addSet copies
+/// the last set's target as its plan, so it may stop following.
 SessionSnapshot _carryForward(
   SessionSnapshot s,
   int e,
@@ -588,7 +604,8 @@ SessionSnapshot _carryForward(
   final repsMoved = toReps != null && fromReps != toReps;
   if (!loadMoved && !repsMoved) return s;
   final ex = s.exercises[e];
-  final kind = ex.sets[i].kind;
+  final edited = ex.sets[i];
+  final kind = edited.kind;
   if (kind == SetKind.timed) return s;
   var changed = false;
   final sets = [
@@ -600,8 +617,14 @@ SessionSnapshot _carryForward(
       else
         () {
           final x = ex.sets[k];
-          final l = loadMoved && x.targetLoadG == fromLoadG;
-          final rr = repsMoved && x.targetReps == fromReps;
+          final l =
+              loadMoved &&
+              x.targetLoadG == fromLoadG &&
+              x.planLoadG == edited.planLoadG;
+          final rr =
+              repsMoved &&
+              x.targetReps == fromReps &&
+              x.planReps == edited.planReps;
           if (!l && !rr) return x;
           changed = true;
           return x.copyWith(

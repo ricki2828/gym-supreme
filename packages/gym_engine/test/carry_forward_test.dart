@@ -204,4 +204,46 @@ void main() {
     expect(s.exercises[0].sets[1].loadG, 16000);
     expect(s.exercises[0].sets[1].completion, Completion.coldStart);
   });
+
+  test('stepping +/- through pyramid values never flattens it', () {
+    const p = [
+      PlannedSet(loadG: 20000, reps: 12),
+      PlannedSet(loadG: 22500, reps: 10),
+      PlannedSet(loadG: 25000, reps: 8),
+    ];
+    var s = start([item('a', p)]);
+    for (final l in [22500, 25000, 22500, 20000]) {
+      s = Session.retarget(s, 'u:0', loadG: l);
+    }
+    for (final r in [11, 10, 11, 12]) {
+      s = Session.retarget(s, 'u:0', reps: r);
+    }
+    expect(loads(s, 0), [20000, 22500, 25000]);
+    expect(reps(s, 0), [12, 10, 8]);
+  });
+
+  test('straight sets still follow a stepped change', () {
+    const p = [
+      PlannedSet(loadG: 22000, reps: 10),
+      PlannedSet(loadG: 22000, reps: 10),
+    ];
+    var s = start([item('a', p)]);
+    for (final l in [21000, 20000]) {
+      s = Session.retarget(s, 'u:0', loadG: l);
+    }
+    expect(loads(s, 0), [20000, 20000]);
+  });
+
+  test('retarget to the same values is a no-op (same object)', () {
+    final s0 = start([item('a', three)]);
+    expect(identical(Session.retarget(s0, 'u:0', reps: 10), s0), isTrue);
+  });
+
+  test('cold start looks at every earlier logged set, not just the last', () {
+    var s = start([item('a', three)]);
+    s = Session.done(s, 'u:0', nowMs: t0 + 1, loadG: 16000);
+    s = Session.done(s, 'u:1', nowMs: t0 + 2, loadG: null);
+    s = Session.done(s, 'u:2', nowMs: t0 + 3, loadG: 18000);
+    expect(s.exercises[0].sets[2].completion, Completion.adjusted);
+  });
 }
