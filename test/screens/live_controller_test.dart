@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_engine/gym_engine.dart' as eng;
 import 'package:gym_supreme/app/workout_port.dart';
 import 'package:gym_supreme/screens/live_controller.dart';
+import 'package:gym_supreme/screens/engine_adapter.dart';
 import 'package:gym_supreme/screens/live_screen.dart';
 
 import 'flaky_port.dart';
@@ -468,5 +469,132 @@ void main() {
     expect(c.view()!.allDone, isTrue);
     await c.reps(1); // runs with no current set
     expect(c.stepQueued, isFalse, reason: 'reset even with no set');
+  });
+
+  test(
+    'undo the last set: back to pending, rest cleared, typed forgotten',
+    () async {
+      await startPush();
+      await c.setLoad(12000);
+      await c.done();
+      expect(
+        c.view()!.undoLabel,
+        contains('× 12 kg'),
+      ); // ea or not: #42 may lead with a stack
+      expect(c.view()!.restLeftS, isNotNull);
+      await c.undoLast();
+      final first = c.snapshot!.exercises.first.sets.first;
+      expect(first.state, eng.SetState.pending);
+      expect(c.view()!.restLeftS, isNull);
+      expect(c.view()!.undoLabel, isNull);
+      expect(c.view()!.set, 1);
+    },
+  );
+
+  test('undo picks the latest of two sets', () async {
+    await startPush();
+    await c.load(1);
+    await c.done();
+    await c.skipRest();
+    now += 1000;
+    await c.done();
+    final second = c.snapshot!.exercises.first.sets[1];
+    await c.undoLast();
+    expect(c.snapshot!.exercises.first.sets[1].state, eng.SetState.pending);
+    expect(c.snapshot!.exercises.first.sets[0].state, eng.SetState.done);
+    expect(second.state, eng.SetState.done);
+  });
+
+  test('add a set on the current exercise', () async {
+    await startPush();
+    final n = c.view()!.sets;
+    await c.addSet();
+    expect(c.view()!.sets, n + 1);
+  });
+
+  test('swap before logging; counted; refused once a set is logged', () async {
+    await startPush();
+    final s0 = c.snapshot!;
+    final cur = s0.exercises.first;
+    final kit = engine.gym(gymId)!.equipmentIds;
+    final options = swapCandidates(catalog, s0, cur.exerciseId, kit);
+    expect(options, isNotEmpty);
+    expect(options.every((o) => o.availableWith(kit)), isTrue);
+    await c.swapCurrent(swapItem(options.first, cur));
+    expect(c.snapshot!.exercises.first.exerciseId, options.first.id);
+    expect(c.snapshot!.swaps, 1);
+    expect(c.view()!.sets, cur.sets.length, reason: 'same set count');
+    await c.load(1);
+    await c.done();
+    expect(c.view()!.canSwap, isFalse);
+    final before = c.snapshot!.exercises.first.exerciseId;
+    await c.swapCurrent(swapItem(options.last, c.snapshot!.exercises.first));
+    expect(c.snapshot!.exercises.first.exerciseId, before);
+  });
+
+  test('undo reaches across exercises and undoes a skip', () async {
+    await startPush();
+    final first = c.snapshot!.exercises.first;
+    for (final _ in first.sets) {
+      await c.skipSet();
+    }
+    expect(c.view()!.lift, 2);
+    expect(c.view()!.undoLabel, startsWith('skip: ${first.name} set'));
+    await c.undoLast(); // the last skip of exercise 1
+    expect(c.view()!.lift, 1);
+    expect(c.snapshot!.exercises.first.sets.last.state, eng.SetState.pending);
+  });
+
+  test('swap is tied to the exercise it was opened for', () async {
+    await startPush();
+    final s0 = c.snapshot!;
+    final cur = s0.exercises.first;
+    final kit = engine.gym(gymId)!.equipmentIds;
+    final opt = swapCandidates(catalog, s0, cur.exerciseId, kit).first;
+    final ok = await c.swapCurrent(
+      swapItem(opt, cur),
+      replacingId: 'something-else',
+    );
+    expect(ok, isFalse);
+    expect(c.snapshot!.exercises.first.exerciseId, cur.exerciseId);
+    expect(
+      await c.swapCurrent(swapItem(opt, cur), replacingId: cur.exerciseId),
+      isTrue,
+    );
+  });
+
+  test('swap candidates exclude timed and distance; from timed uses reps', () {
+    final plan = engine.suggest(gymId: gymId, muscleIds: const ['abs']);
+    final s = eng.Session.start(plan, nowMs: now, tzOffsetMin: 480);
+    final kit = {...engine.gym(gymId)!.equipmentIds, 'rower', 'bike'};
+    for (final e in s.exercises) {
+      final opts = swapCandidates(catalog, s, e.exerciseId, kit);
+      expect(
+        opts.where((o) => o.load == 'timed' || o.load == 'distance'),
+        isEmpty,
+      );
+    }
+    // A timed entry (as the plank or a timer block arrives): 45 s targets.
+    final withTimed = eng.Session.addExercise(
+      s,
+      const eng.PlannedItem(
+        exerciseId: 'plank',
+        name: 'Plank',
+        unit: eng.LoadUnit.timed,
+        sets: [eng.PlannedSet(loadG: null, reps: 45)],
+        repLo: 45,
+        repHi: 45,
+        restS: 60,
+        reason: '',
+        primary: ['abs'],
+      ),
+    );
+    final timedEx = withTimed.exercises.last;
+    expect(timedEx.loadKind, 'timed');
+    final opts = swapCandidates(catalog, withTimed, 'plank', kit);
+    expect(opts, isNotEmpty);
+    final item = swapItem(opts.first, timedEx);
+    expect(item.sets.first.reps, 10, reason: 'not 45 seconds as reps');
+    expect(item.repLo, 8);
   });
 }

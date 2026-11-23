@@ -258,9 +258,11 @@ class _GymRootState extends State<GymRoot> {
   }
 
   Future<void> _runLive(LiveController c) async {
-    final uuid = await Navigator.of(
-      context,
-    ).push<String>(MaterialPageRoute(builder: (_) => LiveFlow(controller: c)));
+    final uuid = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => LiveFlow(controller: c, catalog: widget.deps.catalog),
+      ),
+    );
     // Anything not stored stays offered as Resume (paused, or a finish that
     // failed half way: its journal is still on disk).
     final paused = c.finishedUuid == null ? c.snapshot : null;
@@ -694,8 +696,9 @@ class _PickerFlowState extends State<PickerFlow> {
 /// The live screen over a [LiveController]. Pops with the workout uuid on
 /// finish, or null when paused.
 class LiveFlow extends StatefulWidget {
-  const LiveFlow({super.key, required this.controller});
+  const LiveFlow({super.key, required this.controller, required this.catalog});
   final LiveController controller;
+  final eng.Catalog catalog;
   @override
   State<LiveFlow> createState() => _LiveFlowState();
 }
@@ -808,6 +811,69 @@ class _LiveFlowState extends State<LiveFlow> {
     }
   }
 
+  /// Swap the current exercise for one that trains the same muscles with
+  /// this gym's kit (P1-5).
+  Future<void> _swap() async {
+    final s = c.snapshot;
+    final cur = s?.current;
+    if (s == null || cur == null || _leaving) return;
+    final ex = s.exercises[cur.exercise];
+    final kit = c.engine.gym(s.gymId)?.equipmentIds ?? const <String>{};
+    final options = swapCandidates(widget.catalog, s, ex.exerciseId, kit);
+    final picked = await showModalBottomSheet<eng.Exercise>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text(
+                'SWAP ${ex.name.toUpperCase()}',
+                style: LitType.display(26),
+              ),
+            ),
+            if (options.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Text('Nothing else here trains those muscles.'),
+              ),
+            for (final o in options)
+              ListTile(
+                minTileHeight: 56,
+                title: Text(o.name),
+                subtitle: Text(o.primary.join(', ')),
+                onTap: () => Navigator.of(ctx).pop(o),
+              ),
+          ],
+        ),
+      ),
+    );
+    // A workout finished elsewhere while the sheet was up: leave now (its
+    // first _leave found the sheet, not this route, on top).
+    final done = c.finishedUuid;
+    if (done != null && mounted) {
+      _leave(done);
+      return;
+    }
+    if (picked == null || !mounted || _leaving) return;
+    final last = c.engine.lastTime(gymId: s.gymId, exerciseId: picked.id);
+    final ok = await c.swapCurrent(
+      swapItem(picked, ex, last: last),
+      replacingId: ex.exerciseId,
+    );
+    if (!ok && mounted && c.lastError == null) {
+      // A save failure shows the error banner instead; this is the case
+      // where the session moved on under the sheet.
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Not swapped: that exercise has a set logged now.'),
+        ),
+      );
+    }
+  }
+
   Future<void> _pause() async {
     if (_leaving) return;
     _leaving = true;
@@ -845,6 +911,9 @@ class _LiveFlowState extends State<LiveFlow> {
             onReorder: c.reorderUpNext,
             onPause: _pause,
             onFinish: _finish,
+            onUndo: c.undoLast,
+            onSwap: _swap,
+            onAddSet: c.addSet,
             setExtra: _setExtra(),
             actions: [
               if (Features.timers &&

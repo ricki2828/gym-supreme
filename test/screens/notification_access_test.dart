@@ -148,7 +148,10 @@ void main() {
       expect(access.calls, ['mark', 'request']);
       expect(find.byType(LiveScreen), findsOneWidget, reason: 'never blocks');
       // Finish, then a second Start: no second ask.
-      await tapText(tester, 'Finish');
+      await tester.tap(find.byKey(const Key('live.finish')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('finish.confirm')));
+      await tester.pumpAndSettle();
       await tapText(tester, 'DONE'); // post-workout
       await startChest(tester);
       expect(find.byType(LiveScreen), findsOneWidget);
