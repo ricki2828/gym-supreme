@@ -203,4 +203,37 @@ void main() {
     );
     expect(find.textContaining('First time'), findsNothing);
   });
+
+  testWidgets('nearly everything resting: banner names the most rested', (
+    tester,
+  ) async {
+    phone(tester);
+    await tester.pumpWidget(
+      app(
+        PickerScreen(
+          gym: condo,
+          days: allRestingDays,
+          selected: const {},
+          plan: null,
+        ),
+      ),
+    );
+    expect(
+      find.text(
+        'Nearly everything trained in the last 2 days. Core is the most rested.',
+      ),
+      findsOneWidget,
+    );
+    await tester.pumpWidget(
+      app(
+        PickerScreen(
+          gym: condo,
+          days: storyDays,
+          selected: const {},
+          plan: null,
+        ),
+      ),
+    );
+    expect(find.textContaining('Nearly everything'), findsNothing);
+  });
 }

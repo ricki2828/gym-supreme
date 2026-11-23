@@ -1,0 +1,666 @@
+import 'package:flutter/material.dart';
+import 'package:supreme_ui/supreme_ui.dart';
+
+import '../widgets/lit_widgets.dart';
+import 'view_models.dart';
+
+enum SetTile { done, current, pending, skipped }
+
+/// Everything the live screen shows. Built from the session snapshot plus
+/// the screen's draft (the +/- before Done) by the live controller.
+class LiveView {
+  const LiveView({
+    required this.type,
+    required this.exerciseName,
+    required this.lift,
+    required this.lifts,
+    required this.set,
+    required this.sets,
+    required this.rail,
+    required this.reps,
+    required this.loadG,
+    required this.unit,
+    required this.targetReps,
+    required this.targetLoadG,
+    required this.restS,
+    required this.upNext,
+    required this.elapsedS,
+    this.lastTime,
+    this.canLoadUp = true,
+    this.canLoadDown = true,
+    this.restLeftS,
+    this.paused = false,
+    this.allDone = false,
+  });
+
+  final WorkoutType? type;
+  final String exerciseName;
+
+  /// 1-based.
+  final int lift, lifts, set, sets;
+
+  /// Sets of the current exercise, first to last.
+  final List<SetTile> rail;
+
+  /// What Done will log.
+  final int reps;
+  final int? loadG;
+  final LoadUnit unit;
+
+  /// The plan for this set; null load = cold start (first time here).
+  final int? targetReps;
+  final int? targetLoadG;
+
+  /// "Last time 3 × 10 · 22 kg ea", or null.
+  final String? lastTime;
+  final bool canLoadUp, canLoadDown;
+
+  /// Rest after this set, seconds.
+  final int restS;
+
+  /// Exercises after the current one, in order (drag to reorder).
+  final List<PlanItem> upNext;
+
+  /// Seconds left in the running rest; null = not resting.
+  final int? restLeftS;
+  final int elapsedS;
+  final bool paused;
+
+  /// Every set is logged or skipped: only Finish is left.
+  final bool allDone;
+
+  bool get coldStart =>
+      targetLoadG == null && (unit == LoadUnit.kg || unit == LoadUnit.kgEach);
+
+  bool get asPlanned => reps == targetReps && loadG == targetLoadG;
+}
+
+/// Live logging (plan item 4; b-live.png): prefill from last time, one-tap
+/// Done, +/- on the gym's real weights, auto rest, drag to reorder.
+class LiveScreen extends StatelessWidget {
+  const LiveScreen({
+    super.key,
+    required this.view,
+    this.onReps,
+    this.onLoad,
+    this.onDone,
+    this.onSkipSet,
+    this.onRestDelta,
+    this.onSkipRest,
+    this.onReorder,
+    this.onPause,
+    this.onFinish,
+    this.setExtra,
+    this.actions = const [],
+  });
+
+  final LiveView view;
+
+  /// Cut-2 slot under the last-time line (ghost line for the current set).
+  final Widget? setExtra;
+
+  /// Cut-2 slot: extra actions above Pause/Finish (e.g. "Add timer block").
+  final List<Widget> actions;
+
+  /// +1 / -1 rep.
+  final ValueChanged<int>? onReps;
+
+  /// +1 / -1 step along the gym's weight list.
+  final ValueChanged<int>? onLoad;
+  final VoidCallback? onDone;
+  final VoidCallback? onSkipSet;
+
+  /// ±15 s on the planned or running rest.
+  final ValueChanged<int>? onRestDelta;
+  final VoidCallback? onSkipRest;
+
+  /// Indexes within [LiveView.upNext].
+  final void Function(int from, int to)? onReorder;
+  final VoidCallback? onPause;
+  final VoidCallback? onFinish;
+
+  @override
+  Widget build(BuildContext context) {
+    if (view.allDone) return _AllDone(view: view, onFinish: onFinish);
+    if (view.restLeftS != null) {
+      return _RestScreen(
+        view: view,
+        onRestDelta: onRestDelta,
+        onSkipRest: onSkipRest,
+        onReorder: onReorder,
+      );
+    }
+    final bg = view.type?.colour ?? Lit.ground;
+    final ink = view.type?.onColour ?? Lit.ink;
+    return Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 20, 16, 20),
+                children: [
+                  _Header(view: view, ink: ink),
+                  const SizedBox(height: 6),
+                  Text(
+                    view.exerciseName.toUpperCase(),
+                    style: LitType.display(
+                      view.exerciseName.length > 18 ? 44 : 60,
+                      ink,
+                    ),
+                    semanticsLabel: view.exerciseName,
+                  ),
+                  const SizedBox(height: 14),
+                  _Stepper(
+                    value: view.unit == LoadUnit.timed
+                        ? clock(view.reps)
+                        : '${view.reps}',
+                    unit: view.unit == LoadUnit.timed ? 'SEC' : 'REPS',
+                    size: 96,
+                    ink: ink,
+                    bg: bg,
+                    label: view.unit == LoadUnit.timed ? 'seconds' : 'reps',
+                    onMinus: onReps == null || view.reps <= 1
+                        ? null
+                        : () => onReps!(-1),
+                    onPlus: onReps == null ? null : () => onReps!(1),
+                  ),
+                  if (view.unit == LoadUnit.kg ||
+                      view.unit == LoadUnit.kgEach) ...[
+                    const SizedBox(height: 8),
+                    _Stepper(
+                      value: view.loadG == null ? '–' : kg(view.loadG!),
+                      unit: view.unit == LoadUnit.kgEach ? 'KG EA' : 'KG',
+                      size: 150,
+                      ink: ink,
+                      bg: bg,
+                      label: 'kilograms',
+                      onMinus: onLoad == null || !view.canLoadDown
+                          ? null
+                          : () => onLoad!(-1),
+                      onPlus: onLoad == null || !view.canLoadUp
+                          ? null
+                          : () => onLoad!(1),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Text(
+                    view.coldStart
+                        ? 'First time here. Pick a starting weight; '
+                              'the app remembers it.'
+                        : (view.lastTime ?? 'No history at this gym yet.'),
+                    style: LitType.body(17, ink, FontWeight.w600),
+                  ),
+                  ?setExtra,
+                  const SizedBox(height: 18),
+                  BigButton(
+                    label: 'DONE',
+                    sub: _doneSub(),
+                    colour: Lit.ink,
+                    ink: Colors.white,
+                    subColour: view.type?.colour ?? Colors.white,
+                    height: 150,
+                    fontSize: 110,
+                    radius: 28,
+                    onTap: view.coldStart && view.loadG == null ? null : onDone,
+                  ),
+                  const SizedBox(height: 12),
+                  _RestPanel(
+                    seconds: view.restS,
+                    ink: ink,
+                    onDelta: onRestDelta,
+                  ),
+                  if (onSkipSet != null)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: onSkipSet,
+                        style: TextButton.styleFrom(foregroundColor: ink),
+                        child: Text(
+                          'Skip this set',
+                          style: LitType.body(14, ink, FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  if (view.upNext.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      'NEXT UP · DRAG TO REORDER',
+                      style: LitType.cap(13, ink),
+                    ),
+                    const SizedBox(height: 8),
+                    PlanList(
+                      items: view.upNext,
+                      onReorder: onReorder,
+                      ruleColour: ink.withValues(alpha: 0.25),
+                    ),
+                  ],
+                  for (final a in actions) ...[const SizedBox(height: 12), a],
+                  const SizedBox(height: 18),
+                  _PauseFinish(ink: ink, onPause: onPause, onFinish: onFinish),
+                ],
+              ),
+            ),
+            _SetRail(rail: view.rail, accent: bg),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _doneSub() {
+    final load = loadLabel(view.loadG, view.unit);
+    final work = view.unit == LoadUnit.timed
+        ? clock(view.reps)
+        : '${view.reps}';
+    final what = load.isEmpty ? '$work reps' : '$work × $load';
+    if (view.coldStart) {
+      return view.loadG == null ? 'Set a weight first' : '$what, first time';
+    }
+    return view.asPlanned ? '$what, as planned' : '$what, changed';
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({required this.view, required this.ink});
+  final LiveView view;
+  final Color ink;
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Text(
+          'LIFT ${view.lift} OF ${view.lifts} · SET ${view.set} OF ${view.sets}',
+          style: LitType.cap(14, ink),
+        ),
+      ),
+      Text(
+        clock(view.elapsedS),
+        style: LitType.cap(14, ink),
+        semanticsLabel: '${view.elapsedS ~/ 60} minutes in',
+      ),
+    ],
+  );
+}
+
+class _Stepper extends StatelessWidget {
+  const _Stepper({
+    required this.value,
+    required this.unit,
+    required this.size,
+    required this.ink,
+    required this.bg,
+    required this.label,
+    this.onMinus,
+    this.onPlus,
+  });
+  final String value;
+  final String unit;
+  final double size;
+  final Color ink;
+  final Color bg;
+  final String label;
+  final VoidCallback? onMinus;
+  final VoidCallback? onPlus;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: '$value $label',
+    child: Row(
+      children: [
+        _Round(icon: Icons.remove, tip: 'Less', bg: bg, onTap: onMinus),
+        Expanded(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(value, style: LitType.display(size, ink)),
+                const SizedBox(width: 8),
+                Text(unit, style: LitType.display(size * 0.42, ink)),
+              ],
+            ),
+          ),
+        ),
+        _Round(icon: Icons.add, tip: 'More', bg: bg, onTap: onPlus),
+      ],
+    ),
+  );
+}
+
+class _Round extends StatelessWidget {
+  const _Round({
+    required this.icon,
+    required this.tip,
+    required this.bg,
+    this.onTap,
+  });
+  final IconData icon;
+  final String tip;
+  final Color bg;
+  final VoidCallback? onTap;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    enabled: onTap != null,
+    label: tip,
+    excludeSemantics: true,
+    child: Material(
+      color: onTap == null ? Lit.ink.withValues(alpha: 0.35) : Lit.ink,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 60,
+          height: 60,
+          child: Icon(icon, size: 30, color: bg),
+        ),
+      ),
+    ),
+  );
+}
+
+class _RestPanel extends StatelessWidget {
+  const _RestPanel({required this.seconds, required this.ink, this.onDelta});
+  final int seconds;
+  final Color ink;
+  final ValueChanged<int>? onDelta;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+    decoration: BoxDecoration(
+      color: Lit.ink.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(18),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'THEN REST ${clock(seconds)}',
+                style: LitType.display(34, ink),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Starts itself. Buzzes when it ends.',
+                style: LitType.body(13, ink, FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+        _Pill('−15', ink, onDelta == null ? null : () => onDelta!(-15)),
+        const SizedBox(width: 6),
+        _Pill('+15', ink, onDelta == null ? null : () => onDelta!(15)),
+      ],
+    ),
+  );
+}
+
+class _Pill extends StatelessWidget {
+  const _Pill(this.label, this.ink, this.onTap);
+  final String label;
+  final Color ink;
+  final VoidCallback? onTap;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: label.startsWith('+')
+        ? '15 seconds more rest'
+        : '15 seconds less rest',
+    excludeSemantics: true,
+    child: InkWell(
+      onTap: onTap,
+      customBorder: const StadiumBorder(),
+      child: Container(
+        constraints: const BoxConstraints(minWidth: 52, minHeight: 48),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: ShapeDecoration(
+          shape: StadiumBorder(side: BorderSide(color: ink, width: 1.5)),
+        ),
+        child: Text(label, style: LitType.body(15, ink, FontWeight.w700)),
+      ),
+    ),
+  );
+}
+
+class _PauseFinish extends StatelessWidget {
+  const _PauseFinish({required this.ink, this.onPause, this.onFinish});
+  final Color ink;
+  final VoidCallback? onPause;
+  final VoidCallback? onFinish;
+  @override
+  Widget build(BuildContext context) {
+    Widget b(String l, VoidCallback? t) => Expanded(
+      child: Material(
+        color: Lit.ink.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: t,
+          borderRadius: BorderRadius.circular(18),
+          child: SizedBox(
+            height: 56,
+            child: Center(
+              child: Text(l, style: LitType.body(17, ink, FontWeight.w700)),
+            ),
+          ),
+        ),
+      ),
+    );
+    return Row(
+      children: [
+        b('Pause', onPause),
+        const SizedBox(width: 12),
+        b('Finish', onFinish),
+      ],
+    );
+  }
+}
+
+/// The set strip on the right edge (b-live): last set on top.
+class _SetRail extends StatelessWidget {
+  const _SetRail({required this.rail, required this.accent});
+  final List<SetTile> rail;
+  final Color accent;
+  @override
+  Widget build(BuildContext context) {
+    final n = rail.length;
+    return ExcludeSemantics(
+      child: SizedBox(
+        width: 46,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 36),
+          child: Column(
+            children: [
+              for (var i = n - 1; i >= 0; i--)
+                Expanded(
+                  flex: rail[i] == SetTile.current ? 3 : 2,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _tile(i + 1, rail[i]),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _tile(int number, SetTile t) {
+    final (Color fill, Color border, Color text) = switch (t) {
+      SetTile.done => (Lit.ink, Lit.ink, accent),
+      SetTile.current => (Colors.white, Lit.ink, Lit.ink),
+      SetTile.pending => (
+        Colors.transparent,
+        Lit.ink.withValues(alpha: 0.4),
+        Lit.ink,
+      ),
+      SetTile.skipped => (
+        Colors.transparent,
+        Lit.ink.withValues(alpha: 0.4),
+        Lit.inkQuiet,
+      ),
+    };
+    return Container(
+      decoration: BoxDecoration(
+        color: fill,
+        border: Border.all(color: border, width: 2.5),
+        borderRadius: const BorderRadius.horizontal(left: Radius.circular(14)),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        t == SetTile.skipped ? '–' : '$number',
+        style: LitType.body(15, text, FontWeight.w800),
+      ),
+    );
+  }
+}
+
+/// Rest running: the screen turns blue (b-live's promise; b-timer's Rest).
+class _RestScreen extends StatelessWidget {
+  const _RestScreen({
+    required this.view,
+    this.onRestDelta,
+    this.onSkipRest,
+    this.onReorder,
+  });
+  final LiveView view;
+  final ValueChanged<int>? onRestDelta;
+  final VoidCallback? onSkipRest;
+  final void Function(int from, int to)? onReorder;
+
+  @override
+  Widget build(BuildContext context) {
+    const bg = Lit.pull;
+    const ink = Lit.ink;
+    final left = view.restLeftS!;
+    final load = loadLabel(view.loadG, view.unit);
+    final next = load.isEmpty ? '${view.reps} reps' : '${view.reps} × $load';
+    return Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+          children: [
+            Row(
+              children: [
+                Expanded(child: Text('REST', style: LitType.cap(14))),
+                Text(clock(view.elapsedS), style: LitType.cap(14)),
+              ],
+            ),
+            Semantics(
+              liveRegion: true,
+              label: '${clock(left)} rest left',
+              excludeSemantics: true,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(clock(left), style: LitType.display(220, ink)),
+              ),
+            ),
+            Text(
+              'left. Buzz and a tone when it ends, even locked.',
+              style: LitType.body(17, ink, FontWeight.w600),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'NEXT · SET ${view.set} OF ${view.sets}',
+              style: LitType.cap(14, ink),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              view.exerciseName.toUpperCase(),
+              style: LitType.display(40, ink),
+            ),
+            Text(next.toUpperCase(), style: LitType.display(40, ink)),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                _Pill(
+                  '−15',
+                  ink,
+                  onRestDelta == null ? null : () => onRestDelta!(-15),
+                ),
+                const SizedBox(width: 8),
+                _Pill(
+                  '+15',
+                  ink,
+                  onRestDelta == null ? null : () => onRestDelta!(15),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: BigButton(
+                    label: 'SKIP REST',
+                    colour: Lit.ink,
+                    ink: Colors.white,
+                    fontSize: 28,
+                    onTap: onSkipRest,
+                  ),
+                ),
+              ],
+            ),
+            if (view.upNext.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Text('THEN · DRAG TO REORDER', style: LitType.cap(13, ink)),
+              const SizedBox(height: 8),
+              PlanList(
+                items: view.upNext,
+                onReorder: onReorder,
+                ruleColour: ink.withValues(alpha: 0.25),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AllDone extends StatelessWidget {
+  const _AllDone({required this.view, this.onFinish});
+  final LiveView view;
+  final VoidCallback? onFinish;
+  @override
+  Widget build(BuildContext context) {
+    final bg = view.type?.colour ?? Lit.ground;
+    final ink = view.type?.onColour ?? Lit.ink;
+    return Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(clock(view.elapsedS), style: LitType.cap(14, ink)),
+              const Spacer(),
+              Text('EVERY SET LOGGED', style: LitType.display(64, ink)),
+              const SizedBox(height: 8),
+              Text(
+                'Finish to save it and see what lit up.',
+                style: LitType.body(17, ink, FontWeight.w600),
+              ),
+              const SizedBox(height: 24),
+              BigButton(
+                label: 'FINISH',
+                colour: Lit.ink,
+                ink: Colors.white,
+                height: 96,
+                fontSize: 64,
+                radius: 28,
+                onTap: onFinish,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

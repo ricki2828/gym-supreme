@@ -23,7 +23,11 @@ class PickerScreen extends StatelessWidget {
     this.onStart,
     this.onClose,
     this.onGymTap,
+    this.sheetExtra,
   });
+
+  /// Cut-2 slot at the top of the session sheet (rotation "next up" chip).
+  final Widget? sheetExtra;
 
   final GymView gym;
 
@@ -47,8 +51,11 @@ class PickerScreen extends StatelessWidget {
 
   bool get _firstRun => days.values.every((d) => d.days == null);
 
+  /// "Nearly everything" (s2): at least three in four muscles still resting.
   bool get _allResting =>
-      !_firstRun && days.values.every((d) => d.resting || d.uncovered);
+      !_firstRun &&
+      days.isNotEmpty &&
+      days.values.where((d) => d.resting).length * 4 >= days.length * 3;
 
   Color get _pickColour => plan?.type?.colour ?? Lit.ink;
   Color get _onPick => plan?.type?.onColour ?? Colors.white;
@@ -113,70 +120,69 @@ class PickerScreen extends StatelessWidget {
       backgroundColor: Lit.ground,
       body: SafeArea(
         bottom: false,
-        child: Stack(
+        child: Column(
           children: [
-            ListView(
-              padding: EdgeInsets.fromLTRB(20, 20, 20, big ? 140 : 380),
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'LIGHT UP WHAT?',
-                        style: LitType.display(48),
-                        semanticsLabel: 'Light up what?',
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: onClose,
-                      tooltip: 'Close',
-                      icon: const Icon(Icons.close, size: 30, color: Lit.ink),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(subtitle, style: LitType.body(14, Lit.inkSecondary)),
-                if (_allResting) ...[
-                  const SizedBox(height: 10),
-                  _InkNote(_restingNote()),
-                ],
-                const SizedBox(height: 10),
-                if (big) ...[
-                  Center(child: body),
-                  const SizedBox(height: 12),
-                  rows,
-                ] else
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                children: [
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 40),
-                        child: Column(
-                          children: [
-                            body,
-                            const SizedBox(height: 6),
-                            Text(
-                              'days since last trained →',
-                              style: LitType.body(
-                                11,
-                                Lit.inkSecondary,
-                                FontWeight.w700,
-                              ),
-                            ),
-                          ],
+                      Expanded(
+                        child: Text(
+                          'LIGHT UP WHAT?',
+                          style: LitType.display(48),
+                          semanticsLabel: 'Light up what?',
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(child: rows),
+                      IconButton(
+                        onPressed: onClose,
+                        tooltip: 'Close',
+                        icon: const Icon(Icons.close, size: 30, color: Lit.ink),
+                      ),
                     ],
                   ),
-              ],
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: LitType.body(14, Lit.inkSecondary)),
+                  if (_allResting) ...[
+                    const SizedBox(height: 10),
+                    _InkNote(_restingNote()),
+                  ],
+                  const SizedBox(height: 10),
+                  if (big) ...[
+                    Center(child: body),
+                    const SizedBox(height: 12),
+                    rows,
+                  ] else
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 40),
+                          child: Column(
+                            children: [
+                              body,
+                              const SizedBox(height: 6),
+                              Text(
+                                'days since last trained →',
+                                style: LitType.body(
+                                  11,
+                                  Lit.inkSecondary,
+                                  FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: rows),
+                      ],
+                    ),
+                ],
+              ),
             ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: big ? _peek(context) : _sheet(),
-            ),
+            big ? _peek(context) : _sheet(),
           ],
         ),
       ),
@@ -315,6 +321,7 @@ class PickerScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
+          ?sheetExtra,
           _sheetHead('${p.items.length} LIFTS · ${p.minutes} MIN'),
           const SizedBox(height: 4),
           PlanList(items: p.items, onReorder: onReorder, dark: true),
@@ -436,14 +443,26 @@ class _GroupRow extends StatelessWidget {
                     Icon(Icons.check, size: 15, color: fg),
                     const SizedBox(width: 4),
                   ],
+                  // Label keeps most of the row so names wrap at words;
+                  // a long state ("TODAY · RESTING") scales down instead.
                   Expanded(
+                    flex: 5,
                     child: Text(
                       group.label,
                       style: LitType.body(13, fg, FontWeight.w700),
                     ),
                   ),
                   const SizedBox(width: 6),
-                  Text(note, style: LitType.display(19, fg)),
+                  Expanded(
+                    flex: 4,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(note, style: LitType.display(19, fg)),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
