@@ -1,0 +1,15 @@
+## session 1
+dumbbell-bench-press -x10 -x10 -x10 | Chest: no history yet. First time here: pick a weight you can do 10 clean reps with.
+incline-dumbbell-press -x10 -x10 -x10 | Chest: no history yet. First time here: pick a weight you can do 10 clean reps with.
+pushups -x10 -x10 -x10 | Chest: no history yet. First time here.
+bench-dips -x10 -x10 -x10 | Triceps: no history yet. First time here.
+## session 2
+dumbbell-bench-press 25000x8 25000x8 25000x8 | Chest is 3 days rested. You did 3 x 12 at 24 kg ea last time. Up to 25 kg ea.
+incline-dumbbell-press 20000x11 20000x11 20000x11 | Chest is 3 days rested. You did 3 x 10 at 20 kg ea last time. Aim for one more rep.
+pushups -x11 -x11 -x11 | Chest is 3 days rested. You did 3 x 10 reps last time. Aim for one more rep.
+bench-dips -x11 -x11 -x11 | Triceps is 3 days rested. You did 3 x 10 reps last time. Aim for one more rep.
+## session 3
+dumbbell-bench-press 25000x13 25000x13 25000x13 | Chest is 3 days rested. You did 3 x 12 at 25 kg ea last time. Top weight here: more reps.
+incline-dumbbell-press 20000x12 20000x12 20000x12 | Chest is 3 days rested. You did 3 x 11 at 20 kg ea last time. Aim for one more rep.
+pushups -x12 -x12 -x12 | Chest is 3 days rested. You did 3 x 11 reps last time. Aim for one more rep.
+bench-dips -x12 -x12 -x12 | Triceps is 3 days rested. You did 3 x 11 reps last time. Aim for one more rep.

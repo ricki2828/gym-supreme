@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:gym_engine/gym_engine.dart';
+import 'package:gym_engine/sqlite_store.dart';
 import 'package:test/test.dart';
 
 const day = 86400000;
@@ -13,6 +14,9 @@ Catalog loadCatalog() => Catalog.fromJson(
   File('../../assets/exercises_taxonomy.json').readAsStringSync(),
   File('../../assets/exercises.json').readAsStringSync(),
 );
+
+/// Which store the rigs use; each group sets it.
+HistoryStore Function() newStore = MemoryStore.new;
 
 class Rig {
   Rig() {
@@ -32,7 +36,7 @@ class Rig {
   }
 
   static final catalog = loadCatalog();
-  final store = MemoryStore();
+  final HistoryStore store = newStore();
   late final GymEngine engine;
   late final String gymId;
   int now = monday;
@@ -74,6 +78,17 @@ class Rig {
 }
 
 void main() {
+  group('memory store', () {
+    setUp(() => newStore = MemoryStore.new);
+    engineTests();
+  });
+  group('sqlite store', () {
+    setUp(() => newStore = SqliteStore.inMemory);
+    engineTests();
+  });
+}
+
+void engineTests() {
   test('condo push suggestion: kit-valid, loads available, fits 45 min', () {
     final r = Rig();
     final p = r.engine.suggest(
@@ -392,7 +407,7 @@ void main() {
       hrText: '{"t_ms":1,"e_ms":1,"bpm":100}\n{"t_ms":2,"e_ms":2,"bpm":101}\n{"t_ms":3,"b',
     );
     expect(res.action, RecoveryAction.savedThenDelete);
-    expect(r.store.hrByWorkout[s.workoutUuid], hasLength(2));
+    expect(r.store.hrSamples(s.workoutUuid), hasLength(2));
   });
 
   test('an empty start-then-finish is not a session in counters', () {
@@ -452,5 +467,45 @@ void main() {
     ];
     expect(ids(3), ids(3));
     expect(ids(0), ids(0));
+  });
+
+  test('ceiling with a harder variant points at it (B7)', () {
+    Exercise ex(String id, {String? harder}) => Exercise(
+      id: id,
+      name: id == 'a' ? 'Floor Press' : 'Bench Press',
+      primary: const ['chest'],
+      secondary: const [],
+      equipmentSets: const [
+        {'dumbbells'},
+      ],
+      load: 'dumbbell',
+      unilateral: false,
+      cue: '',
+      harderThan: harder,
+    );
+    final base = Rig.catalog;
+    final cat = Catalog(
+      muscles: base.muscles,
+      equipment: base.equipment,
+      presets: base.presets,
+      exercises: [
+        ex('a'),
+        ex('b', harder: 'a'),
+      ],
+    );
+    final e = GymEngine(catalog: cat, store: MemoryStore(), nowMs: () => 0);
+    final steps = const LoadSteps(LoadUnit.ea, [20000, 25000]);
+    final p = e.progress(
+      cat.exercise('a')!,
+      const LastTime(
+        workoutUuid: 'w',
+        atMs: 0,
+        sets: [PlannedSet(loadG: 25000, reps: 12)],
+      ),
+      steps,
+    );
+    expect(p.loadG, 25000);
+    expect(p.reps, [13]);
+    expect(p.note, contains('try Bench Press'));
   });
 }

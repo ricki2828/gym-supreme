@@ -366,6 +366,23 @@ void main() {
     expect(s.exercises[0].sets[1].startedAtMs, t0 + 150000);
   });
 
+  test('undo after a pause does not count paused time as set time', () {
+    var s = Session.done(start(), 'u:0', nowMs: t0 + 60000);
+    s = Session.pause(s, nowMs: t0 + 70000);
+    s = Session.resume(s, nowMs: t0 + 670000);
+    s = Session.undo(s, 'u:0');
+    s = Session.done(s, 'u:0', nowMs: t0 + 700000);
+    expect(s.exercises[0].sets[0].startedAtMs, t0 + 670000);
+  });
+
+  test('undo after a skipped rest still restores the set start', () {
+    var s = Session.done(start(), 'u:0', nowMs: t0 + 60000);
+    s = Session.skipRest(s, nowMs: t0 + 70000);
+    s = Session.undo(s, 'u:0');
+    s = Session.done(s, 'u:0', nowMs: t0 + 80000);
+    expect(s.exercises[0].sets[0].startedAtMs, t0);
+  });
+
   test('decode rejects next_set_n that would reuse an id', () {
     final enc = start().encode().replaceFirst(
       '"next_set_n":3',
@@ -393,6 +410,55 @@ void main() {
       expect(r.corruptLines, 1);
     },
   );
+
+  test('replaceSet: maps one set, bumps rev, keeps id, block via copyWith', () {
+    final a = start();
+    final b = Session.replaceSet(
+      a,
+      'u:2',
+      (x) => x.copyWith(block: const {'type': 'emom', 'work_ms': 60000}),
+    );
+    expect(b.rev, a.rev + 1);
+    expect(b.exercises[1].sets[0].block, {'type': 'emom', 'work_ms': 60000});
+    expect(b.exercises[1].sets[0].targetReps, 12);
+    expect(identical(Session.replaceSet(a, 'nope', (x) => x), a), isTrue);
+    expect(identical(Session.replaceSet(a, 'u:0', (x) => x), a), isTrue);
+    expect(SessionSnapshot.decode(b.encode()).exercises[1].sets[0].block, {
+      'type': 'emom',
+      'work_ms': 60000,
+    });
+  });
+
+  test('undo keeps the block definition and resets run state + results', () {
+    var s = Session.replaceSet(
+      start(),
+      'u:2',
+      (x) => x.copyWith(
+        block: const {
+          'type': 'amrap',
+          'cap_ms': 600000,
+          'run': 2,
+          'started_at_wall_ms': 5,
+          'elapsed_before_ms': 1000,
+          'cues': [
+            {'index': 0, 'at_ms': 0, 'kind': 'go', 'label': 'Go'},
+          ],
+          'amrap_rounds': 7,
+          'round_marks_ms': [60000],
+        },
+      ),
+    );
+    s = Session.done(s, 'u:2', nowMs: t0 + 1);
+    s = Session.undo(s, 'u:2');
+    expect(s.exercises[1].sets[0].block, {
+      'type': 'amrap',
+      'cap_ms': 600000,
+      'run': 2, // kept: cut 2 re-arms with run + 1
+      'started_at_wall_ms': null,
+      'elapsed_before_ms': 0,
+      'cues': <Object?>[],
+    });
+  });
 
   test('uuidV4 shape', () {
     expect(

@@ -157,6 +157,9 @@ class Session {
       planReps: set.planReps,
       targetLoadG: set.targetLoadG,
       targetReps: set.targetReps,
+      // The timer definition survives; run state and results do not, so a
+      // redo starts clean (cut 2 re-arms it).
+      block: _definitionOnly(set.block),
     );
     final next = _replaceSet(s, at.e, at.s, back);
     final clears = s.rest?.setId == setId;
@@ -172,7 +175,12 @@ class Session {
         }
       }
     }
-    final restore = clears || (s.rest == null && latest);
+    // ...but not across a pause (paused time is never set time). The set's
+    // offset recorded the paused total at its end; a pause since changed it.
+    final pausedAtEnd =
+        (set.endedAtMs ?? 0) - s.startedAtMs - (set.offsetMs ?? 0);
+    final resumedSince = set.offsetMs != null && s.pausedTotalMs != pausedAtEnd;
+    final restore = clears || (s.rest == null && latest && !resumedSince);
     return next.copyWith(
       rev: s.rev + 1,
       rest: clears ? null : s.rest,
@@ -181,6 +189,27 @@ class Session {
           ? (set.startedAtMs ?? s.setReadyAtMs)
           : s.setReadyAtMs,
     );
+  }
+
+  /// Generic hook for features layered on the session (cut-2 timers): maps
+  /// one set through [f] and bumps rev. No-op if finished, the set is
+  /// missing, or [f] returns the same object. [f] must keep `set_id`; the
+  /// result must still satisfy the contract (strict decode).
+  static SessionSnapshot replaceSet(
+    SessionSnapshot s,
+    String setId,
+    SnapshotSet Function(SnapshotSet) f,
+  ) {
+    if (s.finished) return s;
+    final at = _find(s, setId);
+    if (at == null) return s;
+    final old = s.exercises[at.e].sets[at.s];
+    final next = f(old);
+    if (identical(next, old)) return s;
+    if (next.setId != setId) {
+      throw ArgumentError('replaceSet must keep set_id $setId');
+    }
+    return _replaceSet(s, at.e, at.s, next).copyWith(rev: s.rev + 1);
   }
 
   /// Marks a pending set skipped. Kept for history; no volume.
@@ -406,6 +435,30 @@ class Session {
 }
 
 const Object _keep = Object();
+
+/// Block keys that define a timer: the "Definition" bullet of the `block`
+/// section in contracts/session_snapshot.md. Keep in step when the contract
+/// gains a definition key, or undo strips it (contract_fixtures_test checks).
+const Set<String> blockDefinitionKeys = {
+  'type',
+  'work_ms',
+  'rest_ms',
+  'rounds',
+  'cap_ms',
+  'lead_in_ms',
+  'warn_ms',
+};
+
+Map<String, Object?>? _definitionOnly(Map<String, Object?>? block) {
+  if (block == null) return null;
+  return {
+    for (final e in block.entries)
+      if (blockDefinitionKeys.contains(e.key) || e.key == 'run') e.key: e.value,
+    if (block.containsKey('started_at_wall_ms')) 'started_at_wall_ms': null,
+    if (block.containsKey('elapsed_before_ms')) 'elapsed_before_ms': 0,
+    if (block.containsKey('cues')) 'cues': const <Object?>[],
+  };
+}
 
 String _unitKind(LoadUnit u) => switch (u) {
   LoadUnit.kg => 'stack',
