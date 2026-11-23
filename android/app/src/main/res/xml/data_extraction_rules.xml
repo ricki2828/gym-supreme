@@ -10,7 +10,8 @@
         <exclude domain="file" path="spike/" />
         <exclude domain="file" path="ble-trail.log" />
         <exclude domain="file" path="install_marker.txt" />
-        <exclude domain="file" path="gym.db-wal" />
+        <!-- WAL kept: a backup between checkpoints would miss the last writes; SQLite ignores a stale WAL (salt). -->
+        <include domain="file" path="gym.db-wal" />
         <exclude domain="file" path="gym.db-shm" />
         <exclude domain="sharedpref" path="gymsupreme.journal.xml" />
         <exclude domain="sharedpref" path="gymsupreme.ble.xml" />
@@ -23,7 +24,8 @@
         <exclude domain="file" path="spike/" />
         <exclude domain="file" path="ble-trail.log" />
         <exclude domain="file" path="install_marker.txt" />
-        <exclude domain="file" path="gym.db-wal" />
+        <!-- WAL kept: a backup between checkpoints would miss the last writes; SQLite ignores a stale WAL (salt). -->
+        <include domain="file" path="gym.db-wal" />
         <exclude domain="file" path="gym.db-shm" />
         <exclude domain="sharedpref" path="gymsupreme.journal.xml" />
         <exclude domain="sharedpref" path="gymsupreme.ble.xml" />
