@@ -468,4 +468,44 @@ void engineTests() {
     expect(ids(3), ids(3));
     expect(ids(0), ids(0));
   });
+
+  test('ceiling with a harder variant points at it (B7)', () {
+    Exercise ex(String id, {String? harder}) => Exercise(
+      id: id,
+      name: id == 'a' ? 'Floor Press' : 'Bench Press',
+      primary: const ['chest'],
+      secondary: const [],
+      equipmentSets: const [
+        {'dumbbells'},
+      ],
+      load: 'dumbbell',
+      unilateral: false,
+      cue: '',
+      harderThan: harder,
+    );
+    final base = Rig.catalog;
+    final cat = Catalog(
+      muscles: base.muscles,
+      equipment: base.equipment,
+      presets: base.presets,
+      exercises: [
+        ex('a'),
+        ex('b', harder: 'a'),
+      ],
+    );
+    final e = GymEngine(catalog: cat, store: MemoryStore(), nowMs: () => 0);
+    final steps = const LoadSteps(LoadUnit.ea, [20000, 25000]);
+    final p = e.progress(
+      cat.exercise('a')!,
+      const LastTime(
+        workoutUuid: 'w',
+        atMs: 0,
+        sets: [PlannedSet(loadG: 25000, reps: 12)],
+      ),
+      steps,
+    );
+    expect(p.loadG, 25000);
+    expect(p.reps, [13]);
+    expect(p.note, contains('try Bench Press'));
+  });
 }

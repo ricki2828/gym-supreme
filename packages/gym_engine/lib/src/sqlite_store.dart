@@ -95,6 +95,7 @@ class SqliteStore implements HistoryStore {
   /// Opens (and creates or migrates) the database file.
   factory SqliteStore.open(String path) {
     final db = sqlite3.open(path);
+    db.execute('PRAGMA busy_timeout = 5000');
     db.execute('PRAGMA journal_mode = WAL');
     return SqliteStore._(db);
   }
