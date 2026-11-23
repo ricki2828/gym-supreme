@@ -200,7 +200,16 @@ class FlutterError (
 data class HostInfo (
   val sdkInt: Long,
   val model: String,
-  val versionCode: Long
+  val versionCode: Long,
+  /** Android release name, e.g. "15". */
+  val release: String,
+  /**
+   * False: rest alerts only buzz and beep; Diagnostics and the live screen
+   * show the standing banner (plan 6.2).
+   */
+  val notificationsEnabled: Boolean,
+  /** Battery saver on right now. */
+  val batterySaver: Boolean
 )
  {
   companion object {
@@ -208,7 +217,10 @@ data class HostInfo (
       val sdkInt = pigeonVar_list[0] as Long
       val model = pigeonVar_list[1] as String
       val versionCode = pigeonVar_list[2] as Long
-      return HostInfo(sdkInt, model, versionCode)
+      val release = pigeonVar_list[3] as String
+      val notificationsEnabled = pigeonVar_list[4] as Boolean
+      val batterySaver = pigeonVar_list[5] as Boolean
+      return HostInfo(sdkInt, model, versionCode, release, notificationsEnabled, batterySaver)
     }
   }
   fun toList(): List<Any?> {
@@ -216,6 +228,9 @@ data class HostInfo (
       sdkInt,
       model,
       versionCode,
+      release,
+      notificationsEnabled,
+      batterySaver,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -226,7 +241,7 @@ data class HostInfo (
       return true
     }
     val other = other as HostInfo
-    return PlatformApiPigeonUtils.deepEquals(this.sdkInt, other.sdkInt) && PlatformApiPigeonUtils.deepEquals(this.model, other.model) && PlatformApiPigeonUtils.deepEquals(this.versionCode, other.versionCode)
+    return PlatformApiPigeonUtils.deepEquals(this.sdkInt, other.sdkInt) && PlatformApiPigeonUtils.deepEquals(this.model, other.model) && PlatformApiPigeonUtils.deepEquals(this.versionCode, other.versionCode) && PlatformApiPigeonUtils.deepEquals(this.release, other.release) && PlatformApiPigeonUtils.deepEquals(this.notificationsEnabled, other.notificationsEnabled) && PlatformApiPigeonUtils.deepEquals(this.batterySaver, other.batterySaver)
   }
 
   override fun hashCode(): Int {
@@ -234,6 +249,9 @@ data class HostInfo (
     result = 31 * result + PlatformApiPigeonUtils.deepHash(this.sdkInt)
     result = 31 * result + PlatformApiPigeonUtils.deepHash(this.model)
     result = 31 * result + PlatformApiPigeonUtils.deepHash(this.versionCode)
+    result = 31 * result + PlatformApiPigeonUtils.deepHash(this.release)
+    result = 31 * result + PlatformApiPigeonUtils.deepHash(this.notificationsEnabled)
+    result = 31 * result + PlatformApiPigeonUtils.deepHash(this.batterySaver)
     return result
   }
 }
@@ -265,6 +283,8 @@ val PlatformApiPigeonMethodCodec = StandardMethodCodec(PlatformApiPigeonCodec())
 /** Generated interface from Pigeon that represents a handler of messages from Flutter. */
 interface GymHostApi {
   fun getHostInfo(): HostInfo
+  /** Opens this app's notification settings (the banner's "Turn on"). */
+  fun openNotificationSettings()
 
   companion object {
     /** The codec used by GymHostApi. */
@@ -281,6 +301,22 @@ interface GymHostApi {
           channel.setMessageHandler { _, reply ->
             val wrapped: List<Any?> = try {
               listOf(api.getHostInfo())
+            } catch (exception: Throwable) {
+              PlatformApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.gym_supreme.GymHostApi.openNotificationSettings$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              api.openNotificationSettings()
+              listOf(null)
             } catch (exception: Throwable) {
               PlatformApiPigeonUtils.wrapError(exception)
             }

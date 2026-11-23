@@ -22,16 +22,32 @@ class HostInfo {
     required this.sdkInt,
     required this.model,
     required this.versionCode,
+    required this.release,
+    required this.notificationsEnabled,
+    required this.batterySaver,
   });
 
   int sdkInt;
   String model;
   int versionCode;
+
+  /// Android release name, e.g. "15".
+  String release;
+
+  /// False: rest alerts only buzz and beep; Diagnostics and the live screen
+  /// show the standing banner (plan 6.2).
+  bool notificationsEnabled;
+
+  /// Battery saver on right now.
+  bool batterySaver;
 }
 
 @HostApi()
 abstract class GymHostApi {
   HostInfo getHostInfo();
+
+  /// Opens this app's notification settings (the banner's "Turn on").
+  void openNotificationSettings();
 }
 
 /// Cut-1 live workout contract (t3x decision 23-Nov, integration doc ruling 1).
