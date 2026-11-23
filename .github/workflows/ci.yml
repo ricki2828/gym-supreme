@@ -23,6 +23,9 @@ env:
   FLUTTER_VERSION: '3.47.5'
   JAVA_VERSION: '21'
   DOGFOOD_PKG: app.gymsupreme.dogfood
+  # Cut-2 features compiled ON in the dogfood build (lib/app/feature_flags.dart). Set with the repo
+  # variable GS_FEATURES (e.g. ghost,rotation) only on t3x's call; empty = all off (APK 0.1).
+  GS_FEATURES: ${{ vars.GS_FEATURES || '' }}
 
 jobs:
   changes:
@@ -241,7 +244,9 @@ jobs:
           flutter build apk --release --flavor dogfood --split-per-abi \
             --target-platform android-arm64,android-x64 \
             --obfuscate --split-debug-info=build/symbols-dogfood \
-            --dart-define=BUILD_SHA=${{ github.event.pull_request.head.sha || github.sha }}
+            --dart-define=BUILD_SHA=${{ github.event.pull_request.head.sha || github.sha }} \
+            --dart-define=GS_FEATURES="$GS_FEATURES"
+          echo "### Dogfood features: ${GS_FEATURES:-none (all off)}" >> "$GITHUB_STEP_SUMMARY"
           ls -la build/app/outputs/flutter-apk/
       - name: Verify signer, application id, permissions, 16 KB alignment
         run: |
