@@ -140,8 +140,20 @@ Future<void> _waitFor(
     await tester.pump(const Duration(milliseconds: 100));
     if (f.evaluate().isNotEmpty) return;
   }
-  fail('ui-e2e: step $stepName did not show $f within ${timeout.inSeconds} s');
+  fail(
+    'ui-e2e: step $stepName did not show $f within ${timeout.inSeconds} s; '
+    'on screen: ${_texts()}',
+  );
 }
+
+/// The visible texts, for a failure message.
+String _texts() => find
+    .byType(Text)
+    .evaluate()
+    .map((e) => (e.widget as Text).data ?? '')
+    .where((t) => t.isNotEmpty)
+    .take(40)
+    .join(' | ');
 
 /// Real time on a device: settle animations, never hang on the 1 s ticker.
 Future<void> _settle(WidgetTester tester) async {
@@ -158,14 +170,20 @@ Future<void> _settle(WidgetTester tester) async {
 
 Future<void> _tap(WidgetTester tester, Finder f) async {
   await _settle(tester);
-  final target = f.first;
-  if (target.evaluate().isEmpty) {
-    await tester.scrollUntilVisible(
-      target,
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
+  // Not built yet (low in a lazy list): scroll it in first. Check the plain
+  // finder: `.first` on an empty finder throws instead of matching nothing.
+  if (f.evaluate().isEmpty) {
+    try {
+      await tester.scrollUntilVisible(
+        f,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+    } on Object {
+      fail('ui-e2e: nothing matches $f; on screen: ${_texts()}');
+    }
   }
+  final target = f.first;
   await tester.ensureVisible(target);
   await _settle(tester);
   await tester.tap(target);
