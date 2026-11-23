@@ -45,6 +45,7 @@ CREATE TABLE workout (
   ended_at_ms INTEGER NOT NULL,
   paused_ms INTEGER NOT NULL DEFAULT 0,
   app_version TEXT NOT NULL DEFAULT '',
+  swaps INTEGER NOT NULL DEFAULT 0,
   snapshot_json TEXT
 );
 CREATE INDEX workout_started ON workout(started_at_ms);
@@ -258,13 +259,13 @@ class SqliteStore implements HistoryStore {
     // (INSERT OR IGNORE): a second save without samples must not wipe them.
     db.execute(
       'INSERT INTO workout (uuid, gym_id, type_id, muscles, started_at_ms, '
-      'tz_offset_min, ended_at_ms, paused_ms, app_version, snapshot_json) '
-      'VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(uuid) DO UPDATE SET '
+      'tz_offset_min, ended_at_ms, paused_ms, app_version, swaps, '
+      'snapshot_json) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(uuid) DO UPDATE SET '
       'gym_id = excluded.gym_id, type_id = excluded.type_id, '
       'muscles = excluded.muscles, started_at_ms = excluded.started_at_ms, '
       'tz_offset_min = excluded.tz_offset_min, '
       'ended_at_ms = excluded.ended_at_ms, paused_ms = excluded.paused_ms, '
-      'app_version = excluded.app_version, '
+      'app_version = excluded.app_version, swaps = excluded.swaps, '
       'snapshot_json = coalesce(excluded.snapshot_json, snapshot_json)',
       [
         w.uuid,
@@ -276,6 +277,7 @@ class SqliteStore implements HistoryStore {
         w.endedAtMs,
         w.pausedMs,
         w.appVersion,
+        w.swaps,
         snapshotJson,
       ],
     );
@@ -411,6 +413,7 @@ class SqliteStore implements HistoryStore {
         endedAtMs: r['ended_at_ms'] as int,
         pausedMs: r['paused_ms'] as int,
         appVersion: r['app_version'] as String,
+        swaps: r['swaps'] as int,
         sets: sets[r['uuid'] as String] ?? const [],
       ),
   ];

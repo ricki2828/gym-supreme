@@ -27,6 +27,7 @@ CREATE TABLE workout (
   ended_at_ms INTEGER NOT NULL,
   paused_ms INTEGER NOT NULL DEFAULT 0,
   app_version TEXT NOT NULL DEFAULT '',
+  swaps INTEGER NOT NULL DEFAULT 0,
   snapshot_json TEXT
 );
 CREATE INDEX workout_started ON workout(started_at_ms);
@@ -60,7 +61,7 @@ CREATE TABLE hr_sample (
 INSERT INTO gym VALUES ('g1','Condo gym','condo',1795400000000);
 INSERT INTO gym_item VALUES ('g1','dumbbells','preset',1,'[2000,4000,22500]');
 INSERT INTO setting VALUES ('settings','{"bodyweight_g":80000,"default_minutes":45,"rest_compound_s":120,"rest_isolation_s":75}');
-INSERT INTO workout VALUES ('3f2b8c1e-4a5d-4e6f-9a7b-1c2d3e4f5a6b','g1','push','["chest"]',1795400000000,480,1795400800000,60000,'0.1.0+1',NULL);
+INSERT INTO workout VALUES ('3f2b8c1e-4a5d-4e6f-9a7b-1c2d3e4f5a6b','g1','push','["chest"]',1795400000000,480,1795400800000,60000,'0.1.0+1',1,NULL);
 INSERT INTO set_row VALUES ('3f2b8c1e-4a5d-4e6f-9a7b-1c2d3e4f5a6b:0','3f2b8c1e-4a5d-4e6f-9a7b-1c2d3e4f5a6b','g1','dumbbell-bench-press','Dumbbell Bench Press',0,1,'reps',22500,10,'tap_unchanged',0,'app',1795400000000,1795400095000,95000,NULL);
 INSERT INTO hr_sample VALUES ('3f2b8c1e-4a5d-4e6f-9a7b-1c2d3e4f5a6b',1795400001000,118);
 PRAGMA user_version = 1;
