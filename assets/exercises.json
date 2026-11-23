@@ -410,7 +410,7 @@
    ],
    "load": "stack",
    "unilateral": false,
-   "mechanic": "compound",
+   "mechanic": "isolation",
    "force": "pull",
    "level": "beginner",
    "cue": "Sit tall, rotate the torso side to side with straight arms."
@@ -543,7 +543,7 @@
    ],
    "load": "bodyweight",
    "unilateral": false,
-   "mechanic": "compound",
+   "mechanic": "isolation",
    "force": "pull",
    "level": "beginner",
    "cue": "Back flat, lower opposite arm and leg, keep the ribs down."
@@ -891,7 +891,7 @@
    ],
    "load": "stack",
    "unilateral": false,
-   "mechanic": "compound",
+   "mechanic": "isolation",
    "force": "pull",
    "level": "intermediate",
    "cue": "Rope at face height, pull to the forehead, elbows high, hands apart."
@@ -971,7 +971,7 @@
    ],
    "load": "stack",
    "unilateral": false,
-   "mechanic": "compound",
+   "mechanic": "isolation",
    "force": "pull",
    "level": "intermediate",
    "cue": "Two high pulleys, arms out wide, curl the hands to the ears."
@@ -1038,7 +1038,7 @@
    ],
    "load": "dumbbell",
    "unilateral": false,
-   "mechanic": "compound",
+   "mechanic": "isolation",
    "force": "push",
    "level": "beginner",
    "cue": "Same arc as the flat fly, bench at 30 degrees, stop at shoulder height."
@@ -1610,7 +1610,7 @@
    ],
    "load": "timed",
    "unilateral": true,
-   "mechanic": null,
+   "mechanic": "isolation",
    "force": "static",
    "level": "beginner",
    "cue": "Elbow under shoulder, hips high in a straight line."
@@ -1761,7 +1761,7 @@
    ],
    "load": "stack",
    "unilateral": false,
-   "mechanic": "compound",
+   "mechanic": "isolation",
    "force": "pull",
    "level": "beginner",
    "cue": "Cable high, rotate the torso and chop down across the body."
