@@ -429,6 +429,17 @@ void main() {
     });
   });
 
+  test('undo keeps a set block', () {
+    var s = Session.replaceSet(
+      start(),
+      'u:2',
+      (x) => x.copyWith(block: const {'type': 'amrap', 'cap_ms': 600000}),
+    );
+    s = Session.done(s, 'u:2', nowMs: t0 + 1);
+    s = Session.undo(s, 'u:2');
+    expect(s.exercises[1].sets[0].block, {'type': 'amrap', 'cap_ms': 600000});
+  });
+
   test('uuidV4 shape', () {
     expect(
       uuidV4(),

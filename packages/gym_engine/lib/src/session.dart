@@ -157,6 +157,7 @@ class Session {
       planReps: set.planReps,
       targetLoadG: set.targetLoadG,
       targetReps: set.targetReps,
+      block: set.block, // timer definition survives; cut 2 re-arms it
     );
     final next = _replaceSet(s, at.e, at.s, back);
     final clears = s.rest?.setId == setId;
