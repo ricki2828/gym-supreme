@@ -103,10 +103,20 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    // Scrolls first: with cut-2 flags on (ghost lines), Finish can sit in the
+    // unbuilt part of the live screen's lazy list.
     Future<void> tapText(WidgetTester tester, String t) async {
-      await tester.ensureVisible(find.text(t).first);
+      final f = find.text(t);
+      if (f.evaluate().isEmpty) {
+        await tester.scrollUntilVisible(
+          f,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+      }
+      await tester.ensureVisible(f.first);
       await tester.pumpAndSettle();
-      await tester.tap(find.text(t).first);
+      await tester.tap(f.first);
       await tester.pumpAndSettle();
     }
 

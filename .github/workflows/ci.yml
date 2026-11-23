@@ -107,6 +107,9 @@ jobs:
         run: flutter analyze
       - name: App tests
         run: flutter test
+      - name: App tests with every cut-2 feature ON (GS_FEATURES=all; goldens excluded, they are drawn flags-off)
+        # Flagged code must not rot while its flag is off in a release (review 0.1.1, item 5c).
+        run: flutter test --dart-define=GS_FEATURES=all test/app test/screens test/cut2
       - name: supreme_ui tests
         working-directory: packages/supreme_ui
         run: flutter test
