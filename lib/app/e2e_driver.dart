@@ -23,8 +23,16 @@ class E2eDriver {
   final AppServices s;
   final void Function(String line) _out;
 
-  void _log(String step, [Map<String, Object?> extra = const {}]) =>
-      _out('GymSupreme/e2e ${jsonEncode({'step': step, ...extra})}');
+  String _nonce = '';
+
+  void _log(String step, [Map<String, Object?> extra = const {}]) => _out(
+    'GymSupreme/e2e ${jsonEncode({'step': step, 'nonce': _nonce, ...extra})}',
+  );
+
+  /// Name of the only gym the driver ever uses. It refuses to run on a phone
+  /// that has any other gym, so an app sending gym_e2e to a real dogfood
+  /// install cannot put fake workouts into his history.
+  static const gymName = 'E2E';
 
   LiveController _controller() => LiveController(
     engine: s.engine,
@@ -34,9 +42,18 @@ class E2eDriver {
     appVersion: s.appVersion,
   );
 
+  /// [command] is `<name>:<nonce>`; the nonce is echoed in every line so the
+  /// smoke script never matches a stale line.
   Future<void> run(String command) async {
+    final i = command.indexOf(':');
+    _nonce = i < 0 ? '' : command.substring(i + 1);
+    final name = i < 0 ? command : command.substring(0, i);
+    if (s.engine.gyms().any((g) => g.name != gymName)) {
+      _log('refused', {'reason': 'a real gym exists on this phone'});
+      return;
+    }
     try {
-      switch (command) {
+      switch (name) {
         case 'run':
           await _run(fullFlow: true);
         case 'start_only':
@@ -44,17 +61,17 @@ class E2eDriver {
         case 'resume':
           await _resume();
         default:
-          _log('unknown', {'command': command});
+          _log('unknown', {'command': name});
       }
     } on Object catch (e) {
-      _log('error', {'command': command, 'error': '$e'});
+      _log('error', {'command': name, 'error': '$e'});
     }
   }
 
   String _gymId() {
     final gyms = s.engine.gyms();
     if (gyms.isNotEmpty) return gyms.first.id;
-    final g = s.engine.gymFromPreset('condo');
+    final g = s.engine.gymFromPreset('condo', name: gymName);
     s.engine.saveGym(g);
     return g.id;
   }
