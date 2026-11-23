@@ -13,7 +13,11 @@ LiveView liveView({
   bool allDone = false,
   LoadUnit unit = LoadUnit.kgEach,
   String name = 'Dumbbell bench press',
+  String? undoLabel,
+  bool canSwap = false,
 }) => LiveView(
+  undoLabel: undoLabel,
+  canSwap: canSwap,
   type: WorkoutType.push,
   exerciseName: name,
   lift: 1,
