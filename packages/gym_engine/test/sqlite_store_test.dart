@@ -16,6 +16,7 @@ WorkoutRecord workout(String uuid, {int sets = 2, String gym = 'g1'}) =>
       endedAtMs: 5000,
       pausedMs: 10,
       appVersion: '0.1.0',
+      swaps: 2,
       sets: [
         for (var i = 0; i < sets; i++)
           SetRecord(
@@ -59,6 +60,7 @@ void main() {
     expect(r.muscles, ['chest']);
     expect(r.pausedMs, 10);
     expect(r.appVersion, '0.1.0');
+    expect(r.swaps, 2);
     expect(r.sets, hasLength(2));
     final a = r.sets[0];
     expect(
