@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.util.Log
 import app.gymsupreme.platform.GymHostApi
 import app.gymsupreme.platform.HostInfo
+import app.gymsupreme.workout.SessionSelfTest
 import app.gymsupreme.workout.SpikeChannel
 import app.gymsupreme.workout.SpikeLog
 import app.gymsupreme.workout.WorkoutService
@@ -17,6 +18,7 @@ import java.util.UUID
 class MainActivity : FlutterActivity() {
     private var spike: SpikeChannel? = null
     private var selftestPending = false
+    private var sessionStepPending: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,12 +42,22 @@ class MainActivity : FlutterActivity() {
             SpikeLog.write(this, SpikeLog.line("selftest_requested"))
             WorkoutService.start(this, WorkoutService.ACTION_SELFTEST)
         }
+        sessionStepPending?.let {
+            sessionStepPending = null
+            SessionSelfTest.run(this, it)
+        }
     }
 
+    /** CI self-tests (S5 and the session path): dogfood and debug builds only, never play. */
     private fun noteSelftest(i: Intent?) {
-        if (i?.getBooleanExtra(EXTRA_SELFTEST, false) == true) {
+        if (i == null || !SessionSelfTest.allowed(this)) return
+        if (i.getBooleanExtra(EXTRA_SELFTEST, false)) {
             i.removeExtra(EXTRA_SELFTEST)
             selftestPending = true
+        }
+        i.getStringExtra(SessionSelfTest.EXTRA)?.let {
+            i.removeExtra(SessionSelfTest.EXTRA)
+            sessionStepPending = it
         }
     }
 

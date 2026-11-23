@@ -53,4 +53,29 @@ echo "S5 cue: $cue"
 stopped="$(wait_for '"event":"service_stopped".*"reason":"selftest_done"' 40)" || { echo "S5: service did not stop itself" >&2; svc_lines | tail -n 20 >&2; exit 1; }
 echo "S5 stop: $stopped"
 fatal_check "$PKG" service
+
+# Session path (phase-1 exit: rest alert covered, crash-safe resume). A schema-v1 snapshot goes
+# through LiveSession as Dart sends it: journal line, service start, 3 s rest, alert. Then the
+# process is killed and relaunched: the journal must be found. Then finish + delete.
+session_step() { adb shell am start -W -n "$PKG/app.gymsupreme.MainActivity" --es gym_selftest_session "$1" > /dev/null; }
+session_step start
+s_start="$(wait_for '"event":"selftest_session".*"step":"start".*"ok":true' 30)" || {
+  echo "session: start refused" >&2; svc_lines | grep -E 'selftest_session|session_|journal' | tail -n 10 >&2; exit 1; }
+echo "session start: $s_start"
+alert="$(wait_for '"event":"rest_alert"' 30)" || { echo "session: no rest alert within 30 s" >&2; svc_lines | tail -n 20 >&2; exit 1; }
+echo "session rest alert: $alert"
+noti="$(adb shell dumpsys notification --noredact | tr -d '\r' | grep -E "pkg=$PKG .*id=2001" | head -1 || true)"
+[ -n "$noti" ] || { echo "session: workout notification not posted" >&2; exit 1; }
+adb shell am force-stop "$PKG"
+sleep 2
+launch "$PKG" || { echo "session: relaunch after force-stop failed" >&2; exit 1; }
+session_step pending
+pending="$(wait_for '"event":"selftest_session".*"step":"pending".*"found":true' 30)" || {
+  echo "session: journal not found after force-stop" >&2; svc_lines | grep -E 'selftest_session|journal' | tail -n 10 >&2; exit 1; }
+echo "session resume: $pending"
+session_step finish
+fin="$(wait_for '"event":"selftest_session".*"step":"finish".*"finished":true,"deleted":true' 30)" || {
+  echo "session: finish + delete failed" >&2; svc_lines | grep -E 'selftest_session|session_|journal' | tail -n 10 >&2; exit 1; }
+echo "session finish: $fin"
+fatal_check "$PKG" session
 echo "smoke ok on API $sdk"

@@ -16,6 +16,9 @@ import app.gymsupreme.ble.BleHrClient
 import app.gymsupreme.ble.HrHolder
 import app.gymsupreme.core.ble.HrReading
 import app.gymsupreme.core.ble.HrSummary
+import app.gymsupreme.core.journal.SnapshotView
+import app.gymsupreme.core.rest.RestSpec
+import app.gymsupreme.core.rest.RestTracker
 import app.gymsupreme.core.timer.Cue
 import app.gymsupreme.core.timer.CueClock
 import app.gymsupreme.core.timer.CueKind
@@ -59,6 +62,13 @@ class WorkoutService : Service() {
     private var audibleTotal = 0
     private var stopping = false
 
+    // Session mode (cut 1): the rest alert from Dart's snapshots, one bounded wake lock per rest.
+    private var tracker: RestTracker? = null
+    private var sessionView: SnapshotView? = null
+    private var restLock: PowerManager.WakeLock? = null
+    private var restRunnable: Runnable? = null
+    private var restArmedAt: Long? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -72,6 +82,7 @@ class WorkoutService : Service() {
         val wanted = when (action) {
             ACTION_START_SPIKE -> MODE_SPIKE
             ACTION_SELFTEST -> MODE_SELFTEST
+            ACTION_SESSION -> MODE_SESSION
             else -> null
         }
         if (wanted == null || status.running) {
@@ -92,6 +103,10 @@ class WorkoutService : Service() {
     private fun begin(m: String) {
         mode = m
         stopping = false
+        if (m == MODE_SESSION) {
+            beginSession()
+            return
+        }
         t0 = SystemClock.elapsedRealtime()
         t0Wall = System.currentTimeMillis()
         val plan = if (m == MODE_SELFTEST) CuePlan.selftest() else CuePlan.spike()
@@ -317,6 +332,130 @@ class WorkoutService : Service() {
         }
     }
 
+    // ---- session mode (cut 1) ----
+
+    private fun beginSession() {
+        t0 = SystemClock.elapsedRealtime()
+        t0Wall = System.currentTimeMillis()
+        val view = pendingView
+        pendingView = null
+        sessionView = view
+        reset(Status(running = true, mode = MODE_SESSION, t0 = t0, title = view?.current?.exerciseName ?: "Workout"))
+        if (!goForeground(SPECIAL_USE, "start")) {
+            reset(Status())
+            stopSelfNow()
+            return
+        }
+        val th = HandlerThread("gym-cues", Process.THREAD_PRIORITY_URGENT_AUDIO).also { it.start() }
+        cueThread = th
+        val h = Handler(th.looper)
+        cues = h
+        alerter = Alerter(this, h)
+        tracker = RestTracker()
+        if (view != null) applyView(view) else refreshNotification()
+    }
+
+    /** An accepted snapshot (main thread): arm, keep, cancel or fire the rest; refresh the notification. */
+    fun applyView(view: SnapshotView) {
+        if (status.mode != MODE_SESSION || stopping) return
+        sessionView = view
+        update { it.copy(title = view.current?.exerciseName ?: "All sets logged", fired = view.setsDone, total = view.setsTotal) }
+        val t = tracker ?: return
+        val action = if (view.paused) t.clear() else t.onSnapshot(view.rest, System.currentTimeMillis(), SystemClock.elapsedRealtime())
+        when (action) {
+            is RestTracker.Action.Keep -> Unit
+            is RestTracker.Action.Cancel -> cancelRest("cancelled")
+            is RestTracker.Action.Arm -> armRest(action.spec, action.atElapsedMs)
+            is RestTracker.Action.FireNow -> {
+                cancelRest("replaced")
+                cues?.post { fireRest(action.spec, SystemClock.elapsedRealtime() - action.lateMs, "resume_grace") }
+            }
+            is RestTracker.Action.Missed -> {
+                NativeCounters.add(this, NativeCounters.REST_ALERTS_MISSED)
+                SpikeLog.write(this, SpikeLog.line("rest_missed").put("set_id", action.spec.key).put("late_ms", action.lateMs))
+            }
+        }
+        refreshNotification()
+    }
+
+    private fun armRest(spec: RestSpec, atElapsed: Long) {
+        cancelRest("replaced")
+        val h = cues ?: return
+        val delay = (atElapsed - SystemClock.elapsedRealtime()).coerceAtLeast(0)
+        // R4: a wake lock bounded to this rest, so the alert fires with the screen off.
+        restLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "gymsupreme:rest")
+            .also { it.acquire(delay + REST_LOCK_MARGIN_MS) }
+        restArmedAt = atElapsed
+        val run = Runnable { fireRest(spec, atElapsed, "timer") }
+        restRunnable = run
+        h.postDelayed(run, delay)
+        SpikeLog.write(this, SpikeLog.line("rest_armed").put("set_id", spec.key).put("duration_ms", spec.durationMs).put("fires_in_ms", delay).put("scheduled_elapsed_ms", atElapsed))
+    }
+
+    private fun cancelRest(why: String) {
+        val run = restRunnable
+        restRunnable = null
+        restArmedAt = null
+        if (run != null) {
+            cues?.removeCallbacks(run)
+            SpikeLog.write(this, SpikeLog.line("rest_cancelled").put("why", why))
+        }
+        restLock?.let { if (it.isHeld) it.release() }
+        restLock = null
+    }
+
+    /** Cue thread. A timer that wakes early re-posts itself; the alert fires once. */
+    private fun fireRest(spec: RestSpec, scheduled: Long, cause: String) {
+        val now = SystemClock.elapsedRealtime()
+        if (cause == "timer" && now < scheduled) {
+            restRunnable?.let { cues?.postDelayed(it, scheduled - now) }
+            return
+        }
+        val late = now - scheduled
+        val r = alerter?.fire(long = true)
+        val next = sessionView?.current
+        val posted = notification.cue(if (next != null) "Rest over: ${next.exerciseName}, set ${next.setNumber}" else "Rest over")
+        NativeCounters.add(this, NativeCounters.REST_ALERTS_FIRED)
+        if (late > NativeCounters.LATE_MS) NativeCounters.add(this, NativeCounters.REST_ALERTS_LATE)
+        NativeCounters.max(this, NativeCounters.REST_ALERT_MAX_LATE_MS, late)
+        if (r == null || !r.audio.startsWith("ok")) NativeCounters.add(this, NativeCounters.REST_ALERTS_AUDIO_FAILED)
+        SpikeLog.write(
+            this,
+            DeviceState.addTo(
+                this,
+                SpikeLog.line("rest_alert")
+                    .put("set_id", spec.key)
+                    .put("cause", cause)
+                    .put("duration_ms", spec.durationMs)
+                    .put("scheduled_elapsed_ms", scheduled)
+                    .put("fired_elapsed_ms", now)
+                    .put("late_ms", late)
+                    .put("audio", r?.audio)
+                    .put("audio_method", r?.audioMethod)
+                    .put("focus", r?.focus)
+                    .put("vibrate", r?.vibrate)
+                    .put("notification", posted)
+                    .put("service_type", status.serviceType)
+                    .put("wake_lock_held", restLock?.isHeld == true),
+            ),
+        )
+        main.post {
+            tracker?.onFired(spec.key)
+            restRunnable = null
+            restArmedAt = null
+            restLock?.let { if (it.isHeld) it.release() }
+            restLock = null
+            update { it.copy(lastCue = "rest ${spec.key}", lastLateMs = late) }
+            refreshNotification()
+        }
+    }
+
+    /** Pause or finish from [LiveSession]: stop the service; the journal stays until Dart deletes it. */
+    fun endSession(reason: String) {
+        if (status.mode == MODE_SESSION) stopWorkout(reason)
+    }
+
     // ---- stop ----
 
     /** Stop from the app, the lock screen, the self-test timer or the safety cap. Main thread; idempotent. */
@@ -338,6 +477,9 @@ class WorkoutService : Service() {
             }
         }
         main.removeCallbacksAndMessages(null)
+        cancelRest("stop")
+        tracker = null
+        sessionView = null
         releaseWakeLock("stop")
         stopStrap()
         notification.clearCue()
@@ -365,6 +507,7 @@ class WorkoutService : Service() {
     }
 
     private fun content(): WorkoutNotification.Content {
+        if (mode == MODE_SESSION) return sessionContent()
         val s = status
         val c = clock
         val nextWall = c?.peek()?.let { System.currentTimeMillis() + (c.scheduledAt(it) - SystemClock.elapsedRealtime()) }
@@ -373,6 +516,21 @@ class WorkoutService : Service() {
             if (s.hrConnected) append("  ·  ${s.hr ?: "--"} bpm") else if (mode == MODE_SPIKE) append("  ·  strap not connected")
         }
         return WorkoutNotification.Content(s.title, text, nextWall)
+    }
+
+    /** R3: exercise, set n of m, what Done will log, the rest countdown. No actions until cut 2. */
+    private fun sessionContent(): WorkoutNotification.Content {
+        val v = sessionView
+        val c = v?.current
+        val restEndWall = restArmedAt?.let { System.currentTimeMillis() + (it - SystemClock.elapsedRealtime()) }
+        val title = when {
+            v == null -> "Workout"
+            c == null -> "All sets logged: finish in the app"
+            restEndWall != null -> "Rest · next ${c.exerciseName}"
+            else -> c.exerciseName
+        }
+        val text = if (c == null) "${v?.setsDone ?: 0} sets" else "Set ${c.setNumber} of ${c.setCount}  ·  ${v.doneLine() ?: ""}"
+        return WorkoutNotification.Content(title, text, restEndWall, stopAction = false)
     }
 
     private fun refreshNotification() {
@@ -411,6 +569,29 @@ class WorkoutService : Service() {
         const val ACTION_SELFTEST = "app.gymsupreme.action.SELFTEST"
         const val MODE_SPIKE = "spike"
         const val MODE_SELFTEST = "selftest"
+        const val MODE_SESSION = "session"
+        const val ACTION_SESSION = "app.gymsupreme.action.SESSION"
+        private const val REST_LOCK_MARGIN_MS = 30_000L
+
+        /** The view for a session start, handed to onStartCommand. Main thread. */
+        private var pendingView: SnapshotView? = null
+
+        /**
+         * An accepted snapshot that is not paused: update the running session, or start the
+         * service for it (the caller is Dart in the visible activity). A spike run in progress
+         * is left alone and logged.
+         */
+        fun session(context: Context, view: SnapshotView) {
+            val s = instance
+            when {
+                status.running && status.mode == MODE_SESSION && s != null -> s.applyView(view)
+                status.running -> SpikeLog.write(context, SpikeLog.line("session_blocked").put("running_mode", status.mode))
+                else -> {
+                    pendingView = view
+                    start(context, ACTION_SESSION)
+                }
+            }
+        }
 
         /** ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE (API 34), as a literal so older SDK levels can try it. */
         const val SPECIAL_USE = 1 shl 30

@@ -37,7 +37,7 @@ class WorkoutNotification(private val context: Context) {
         )
     }
 
-    data class Content(val title: String, val text: String, val nextCueWallMs: Long?)
+    data class Content(val title: String, val text: String, val nextCueWallMs: Long?, val stopAction: Boolean = true)
 
     fun build(c: Content): Notification {
         val b = Notification.Builder(context, CHANNEL_ONGOING)
@@ -49,7 +49,7 @@ class WorkoutNotification(private val context: Context) {
             .setCategory(Notification.CATEGORY_SERVICE)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentIntent(openApp())
-            .addAction(Notification.Action.Builder(null, "Stop", action(WorkoutActionReceiver.ACTION_STOP)).build())
+        if (c.stopAction) b.addAction(Notification.Action.Builder(null, "Stop", action(WorkoutActionReceiver.ACTION_STOP)).build())
         if (c.nextCueWallMs != null) {
             b.setUsesChronometer(true).setChronometerCountDown(true).setWhen(c.nextCueWallMs).setShowWhen(true)
         } else {
