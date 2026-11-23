@@ -400,24 +400,80 @@ class LiveController extends ChangeNotifier {
   Future<bool> pause() async {
     var ok = false;
     await _enqueue(() async {
+      ok = await _pauseNow();
+    });
+    return ok;
+  }
+
+  /// [pause] without queueing, for jobs that already hold the queue.
+  Future<bool> _pauseNow() async {
+    final s = _s;
+    if (s == null) return false;
+    if (s.finished) {
+      // The journal already holds the finished snapshot: leaving is safe,
+      // and the next open (or Resume) retries the save.
+      return true;
+    }
+    final next = c2.TimerSession.pause(s, nowMs: nowMs());
+    if (!identical(next, s) && !await _submit(next)) return false;
+    try {
+      await port.pauseSession();
+    } on Object catch (e) {
+      // The accepted paused snapshot already stops the service; the
+      // journal is the truth, so leaving is still safe.
+      lastError = e;
+    }
+    return true;
+  }
+
+  /// Set once [discard] deleted the journal.
+  String? discardedUuid;
+
+  /// The last [discard] did not finish: the pause was refused (the workout
+  /// still runs) or the delete failed after a good pause (the workout is
+  /// paused and still offered as Resume). [lastError] says why. Cleared by
+  /// the next snapshot change.
+  bool discardFailed = false;
+
+  /// Throws the workout away: pause (the journal holds the paused snapshot
+  /// and the service stops), then delete the journal. Nothing is written to
+  /// SQLite and the rotation does not move. True when the journal is gone.
+  ///
+  /// Kotlin stops a running service synchronously on the main thread (the
+  /// paused snapshot's `endSession` resets `status.running` before the submit
+  /// returns), and a start still queued behind it is cancelled natively
+  /// (`WorkoutService.cancelPendingStart`), so the delete needs no retry. A
+  /// `still_running` refusal means something else (a spike run) holds the
+  /// service: the workout stays paused.
+  ///
+  /// Every intent shares [_queue], so anything queued before this runs
+  /// first and anything after sees no session and does nothing: no
+  /// submitSnapshot can follow the delete (and the service would refuse it
+  /// with not_running anyway).
+  Future<bool> discard() async {
+    var ok = false;
+    await _enqueue(() async {
       final s = _s;
-      if (s == null) return;
-      if (s.finished) {
-        // The journal already holds the finished snapshot: leaving is safe,
-        // and the next open (or Resume) retries the save.
-        ok = true;
+      if (s == null || s.finished || finishedUuid != null) return;
+      discardFailed = false;
+      if (!await _pauseNow()) {
+        discardFailed = true;
         return;
       }
-      final next = c2.TimerSession.pause(s, nowMs: nowMs());
-      if (!identical(next, s) && !await _submit(next)) return;
-      ok = true;
       try {
-        await port.pauseSession();
+        await port.deleteJournal(s.workoutUuid);
       } on Object catch (e) {
-        // The accepted paused snapshot already stops the service; the
-        // journal is the truth, so leaving is still safe.
         lastError = e;
+        discardFailed = true;
+        notifyListeners();
+        return;
       }
+      discardedUuid = s.workoutUuid;
+      lastError = null;
+      _s = null;
+      _syncTimer();
+      notifyListeners();
+      ok = true;
     });
     return ok;
   }
@@ -571,6 +627,7 @@ class LiveController extends ChangeNotifier {
 
   void _set(eng.SessionSnapshot s) {
     _s = s;
+    discardFailed = false;
     _syncTimer();
     notifyListeners();
   }

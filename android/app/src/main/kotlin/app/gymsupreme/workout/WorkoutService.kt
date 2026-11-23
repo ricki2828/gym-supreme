@@ -86,7 +86,10 @@ class WorkoutService : Service() {
             ACTION_SESSION -> MODE_SESSION
             else -> null
         }
-        if (wanted == null || status.running) {
+        // A session start whose view was cancelled (paused or deleted before this callback ran) is
+        // stale: go idle, do not start a service for a workout that is no longer running.
+        val staleSession = wanted == MODE_SESSION && pendingView == null
+        if (wanted == null || status.running || staleSession) {
             // Every startForegroundService must reach startForeground, even with nothing to do.
             SpikeLog.write(this, SpikeLog.line("start_ignored").put("action", action).put("running", status.running))
             if (status.running) {
@@ -605,6 +608,15 @@ class WorkoutService : Service() {
                     start(context, ACTION_SESSION)
                 }
             }
+        }
+
+        /**
+         * The journal was paused or deleted while a start was still queued (startForegroundService
+         * returns before onStartCommand runs, so `status.running` is still false and `endSession`
+         * has nothing to stop): drop the view so the late start goes idle. Main thread.
+         */
+        fun cancelPendingStart() {
+            pendingView = null
         }
 
         /** ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE (API 34), as a literal so older SDK levels can try it. */

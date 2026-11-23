@@ -108,6 +108,40 @@ class LiveView {
   bool get asPlanned => reps == targetReps && loadG == targetLoadG;
 }
 
+enum _FinishChoice { keep, finish, discard }
+
+const _destructive = Color(0xFFB3261E);
+
+/// "Discard this workout? N sets will be lost." True when he confirms. One
+/// copy for the live screen and the Resume card on Today.
+Future<bool> askDiscard(BuildContext context, int doneSets) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Discard this workout?'),
+      content: Text(
+        doneSets == 0
+            ? 'Nothing has been logged.'
+            : '$doneSets ${doneSets == 1 ? 'set' : 'sets'} will be lost.',
+      ),
+      actions: [
+        TextButton(
+          key: const Key('discard.keep'),
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Keep it'),
+        ),
+        TextButton(
+          key: const Key('discard.confirm'),
+          onPressed: () => Navigator.of(ctx).pop(true),
+          style: TextButton.styleFrom(foregroundColor: _destructive),
+          child: const Text('Discard'),
+        ),
+      ],
+    ),
+  );
+  return ok == true;
+}
+
 /// Live logging (plan item 4; b-live.png): prefill from last time, one-tap
 /// Done, +/- on the gym's real weights, auto rest, drag to reorder.
 class LiveScreen extends StatelessWidget {
@@ -125,6 +159,7 @@ class LiveScreen extends StatelessWidget {
     this.onReorder,
     this.onPause,
     this.onFinish,
+    this.onDiscard,
     this.onUndo,
     this.onSwap,
     this.onAddSet,
@@ -166,6 +201,10 @@ class LiveScreen extends StatelessWidget {
   /// Called after he confirms (with sets left) or straight away (all done).
   final VoidCallback? onFinish;
 
+  /// Throw the whole workout away (journal deleted, nothing saved). Offered
+  /// inside the Finish confirm, after a second "are you sure".
+  final VoidCallback? onDiscard;
+
   /// Undo the last logged set (P1-6).
   final VoidCallback? onUndo;
 
@@ -180,8 +219,34 @@ class LiveScreen extends StatelessWidget {
   Future<void> _confirmFinish(BuildContext context) async {
     final f = onFinish;
     if (f == null) return;
+    final d = onDiscard;
+    if (view.doneSets == 0 && d != null) {
+      // Nothing logged: storing an empty workout helps nobody.
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Nothing logged'),
+          content: const Text('Discard this workout?'),
+          actions: [
+            TextButton(
+              key: const Key('finish.keep'),
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Keep going'),
+            ),
+            TextButton(
+              key: const Key('finish.nothing_discard'),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: TextButton.styleFrom(foregroundColor: _destructive),
+              child: const Text('Discard'),
+            ),
+          ],
+        ),
+      );
+      if (discard == true) d();
+      return;
+    }
     if (view.leftSets == 0) return f();
-    final ok = await showDialog<bool>(
+    final choice = await showDialog<_FinishChoice>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Finish this workout?'),
@@ -191,20 +256,30 @@ class LiveScreen extends StatelessWidget {
           'dropped.',
         ),
         actions: [
+          if (d != null)
+            TextButton(
+              key: const Key('finish.discard'),
+              onPressed: () => Navigator.of(ctx).pop(_FinishChoice.discard),
+              style: TextButton.styleFrom(foregroundColor: _destructive),
+              child: const Text('Discard workout'),
+            ),
           TextButton(
             key: const Key('finish.keep'),
-            onPressed: () => Navigator.of(ctx).pop(false),
+            onPressed: () => Navigator.of(ctx).pop(_FinishChoice.keep),
             child: const Text('Keep going'),
           ),
           TextButton(
             key: const Key('finish.confirm'),
-            onPressed: () => Navigator.of(ctx).pop(true),
+            onPressed: () => Navigator.of(ctx).pop(_FinishChoice.finish),
             child: const Text('Finish'),
           ),
         ],
       ),
     );
-    if (ok == true) f();
+    if (choice == _FinishChoice.finish) f();
+    if (choice == _FinishChoice.discard && d != null && context.mounted) {
+      if (await askDiscard(context, view.doneSets)) d();
+    }
   }
 
   /// Finish, pinned to the bottom of every live screen so it never needs a
@@ -236,7 +311,11 @@ class LiveScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (view.allDone) {
-      return _AllDone(view: view, onFinish: onFinish, onUndo: onUndo);
+      return _AllDone(
+        view: view,
+        onFinish: onFinish == null ? null : () => _confirmFinish(context),
+        onUndo: onUndo,
+      );
     }
     if (view.restLeftS != null) {
       return _RestScreen(

@@ -114,6 +114,38 @@ void main() {
     },
   );
 
+  test('discard: journal gone, nothing stored, a new start accepted', () async {
+    final store = SqliteStore.inMemory();
+    addTearDown(store.close);
+    final port = AlertingStubPort();
+    final s = services(store, port);
+    final lines = <String>[];
+    await E2eDriver(s, out: lines.add).run('run:r');
+    lines.clear();
+    await E2eDriver(s, out: lines.add).run('discard:d');
+    final steps = lines.map(step).map((m) => m['step']).toList();
+    expect(steps, [
+      'start',
+      'set2',
+      'discard',
+      'restart',
+      'ok',
+    ], reason: lines.join('\n'));
+    final d = lines.map(step).firstWhere((m) => m['step'] == 'discard');
+    expect(d['ok'], isTrue);
+    expect(d['journal_gone'], isTrue);
+    expect(d['stored'], isFalse);
+    expect(d['history_before'], 1);
+    expect(d['history_after'], 1);
+    expect(await port.readPendingJournal(), isNull);
+    expect(s.engine.history(limit: 5), hasLength(1));
+    lines.clear();
+    await E2eDriver(s, out: lines.add).run('history:h');
+    final h = lines.map(step).firstWhere((m) => m['step'] == 'history');
+    expect(h['pending_journal'], isFalse);
+    expect(h['count'], 1);
+  });
+
   test('history lists stored workouts for the restore drill', () async {
     final store = SqliteStore.inMemory();
     addTearDown(store.close);

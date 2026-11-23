@@ -100,6 +100,32 @@ void main() {
       onPause: noop,
       onFinish: noop,
     ),
+    'live (discard offered)': LiveScreen(
+      view: liveView(doneSets: 2, leftSets: 7),
+      onReps: noop1,
+      onLoad: noop1,
+      onTypeReps: (_, _) {},
+      onTypeLoad: (_, _) {},
+      onDone: noop,
+      onSkipSet: noop,
+      onRestDelta: noop1,
+      onSkipRest: noop,
+      onReorder: (_, _) {},
+      onPause: noop,
+      onFinish: noop,
+      onDiscard: noop,
+    ),
+    'resume card with discard': Scaffold(
+      body: ResumeCard(
+        type: WorkoutType.push,
+        lift: 2,
+        lifts: 5,
+        set: 1,
+        pausedWhen: 'today',
+        onResume: noop,
+        onDiscard: noop,
+      ),
+    ),
     'rest': LiveScreen(
       view: liveView(restLeftS: 60),
       onRestDelta: noop1,
@@ -137,6 +163,49 @@ void main() {
       expect(missing(tester), isEmpty);
     });
   }
+
+  for (final nothing in [false, true]) {
+    testWidgets('finish dialog (${nothing ? 'nothing logged' : 'with sets'}): '
+        'every enabled button has a tap action', (tester) async {
+      phone(tester);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LiveScreen(
+            view: liveView(doneSets: nothing ? 0 : 2, leftSets: 7),
+            onFinish: noop,
+            onDiscard: noop,
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(const Key('live.finish')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(Key(nothing ? 'finish.nothing_discard' : 'finish.discard')),
+        findsOneWidget,
+      );
+      expect(missing(tester), isEmpty);
+    });
+  }
+
+  testWidgets('discard confirm: every enabled button has a tap action', (
+    tester,
+  ) async {
+    phone(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (c) => TextButton(
+            onPressed: () => askDiscard(c, 2),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('discard.confirm')), findsOneWidget);
+    expect(missing(tester), isEmpty);
+  });
 
   // Keep the enum import used if fixtures change.
   test('types compile', () => expect(WorkoutType.push.label, 'Push'));

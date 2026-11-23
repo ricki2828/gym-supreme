@@ -252,6 +252,29 @@ class _GymRootState extends State<GymRoot> {
     await _runLive(c);
   }
 
+  /// Resume card: throw the paused workout away. Confirm first; the card
+  /// stays if the journal cannot be deleted. Nothing is written to SQLite
+  /// and the rotation does not move.
+  Future<void> _discardPending() async {
+    final p = _pending;
+    if (p == null || p.finished) return;
+    final sets = [
+      for (final e in p.exercises)
+        for (final s in e.sets)
+          if (s.state == eng.SetState.done) s,
+    ].length;
+    if (!await askDiscard(context, sets) || !mounted) return;
+    try {
+      await widget.deps.port.deleteJournal(p.workoutUuid);
+    } on Object catch (e) {
+      _say('Could not discard: ${_reason(e)}. The workout is still paused.');
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _pending = null);
+    _say('Workout discarded.');
+  }
+
   void _say(String text) {
     if (!mounted) return;
     ScaffoldMessenger.maybeOf(context)
@@ -267,8 +290,18 @@ class _GymRootState extends State<GymRoot> {
     // Anything not stored stays offered as Resume (paused, or a finish that
     // failed half way: its journal is still on disk).
     final paused = c.finishedUuid == null ? c.snapshot : null;
+    final discardFailed =
+        c.discardFailed && c.snapshot?.state == eng.SessionState.paused
+        ? c.lastError
+        : null;
     c.dispose();
     if (!mounted) return;
+    if (discardFailed != null) {
+      _say(
+        'Could not discard: ${_reason(discardFailed)}. The workout is '
+        'paused; discard it from the Resume card.',
+      );
+    }
     if (uuid != null) {
       await Navigator.of(context).push<void>(
         MaterialPageRoute(
@@ -296,6 +329,7 @@ class _GymRootState extends State<GymRoot> {
         pending: _pending,
         onStart: _openPicker,
         onResume: _resume,
+        onDiscard: _discardPending,
         onOpenDiagnostics: widget.onOpenDiagnostics,
         recoveryError: _recoveryError,
         notificationsOff: _notificationsOff,
@@ -343,6 +377,7 @@ class _Today extends StatelessWidget {
     required this.pending,
     required this.onStart,
     required this.onResume,
+    this.onDiscard,
     this.onOpenDiagnostics,
     this.recoveryError,
     this.notificationsOff = false,
@@ -360,6 +395,7 @@ class _Today extends StatelessWidget {
   final eng.SessionSnapshot? pending;
   final VoidCallback onStart;
   final VoidCallback onResume;
+  final VoidCallback? onDiscard;
   final VoidCallback? onOpenDiagnostics;
 
   @override
@@ -446,6 +482,8 @@ class _Today extends StatelessWidget {
               finishedUnsaved: p.finished,
               pausedWhen: _when(p.pausedAtMs ?? p.startedAtMs, deps.nowMs()),
               onResume: onResume,
+              // A finished journal is saved by Resume, not thrown away.
+              onDiscard: p.finished ? null : onDiscard,
             ),
             const SizedBox(height: 16),
           ],
@@ -896,6 +934,24 @@ class _LiveFlowState extends State<LiveFlow> {
     }
   }
 
+  /// Pause, then delete the journal; leaves with no uuid (nothing to
+  /// summarise). If the delete fails the workout stays paused and Today
+  /// offers it as Resume (the failure is said there).
+  Future<void> _discard() async {
+    if (_leaving) return;
+    _leaving = true;
+    await c.discard();
+    // Leave when the journal is gone, or when it is safely paused and only
+    // the delete failed (Today then offers Resume and says so). A refused
+    // pause leaves the workout running: stay, the error banner shows.
+    final paused = c.snapshot?.state == eng.SessionState.paused;
+    if (c.discardedUuid != null || (c.discardFailed && paused)) {
+      _leave();
+    } else {
+      _leaving = false;
+    }
+  }
+
   Future<void> _pause() async {
     if (_leaving) return;
     _leaving = true;
@@ -933,6 +989,7 @@ class _LiveFlowState extends State<LiveFlow> {
             onReorder: c.reorderUpNext,
             onPause: _pause,
             onFinish: _finish,
+            onDiscard: c.active ? _discard : null,
             onUndo: c.undoLast,
             onSwap: _swap,
             onAddSet: c.addSet,

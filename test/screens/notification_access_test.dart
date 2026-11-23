@@ -147,7 +147,12 @@ void main() {
       await startChest(tester);
       expect(access.calls, ['mark', 'request']);
       expect(find.byType(LiveScreen), findsOneWidget, reason: 'never blocks');
-      // Finish, then a second Start: no second ask.
+      // Log one set (finishing an empty workout now offers Discard), finish,
+      // then a second Start: no second ask.
+      await tester.tap(find.bySemanticsLabel('More kilograms'));
+      await tester.pumpAndSettle();
+      await tapText(tester, 'DONE');
+      await tapText(tester, 'SKIP REST');
       await tester.tap(find.byKey(const Key('live.finish')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('finish.confirm')));

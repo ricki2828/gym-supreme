@@ -102,6 +102,7 @@ class LiveSession private constructor(private val context: Context) {
     fun pause() {
         val cur = current()
         if (cur == null || cur.finished) throw Refused("not_running", "no workout in progress")
+        WorkoutService.cancelPendingStart()
         WorkoutService.instance?.endSession("pause")
         SpikeLog.write(context, SpikeLog.line("session_pause").put("uuid", head?.uuid))
     }
@@ -169,6 +170,7 @@ class LiveSession private constructor(private val context: Context) {
         }
         val ok = store.deleteIf(uuid)
         if (ok) {
+            WorkoutService.cancelPendingStart()
             head = null
             prefs.edit().remove("counted:$uuid").apply()
         }
@@ -188,6 +190,7 @@ class LiveSession private constructor(private val context: Context) {
         }
         if (view != null) {
             if (view.paused) {
+                WorkoutService.cancelPendingStart()
                 WorkoutService.instance?.endSession("pause")
             } else {
                 WorkoutService.session(context, view)
