@@ -394,7 +394,8 @@ class GymEngine implements GymApi {
 
     // Fill the time (P1-4: 60 minutes is more than 45). The muscle furthest
     // below its target gets the next new movement that fits; when none
-    // fits, a 4th set on a main lift; then a second isolation of a kind.
+    // fits, a 4th set on a main lift; then 4th sets on the rest; core
+    // muscles may then take a third move.
     double share(String m) {
       var v = 0.0;
       for (final e in chosen) {
@@ -436,26 +437,7 @@ class GymEngine implements GymApi {
         setsOf[more.id] = setsOf[more.id]! + 1;
         continue;
       }
-      // Then a second isolation for a muscle with fewer than two direct
-      // lifts (a crunch next to a dead bug); last, 4th sets on the rest.
-      Exercise? extra;
-      for (final m in byNeed) {
-        for (final e in poolFor(m)) {
-          if (!chosen.contains(e) &&
-              !e.isCompound &&
-              3 * setCost(e) <= room &&
-              fresh(e) &&
-              chosen.where((x) => _samePrimary(x, e)).length < 2) {
-            extra = e;
-            break;
-          }
-        }
-        if (extra != null) break;
-      }
-      if (extra != null) {
-        add(extra);
-        continue;
-      }
+      // Then 4th sets on the rest.
       final iso4 = ordered()
           .where((e) => setsOf[e.id]! < 4 && setCost(e) <= room)
           .firstOrNull;
