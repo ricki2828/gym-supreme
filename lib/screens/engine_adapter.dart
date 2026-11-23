@@ -106,12 +106,18 @@ LiveView? liveViewOf(
   final last = lastDoneSet(s);
   if (last != null) {
     final ex = s.exercises.firstWhere((e) => e.sets.contains(last));
-    final unit = unitOfKind(ex.loadKind);
-    final load = loadLabel(last.loadG, unit);
-    final work = unit == LoadUnit.timed
-        ? clock(last.reps ?? 0)
-        : '${last.reps ?? 0}';
-    undoLabel = load.isEmpty ? '${ex.name} $work' : '${ex.name} $work × $load';
+    if (last.state == eng.SetState.skipped) {
+      undoLabel = 'skip: ${ex.name} set ${ex.sets.indexOf(last) + 1}';
+    } else {
+      final unit = unitOfKind(ex.loadKind);
+      final load = loadLabel(last.loadG, unit);
+      final work = unit == LoadUnit.timed
+          ? clock(last.reps ?? 0)
+          : '${last.reps ?? 0}';
+      undoLabel = load.isEmpty
+          ? '${ex.name} $work'
+          : '${ex.name} $work × $load';
+    }
   }
   final c = s.current;
   // Finished (even with sets left unlogged) or nothing left: only Finish.
@@ -332,6 +338,7 @@ List<eng.Exercise> swapCandidates(
     for (final e in catalog.exercises)
       if (!inSession.contains(e.id) &&
           e.load != 'timed' &&
+          e.load != 'distance' &&
           e.availableWith(kit) &&
           e.primary.any(cur.primary.contains))
         e,
@@ -354,7 +361,11 @@ eng.PlannedItem swapItem(
   eng.LastTime? last,
 }) {
   final pending = replacing.sets.where((x) => x.state == eng.SetState.pending);
-  final reps = pending.isEmpty
+  // From a timed lift, its targets are seconds: use a rep range instead.
+  final fromTimed = unitOfKind(replacing.loadKind) == LoadUnit.timed;
+  final reps = fromTimed
+      ? 10
+      : pending.isEmpty
       ? (replacing.repLo ?? 10)
       : (pending.first.targetReps ?? replacing.repLo ?? 10);
   final load = last == null || last.sets.isEmpty ? null : last.sets.last.loadG;
@@ -376,8 +387,8 @@ eng.PlannedItem swapItem(
           reps: reps,
         ),
     ],
-    repLo: replacing.repLo ?? reps,
-    repHi: replacing.repHi ?? reps,
+    repLo: fromTimed ? 8 : (replacing.repLo ?? reps),
+    repHi: fromTimed ? 12 : (replacing.repHi ?? reps),
     restS: replacing.restS,
     reason: 'Swapped in for ${replacing.name}.',
     primary: e.primary,

@@ -251,11 +251,24 @@ class LiveController extends ChangeNotifier {
 
   /// Swap the current exercise for [item] (only before any set of it is
   /// logged; the engine refuses otherwise). Counts toward the swaps metric.
-  Future<void> swapCurrent(eng.PlannedItem item) => _transition((s) {
-    final c = s.current;
-    if (c == null) return s;
-    return eng.Session.swap(s, c.exercise, item);
-  });
+  /// [replacingId]: the exercise the swap sheet was opened for. If a Done
+  /// (or a lock-screen Done) moved the session on meanwhile, nothing is
+  /// swapped rather than the next exercise. Returns whether it swapped.
+  Future<bool> swapCurrent(eng.PlannedItem item, {String? replacingId}) async {
+    var swapped = false;
+    await _transition((s) {
+      final c = s.current;
+      if (c == null) return s;
+      if (replacingId != null &&
+          s.exercises[c.exercise].exerciseId != replacingId) {
+        return s;
+      }
+      final next = eng.Session.swap(s, c.exercise, item);
+      swapped = !identical(next, s);
+      return next;
+    });
+    return swapped && lastError == null;
+  }
 
   /// One path for skip (and undo): the TimerSession versions stop or re-arm a
   /// timer block; for any other set they equal the Session versions.
@@ -586,7 +599,9 @@ eng.SnapshotSet? lastDoneSet(eng.SessionSnapshot s) {
   eng.SnapshotSet? best;
   for (final e in s.exercises) {
     for (final set in e.sets) {
-      if (set.state != eng.SetState.done) continue;
+      // A skip is undoable too (review of #40: Skip sits beside Swap and
+      // Add a set, so a mis-tap needs a way back). Skip stamps endedAtMs.
+      if (set.state == eng.SetState.pending) continue;
       if (best == null || (set.endedAtMs ?? 0) >= (best.endedAtMs ?? 0)) {
         best = set;
       }

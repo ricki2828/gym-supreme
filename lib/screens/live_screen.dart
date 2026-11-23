@@ -489,6 +489,7 @@ class _SetLinks extends StatelessWidget {
     button: true,
     label: semantic ?? text,
     excludeSemantics: true,
+    onTap: onTap,
     child: TextButton.icon(
       key: key,
       onPressed: onTap,
@@ -511,7 +512,9 @@ class _SetLinks extends StatelessWidget {
           Icons.undo,
           onUndo!,
           key: const Key('live.undo'),
-          semantic: 'Undo last set: $undoLabel',
+          semantic: undoLabel!.startsWith('skip: ')
+              ? 'Undo ${undoLabel!}'
+              : 'Undo last set: $undoLabel',
         ),
       if (onSwap != null)
         _link(

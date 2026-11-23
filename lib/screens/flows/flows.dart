@@ -850,9 +850,26 @@ class _LiveFlowState extends State<LiveFlow> {
         ),
       ),
     );
+    // A workout finished elsewhere while the sheet was up: leave now (its
+    // first _leave found the sheet, not this route, on top).
+    final done = c.finishedUuid;
+    if (done != null && mounted) {
+      _leave(done);
+      return;
+    }
     if (picked == null || !mounted || _leaving) return;
     final last = c.engine.lastTime(gymId: s.gymId, exerciseId: picked.id);
-    await c.swapCurrent(swapItem(picked, ex, last: last));
+    final ok = await c.swapCurrent(
+      swapItem(picked, ex, last: last),
+      replacingId: ex.exerciseId,
+    );
+    if (!ok && mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Not swapped: that exercise has a set logged now.'),
+        ),
+      );
+    }
   }
 
   Future<void> _pause() async {

@@ -404,10 +404,12 @@ void main() {
     await tester.pumpWidget(
       app(LiveScreen(view: withCounts(liveView()), onFinish: () {})),
     );
-    expect(
-      tester.getRect(find.byKey(const Key('live.finish'))).bottom,
-      lessThanOrEqualTo(915),
-    );
+    // Tappable where it is, with no scrolling (sets left: the confirm).
+    await tester.tap(find.byKey(const Key('live.finish')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('finish.confirm')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('finish.keep')));
+    await tester.pumpAndSettle();
     await tester.pumpWidget(
       app(
         LiveScreen(view: withCounts(liveView(restLeftS: 60)), onFinish: () {}),
