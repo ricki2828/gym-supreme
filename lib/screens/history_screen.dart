@@ -165,6 +165,7 @@ class ResumeCard extends StatelessWidget {
     required this.lifts,
     required this.set,
     required this.pausedWhen,
+    this.finishedUnsaved = false,
     this.onResume,
     this.onDiscard,
   });
@@ -173,6 +174,9 @@ class ResumeCard extends StatelessWidget {
 
   /// "Sunday", "today", "an hour ago": composed by the caller.
   final String pausedWhen;
+
+  /// Finished (e.g. from the lock screen) but not saved yet: Resume saves it.
+  final bool finishedUnsaved;
   final VoidCallback? onResume;
 
   /// Ends it as is, saving the sets already logged.
@@ -204,7 +208,9 @@ class ResumeCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Paused $pausedWhen. Pick it up at set $set.',
+                    finishedUnsaved
+                        ? 'Finished but not saved yet. Resume to save it.'
+                        : 'Paused $pausedWhen. Pick it up at set $set.',
                     style: LitType.body(15, ink, FontWeight.w600),
                   ),
                   if (onDiscard != null)

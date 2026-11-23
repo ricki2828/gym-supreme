@@ -309,6 +309,7 @@ class _Today extends StatelessWidget {
               lift: pv.lift,
               lifts: pv.lifts,
               set: pv.set,
+              finishedUnsaved: p.finished,
               pausedWhen: _when(p.pausedAtMs ?? p.startedAtMs, deps.nowMs()),
               onResume: onResume,
             ),
@@ -544,8 +545,9 @@ class _LiveFlowState extends State<LiveFlow> {
   bool _leaving = false;
 
   void _leave([String? uuid]) {
+    if (!mounted) return;
     final route = ModalRoute.of(context);
-    if (!mounted || route == null || !route.isCurrent) return;
+    if (route == null || !route.isCurrent) return;
     Navigator.of(context).pop(uuid);
   }
 
@@ -673,12 +675,19 @@ class _GymFlowState extends State<GymFlow> {
 
   /// His pairs as the screen opened, so stepping down then up gives them
   /// back instead of grid values.
-  late final List<int> _own = [...?widget.gym?.kit['dumbbells']?.weightsG];
+  /// Reset whenever the working gym is replaced (pick, add, preset), so one
+  /// gym's pairs never leak into another.
+  List<int> _own = const [];
+
+  void _use(eng.Gym g) {
+    _gym = g;
+    _own = [...?g.kit['dumbbells']?.weightsG];
+  }
 
   @override
   void initState() {
     super.initState();
-    _gym = widget.gym ?? widget.deps.engine.gymFromPreset('condo');
+    _use(widget.gym ?? widget.deps.engine.gymFromPreset('condo'));
   }
 
   /// The gym's own pairs, or the engine's fallback list until it has some.
@@ -733,17 +742,19 @@ class _GymFlowState extends State<GymFlow> {
       onToggle: (id) => setState(() => _gym = _gym.toggle(id)),
       onPreset: (id) => setState(() {
         final fresh = widget.deps.engine.gymFromPreset(id);
-        _gym = _gym.copyWith(kit: fresh.kit);
+        _use(_gym.copyWith(kit: fresh.kit));
       }),
       onDumbbellMax: _stepDumbbells,
       onPickGym: (id) => setState(() {
-        _gym = widget.deps.engine.gym(id) ?? _gym;
+        _use(widget.deps.engine.gym(id) ?? _gym);
       }),
       // A new gym starts from the condo preset; he fixes what differs.
       onAddGym: () => setState(() {
-        _gym = widget.deps.engine.gymFromPreset(
-          'condo',
-          name: 'Gym ${gyms.length + 1}',
+        _use(
+          widget.deps.engine.gymFromPreset(
+            'condo',
+            name: 'Gym ${gyms.length + 1}',
+          ),
         );
       }),
       onSave: () {

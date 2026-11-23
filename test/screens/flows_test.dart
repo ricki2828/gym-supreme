@@ -236,4 +236,41 @@ void main() {
     await tapText(tester, 'SAVE · 5 ON THE FLOOR');
     expect(engine.gym(g.id)!.kit['dumbbells']!.weightsG, own);
   });
+
+  testWidgets('switching gyms in setup never carries dumbbell pairs over', (
+    tester,
+  ) async {
+    // Pairs that are not in the engine's default list, so a leak shows.
+    final condoGym = engine.gymFromPreset('condo').withWeights(
+      'dumbbells',
+      const [3000, 9000, 26000],
+    );
+    engine.saveGym(condoGym);
+    await pumpRoot(tester);
+    await tester.tap(find.text('Gyms'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('Add a gym'));
+    await tester.pumpAndSettle();
+    await tester.runAsync(
+      () => Scrollable.ensureVisible(
+        tester.element(find.text('Heaviest dumbbell pair')),
+        alignment: 0.5,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.add).last);
+    await tester.pumpAndSettle();
+    await tapText(tester, 'SAVE · 5 ON THE FLOOR');
+    final added = engine.gyms().firstWhere((g) => g.id != condoGym.id);
+    final w = added.kit['dumbbells']!.weightsG;
+    expect(
+      w.any(const [3000, 9000, 26000].contains),
+      isFalse,
+      reason: "condo's own pairs leaked",
+    );
+    expect(
+      w.every(eng.defaultWeightsG['dumbbell']!.followedBy([27500]).contains),
+      isTrue,
+    );
+  });
 }
