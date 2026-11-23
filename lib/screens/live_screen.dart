@@ -31,6 +31,7 @@ class LiveView {
     this.restLeftS,
     this.paused = false,
     this.allDone = false,
+    this.timerBlock = false,
   });
 
   final WorkoutType? type;
@@ -68,6 +69,11 @@ class LiveView {
 
   /// Every set is logged or skipped: only Finish is left.
   final bool allDone;
+
+  /// The current set is a cut-2 timer block (EMOM, AMRAP, intervals). Its
+  /// controls come from the caller's setExtra (the timer panel), so the
+  /// reps/load steppers, last-time line, DONE and the rest panel are hidden.
+  final bool timerBlock;
 
   bool get coldStart =>
       targetLoadG == null && (unit == LoadUnit.kg || unit == LoadUnit.kgEach);
@@ -132,6 +138,9 @@ class LiveScreen extends StatelessWidget {
     }
     final bg = view.type?.colour ?? Lit.ground;
     final ink = view.type?.onColour ?? Lit.ink;
+    // Hand the set to the timer panel only when one is given: a block opened
+    // in a build without it falls back to the normal set controls.
+    final blockUi = view.timerBlock && setExtra != null;
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
@@ -152,66 +161,72 @@ class LiveScreen extends StatelessWidget {
                     ),
                     semanticsLabel: view.exerciseName,
                   ),
-                  const SizedBox(height: 14),
-                  _Stepper(
-                    value: view.unit == LoadUnit.timed
-                        ? clock(view.reps)
-                        : '${view.reps}',
-                    unit: view.unit == LoadUnit.timed ? 'SEC' : 'REPS',
-                    size: 96,
-                    ink: ink,
-                    bg: bg,
-                    label: view.unit == LoadUnit.timed ? 'seconds' : 'reps',
-                    onMinus: onReps == null || view.reps <= 1
-                        ? null
-                        : () => onReps!(-1),
-                    onPlus: onReps == null ? null : () => onReps!(1),
-                  ),
-                  if (view.unit == LoadUnit.kg ||
-                      view.unit == LoadUnit.kgEach) ...[
-                    const SizedBox(height: 8),
+                  if (!blockUi) ...[
+                    const SizedBox(height: 14),
                     _Stepper(
-                      value: view.loadG == null ? '–' : kg(view.loadG!),
-                      unit: view.unit == LoadUnit.kgEach ? 'KG EA' : 'KG',
-                      size: 150,
+                      value: view.unit == LoadUnit.timed
+                          ? clock(view.reps)
+                          : '${view.reps}',
+                      unit: view.unit == LoadUnit.timed ? 'SEC' : 'REPS',
+                      size: 96,
                       ink: ink,
                       bg: bg,
-                      label: 'kilograms',
-                      onMinus: onLoad == null || !view.canLoadDown
+                      label: view.unit == LoadUnit.timed ? 'seconds' : 'reps',
+                      onMinus: onReps == null || view.reps <= 1
                           ? null
-                          : () => onLoad!(-1),
-                      onPlus: onLoad == null || !view.canLoadUp
-                          ? null
-                          : () => onLoad!(1),
+                          : () => onReps!(-1),
+                      onPlus: onReps == null ? null : () => onReps!(1),
+                    ),
+                    if (view.unit == LoadUnit.kg ||
+                        view.unit == LoadUnit.kgEach) ...[
+                      const SizedBox(height: 8),
+                      _Stepper(
+                        value: view.loadG == null ? '–' : kg(view.loadG!),
+                        unit: view.unit == LoadUnit.kgEach ? 'KG EA' : 'KG',
+                        size: 150,
+                        ink: ink,
+                        bg: bg,
+                        label: 'kilograms',
+                        onMinus: onLoad == null || !view.canLoadDown
+                            ? null
+                            : () => onLoad!(-1),
+                        onPlus: onLoad == null || !view.canLoadUp
+                            ? null
+                            : () => onLoad!(1),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    Text(
+                      view.coldStart
+                          ? 'First time here. Pick a starting weight; '
+                                'the app remembers it.'
+                          : (view.lastTime ?? 'No history at this gym yet.'),
+                      style: LitType.body(17, ink, FontWeight.w600),
                     ),
                   ],
-                  const SizedBox(height: 10),
-                  Text(
-                    view.coldStart
-                        ? 'First time here. Pick a starting weight; '
-                              'the app remembers it.'
-                        : (view.lastTime ?? 'No history at this gym yet.'),
-                    style: LitType.body(17, ink, FontWeight.w600),
-                  ),
                   ?setExtra,
-                  const SizedBox(height: 18),
-                  BigButton(
-                    label: 'DONE',
-                    sub: _doneSub(),
-                    colour: Lit.ink,
-                    ink: Colors.white,
-                    subColour: view.type?.colour ?? Colors.white,
-                    height: 150,
-                    fontSize: 110,
-                    radius: 28,
-                    onTap: view.coldStart && view.loadG == null ? null : onDone,
-                  ),
-                  const SizedBox(height: 12),
-                  _RestPanel(
-                    seconds: view.restS,
-                    ink: ink,
-                    onDelta: onRestDelta,
-                  ),
+                  if (!blockUi) ...[
+                    const SizedBox(height: 18),
+                    BigButton(
+                      label: 'DONE',
+                      sub: _doneSub(),
+                      colour: Lit.ink,
+                      ink: Colors.white,
+                      subColour: view.type?.colour ?? Colors.white,
+                      height: 150,
+                      fontSize: 110,
+                      radius: 28,
+                      onTap: view.coldStart && view.loadG == null
+                          ? null
+                          : onDone,
+                    ),
+                    const SizedBox(height: 12),
+                    _RestPanel(
+                      seconds: view.restS,
+                      ink: ink,
+                      onDelta: onRestDelta,
+                    ),
+                  ],
                   if (onSkipSet != null)
                     Align(
                       alignment: Alignment.centerRight,

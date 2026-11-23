@@ -214,4 +214,51 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('10 × 22 kg ea, as planned'), findsOneWidget);
   });
+
+  testWidgets(
+    'a timer block hides steppers, DONE and rest; setExtra drives it',
+    (tester) async {
+      phone(tester);
+      final base = liveView(
+        name: 'Wall balls',
+        unit: LoadUnit.timed,
+        reps: 0,
+        targetReps: 0,
+        loadG: null,
+        targetLoadG: null,
+      );
+      final v = LiveView(
+        type: base.type,
+        exerciseName: base.exerciseName,
+        lift: base.lift,
+        lifts: base.lifts,
+        set: base.set,
+        sets: base.sets,
+        rail: base.rail,
+        reps: base.reps,
+        loadG: base.loadG,
+        unit: base.unit,
+        targetReps: base.targetReps,
+        targetLoadG: base.targetLoadG,
+        restS: base.restS,
+        upNext: base.upNext,
+        elapsedS: base.elapsedS,
+        timerBlock: true,
+      );
+      await tester.pumpWidget(
+        app(LiveScreen(view: v, setExtra: const Text('timer panel'))),
+      );
+      expect(find.text('timer panel'), findsOneWidget);
+      expect(find.text('DONE'), findsNothing);
+      expect(find.text('SEC'), findsNothing);
+      expect(find.textContaining('THEN REST'), findsNothing);
+      // No timer panel given (a build without cut 2): normal controls.
+      await tester.pumpWidget(app(LiveScreen(view: v)));
+      expect(find.text('DONE'), findsOneWidget);
+      // A plank (timed, no block) keeps its stepper and DONE.
+      await tester.pumpWidget(app(LiveScreen(view: base)));
+      expect(find.text('DONE'), findsOneWidget);
+      expect(find.text('SEC'), findsOneWidget);
+    },
+  );
 }
