@@ -91,4 +91,44 @@ fin="$(wait_for '"event":"selftest_session".*"step":"finish".*"finished":true,"d
   echo "session: finish + delete failed" >&2; svc_lines | grep -E 'selftest_session|session_|journal' | tail -n 10 >&2; exit 1; }
 echo "session finish: $fin"
 fatal_check "$PKG" session
+
+# Phase-1 exit e2e (lib/app/e2e_driver.dart): the real Dart flow through LiveController, the
+# SQLite store and the WorkoutService, driven by the gym_e2e launch extra (dogfood/debug only).
+# Each command carries a nonce that the driver echoes in every line: only lines from THIS
+# command count, so a failed `logcat -c` cannot produce a false pass.
+e2e_lines() { timeout 30 adb logcat -d -s flutter:I | sed -n 's/.*GymSupreme\/e2e //p' | grep -F "\"nonce\":\"$NONCE\"" || true; }
+e2e_cmd() { NONCE="$1-$RANDOM$RANDOM"; adb shell am start -W -n "$PKG/app.gymsupreme.MainActivity" --es gym_e2e "$1:$NONCE" > /dev/null; }
+e2e_field() { sed -n "s/.*\"$1\":\"\([^\"]*\)\".*/\1/p" | head -1; }
+e2e_wait() { # e2e_wait <step> <seconds>: fails fast on an error or refused step
+  local i
+  for i in $(seq 1 "$2"); do
+    if e2e_lines | grep -qE '"step":"(error|refused)"'; then echo "e2e failed:" >&2; e2e_lines | tail -n 12 >&2; exit 1; fi
+    e2e_lines | grep -q "\"step\":\"$1\"" && return 0
+    sleep 1
+  done
+  echo "e2e: no $1 step within $2 s" >&2; e2e_lines | tail -n 12 >&2; timeout 60 adb logcat -d | tail -n 60 >&2; exit 1
+}
+adb logcat -c || true
+e2e_cmd run
+e2e_wait ok 120
+e2e_lines | sed 's/^/e2e run: /'
+fin="$(e2e_lines | grep '"step":"finish"')"
+grep -q '"stored":true' <<< "$fin" && grep -q '"journal_gone":true' <<< "$fin" || { echo "e2e: finish not stored or journal left" >&2; exit 1; }
+[ "$(e2e_field uuid <<< "$fin")" = "$(e2e_field history_top <<< "$fin")" ] || { echo "e2e: finished workout is not the newest history row" >&2; exit 1; }
+fatal_check "$PKG" "e2e run"
+# Crash-safe resume: start a workout, log a set, kill the process, relaunch, resume, finish.
+adb logcat -c || true
+e2e_cmd start_only
+e2e_wait set1 60
+started_uuid="$(e2e_lines | grep '"step":"start"' | e2e_field uuid)"
+[ -n "$started_uuid" ] || { echo "e2e: no uuid from start_only" >&2; exit 1; }
+adb shell am force-stop "$PKG"
+sleep 2
+adb logcat -c || true
+e2e_cmd resume
+e2e_wait ok 90
+e2e_lines | sed 's/^/e2e resume: /'
+e2e_lines | grep '"step":"recover"' | grep -q '"action":"offerResume"' || { echo "e2e: the killed workout was not offered for resume" >&2; exit 1; }
+[ "$(e2e_lines | grep '"step":"finish"' | e2e_field uuid)" = "$started_uuid" ] || { echo "e2e: resumed a different workout than the one killed" >&2; exit 1; }
+fatal_check "$PKG" "e2e resume"
 echo "smoke ok on API $sdk"
