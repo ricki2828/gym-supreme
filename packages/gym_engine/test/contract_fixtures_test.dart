@@ -37,6 +37,51 @@ void main() {
     }
   });
 
+  test('canonical key order equals the declared key lists', () {
+    final s = SessionSnapshot.decode(
+      File('${dir.path}/snapshot_v1_finished.json').readAsStringSync().trim(),
+    );
+    final j = s.toJson();
+    expect(j.keys.toList(), SessionSnapshot.topKeys);
+    final ex = (j['exercises'] as List).first as Map;
+    expect(ex.keys.toList(), SnapshotExercise.keys);
+    expect(((ex['sets'] as List).first as Map).keys.toList(), SnapshotSet.keys);
+    expect(
+      Session.done(
+        s.copyWith(finished: false, endedAtMs: null),
+        '${s.workoutUuid}:1',
+        nowMs: 0,
+      ).rest?.toJson().keys.toList(),
+      anyOf(isNull, Rest.keys),
+    );
+  });
+
+  test('every key is required: dropping any one is rejected', () {
+    final line = File('${dir.path}/snapshot_v1_resting.json')
+        .readAsStringSync()
+        .trim();
+    var checked = 0;
+    for (final k in [
+      ...SessionSnapshot.topKeys,
+      'plan_reps',
+      'rep_hi',
+      'duration_ms',
+    ]) {
+      final dropped = line.replaceFirst(
+        RegExp('"$k":(null|-?\\d+|"[^"]*"|true|false|\\[[^\\]]*\\]),?'),
+        '',
+      );
+      if (dropped == line) continue; // nested objects (rest, exercises)
+      expect(
+        () => SessionSnapshot.decode(dropped),
+        throwsFormatException,
+        reason: k,
+      );
+      checked++;
+    }
+    expect(checked, greaterThan(15));
+  });
+
   test('torn journal: last whole line wins; half line is a torn tail', () {
     final r = readJournal(
       File('${dir.path}/journal_v1_torn_tail.jsonl').readAsStringSync(),

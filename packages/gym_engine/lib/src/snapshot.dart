@@ -113,7 +113,16 @@ class SnapshotSet {
     'block': block,
   };
 
-  factory SnapshotSet.fromJson(Map<String, Object?> j) => SnapshotSet(
+  static const keys = [
+    'set_id', 'set_ordinal', 'kind', 'plan_load_g', 'plan_reps', //
+    'target_load_g', 'target_reps', 'state', 'load_g', 'reps', 'completion',
+    'source', 'started_at_ms', 'ended_at_ms', 'offset_ms', 'block',
+  ];
+
+  factory SnapshotSet.fromJson(Map<String, Object?> j) =>
+      _fromJson(_require(j, keys, 'set'));
+
+  static SnapshotSet _fromJson(Map<String, Object?> j) => SnapshotSet(
     setId: j['set_id'] as String,
     setOrdinal: j['set_ordinal'] as int,
     kind: SetKind.values.byName(j['kind'] as String),
@@ -184,7 +193,15 @@ class SnapshotExercise {
     'sets': [for (final s in sets) s.toJson()],
   };
 
-  factory SnapshotExercise.fromJson(Map<String, Object?> j) => SnapshotExercise(
+  static const keys = [
+    'exercise_id', 'name', 'load_kind', 'unilateral', 'rest_s', 'rep_lo', //
+    'rep_hi', 'sets',
+  ];
+
+  factory SnapshotExercise.fromJson(Map<String, Object?> j) =>
+      _fromJson(_require(j, keys, 'exercise'));
+
+  static SnapshotExercise _fromJson(Map<String, Object?> j) => SnapshotExercise(
     exerciseId: j['exercise_id'] as String,
     name: j['name'] as String,
     loadKind: j['load_kind'] as String,
@@ -218,7 +235,12 @@ class Rest {
     'duration_ms': durationMs,
   };
 
-  factory Rest.fromJson(Map<String, Object?> j) => Rest(
+  static const keys = ['set_id', 'ends_at_wall_ms', 'duration_ms'];
+
+  factory Rest.fromJson(Map<String, Object?> j) =>
+      _fromJson(_require(j, keys, 'rest'));
+
+  static Rest _fromJson(Map<String, Object?> j) => Rest(
     setId: j['set_id'] as String,
     endsAtWallMs: j['ends_at_wall_ms'] as int,
     durationMs: j['duration_ms'] as int,
@@ -226,6 +248,15 @@ class Rest {
 }
 
 class SessionSnapshot {
+  /// Every key, in canonical order. All required on decode (null allowed
+  /// where the field is nullable); extra keys are ignored.
+  static const topKeys = [
+    'schema', 'workout_uuid', 'rev', 'app_version', 'gym_id', 'type_id', //
+    'muscles', 'started_at_ms', 'tz_offset_min', 'state', 'paused_at_ms',
+    'paused_total_ms', 'rest', 'finished', 'ended_at_ms', 'set_ready_at_ms',
+    'next_set_n', 'swaps', 'exercises',
+  ];
+
   const SessionSnapshot({
     required this.workoutUuid,
     required this.rev,
@@ -369,6 +400,7 @@ class SessionSnapshot {
     if (schema is! int || schema < 1 || schema > snapshotSchema) {
       throw FormatException('unsupported snapshot schema $schema');
     }
+    _require(j, topKeys, 'snapshot');
     if ((j['state'] == 'paused') != (j['paused_at_ms'] is int)) {
       throw const FormatException(
         'paused_at_ms must be set exactly when state is paused',
@@ -396,7 +428,7 @@ class SessionSnapshot {
         endedAtMs: j['ended_at_ms'] as int?,
         setReadyAtMs: j['set_ready_at_ms'] as int?,
         nextSetN: j['next_set_n'] as int?,
-        swaps: j['swaps'] as int? ?? 0,
+        swaps: j['swaps'] as int,
         exercises: [
           for (final e in j['exercises'] as List)
             SnapshotExercise.fromJson((e as Map).cast<String, Object?>()),
@@ -524,6 +556,17 @@ class SessionSnapshot {
     last = d;
   }
   return (last: last, tornTail: torn, corruptLines: bad);
+}
+
+Map<String, Object?> _require(
+  Map<String, Object?> j,
+  List<String> keys,
+  String what,
+) {
+  for (final k in keys) {
+    if (!j.containsKey(k)) throw FormatException('$what: missing key "$k"');
+  }
+  return j;
 }
 
 const Object _keep = _Keep();
