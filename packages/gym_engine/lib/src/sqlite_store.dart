@@ -85,8 +85,12 @@ int get latestSchemaVersion => migrations.length;
 class SqliteStore implements HistoryStore {
   SqliteStore._(this.db) {
     db.execute('PRAGMA foreign_keys = ON');
+    db.execute('PRAGMA busy_timeout = 5000');
     migrate(db);
   }
+
+  /// Wraps an open database (tests, fixtures); migrates it.
+  factory SqliteStore.fromDatabase(Database db) => SqliteStore._(db);
 
   /// Opens (and creates or migrates) the database file.
   factory SqliteStore.open(String path) {
@@ -102,27 +106,36 @@ class SqliteStore implements HistoryStore {
   /// Runs every migration above the database's `user_version`, each in its
   /// own transaction. Refuses a database newer than this build.
   static void migrate(Database db) {
-    final v = db.select('PRAGMA user_version').first.columnAt(0) as int;
-    if (v > migrations.length) {
+    int version() => db.select('PRAGMA user_version').first.columnAt(0) as int;
+    if (version() > migrations.length) {
       throw StateError(
-        'database schema v$v is newer than this build (v${migrations.length})',
+        'database schema v${version()} is newer than this build '
+        '(v${migrations.length})',
       );
     }
-    for (var i = v; i < migrations.length; i++) {
-      db.execute('BEGIN');
+    while (version() < migrations.length) {
+      // Re-read inside the write lock: a second opener may have migrated.
+      db.execute('BEGIN IMMEDIATE');
       try {
-        db.execute(migrations[i]);
-        db.execute('PRAGMA user_version = ${i + 1}');
+        final v = version();
+        if (v < migrations.length) {
+          db.execute(migrations[v]);
+          db.execute('PRAGMA user_version = ${v + 1}');
+        }
         db.execute('COMMIT');
       } catch (_) {
-        db.execute('ROLLBACK');
+        if (!db.autocommit) db.execute('ROLLBACK');
         rethrow;
       }
     }
   }
 
   /// Checkpoint the WAL into the main file (before Auto Backup, plan 7).
-  void checkpoint() => db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+  /// Returns false if the checkpoint could not finish (busy).
+  bool checkpoint() {
+    final r = db.select('PRAGMA wal_checkpoint(TRUNCATE)');
+    return r.isEmpty || (r.first.columnAt(0) as int) == 0;
+  }
 
   void close() => db.close();
 
@@ -137,7 +150,7 @@ class SqliteStore implements HistoryStore {
       db.execute('COMMIT');
       return r;
     } catch (_) {
-      db.execute('ROLLBACK');
+      if (!db.autocommit) db.execute('ROLLBACK');
       rethrow;
     }
   }
