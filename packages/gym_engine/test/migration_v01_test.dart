@@ -41,6 +41,46 @@ void main() {
     final raw = sqlite3.open(freshCopy());
     addTearDown(raw.close);
     expect(raw.select('PRAGMA user_version').first.columnAt(0), 1);
+    // The dump is pinned too: it must match the raw (unmigrated) 0.1 db, so
+    // nobody can edit it to fit a broken migration.
+    final want = json('v0_1_tables.json');
+    for (final t in want.keys.where((k) => k != 'user_version')) {
+      final spec = want[t] as Map<String, dynamic>;
+      final cols = (spec['columns'] as List).cast<String>();
+      final rows = raw.select(
+        'SELECT ${cols.join(', ')} FROM $t ORDER BY ${cols.join(', ')}',
+      );
+      expect(
+        [
+          for (final r in rows) [for (final c in cols) r[c]],
+        ],
+        spec['rows'],
+        reason: 'dump vs raw 0.1 db, table $t',
+      );
+    }
+    // The variety the fixture exists for is really in it.
+    expect(
+      raw
+          .select('SELECT count(*) FROM set_row WHERE skipped = 1')
+          .first
+          .columnAt(0),
+      greaterThan(0),
+    );
+    expect(
+      raw.select('SELECT max(swaps) FROM workout').first.columnAt(0),
+      greaterThan(0),
+    );
+    expect(
+      raw.select('SELECT count(*) FROM hr_sample').first.columnAt(0),
+      greaterThan(0),
+    );
+    expect(
+      raw
+          .select('SELECT count(DISTINCT gym_id) FROM workout')
+          .first
+          .columnAt(0),
+      2,
+    );
     expect(File('$fixtures/v0_1.db-wal').existsSync(), isFalse);
   });
 
