@@ -407,7 +407,7 @@ void engineTests() {
       hrText: '{"t_ms":1,"e_ms":1,"bpm":100}\n{"t_ms":2,"e_ms":2,"bpm":101}\n{"t_ms":3,"b',
     );
     expect(res.action, RecoveryAction.savedThenDelete);
-    expect(r.store.hrByWorkout[s.workoutUuid], hasLength(2));
+    expect(r.store.hrSamples(s.workoutUuid), hasLength(2));
   });
 
   test('an empty start-then-finish is not a session in counters', () {

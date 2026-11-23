@@ -60,13 +60,14 @@ CREATE TABLE set_row (
   kind TEXT NOT NULL CHECK (kind IS NOT NULL AND kind IN ('reps','timed')),
   load_g INTEGER,
   reps INTEGER,
-  completion TEXT NOT NULL CHECK (completion IS NOT NULL AND completion IN ('tap_unchanged','adjusted','typed','cold_start')),
+  completion TEXT CHECK (completion IS NULL OR completion IN ('tap_unchanged','adjusted','typed','cold_start')),
   skipped INTEGER NOT NULL CHECK (skipped IN (0,1)),
   source TEXT NOT NULL CHECK (source IS NOT NULL AND source IN ('app','lockscreen')),
   started_at_ms INTEGER,
   ended_at_ms INTEGER,
   offset_ms INTEGER,
-  block_json TEXT
+  block_json TEXT,
+  CHECK ((skipped = 1) = (completion IS NULL))
 );
 CREATE INDEX set_ghost ON set_row(gym_id, exercise_id, workout_uuid);
 CREATE INDEX set_workout ON set_row(workout_uuid);
@@ -301,7 +302,7 @@ class SqliteStore implements HistoryStore {
           s.kind.name,
           s.loadG,
           s.reps,
-          s.completion.wire,
+          s.completion?.wire,
           s.skipped ? 1 : 0,
           s.source.name,
           s.startedAtMs,
@@ -361,6 +362,7 @@ class SqliteStore implements HistoryStore {
     );
   }
 
+  @override
   List<HrSample> hrSamples(String uuid) => [
     for (final r in db.select(
       'SELECT t_ms, bpm FROM hr_sample WHERE workout_uuid = ? ORDER BY t_ms',
@@ -382,7 +384,9 @@ class SqliteStore implements HistoryStore {
           kind: SetKind.values.byName(r['kind'] as String),
           loadG: r['load_g'] as int?,
           reps: r['reps'] as int?,
-          completion: Completion.fromWire(r['completion'] as String),
+          completion: r['completion'] == null
+              ? null
+              : Completion.fromWire(r['completion'] as String),
           skipped: (r['skipped'] as int) == 1,
           source: SetSource.values.byName(r['source'] as String),
           startedAtMs: r['started_at_ms'] as int?,

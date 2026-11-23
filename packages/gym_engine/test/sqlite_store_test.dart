@@ -27,7 +27,7 @@ WorkoutRecord workout(String uuid, {int sets = 2, String gym = 'g1'}) =>
             setOrdinal: i + 1,
             loadG: 22500,
             reps: 10,
-            completion: Completion.tapUnchanged,
+            completion: i == 1 ? null : Completion.tapUnchanged,
             source: i == 0 ? SetSource.lockscreen : SetSource.app,
             startedAtMs: 1000 + i,
             endedAtMs: 2000 + i,
@@ -68,6 +68,7 @@ void main() {
       [1, 990, 22500, 10, SetSource.lockscreen, Completion.tapUnchanged],
     );
     expect(r.sets[1].skipped, isTrue);
+    expect(r.sets[1].completion, isNull);
     expect(r.sets[1].blockJson, '{"type":"emom"}');
     expect(s.hrSamples('w1').single.bpm, 120);
   });
