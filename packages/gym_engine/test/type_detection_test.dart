@@ -48,4 +48,16 @@ void main() {
     // Chest + Triceps + Back: 2 of 3 rows are Push.
     expect(typeForGroups([chest, triceps, back]), 'push');
   });
+  test('a full upper-body day is mixed, not Push (3 of 5 rows)', () {
+    expect(typeForGroups([chest, shoulders, triceps, back, arms]), isNull);
+    expect(typeForGroups([chest, shoulders, triceps, back]), 'push'); // 3 of 4
+  });
+  test('a lone rear-delts pick is Pull', () {
+    expect(
+      typeForGroups([
+        ['rear-delts'],
+      ]),
+      'pull',
+    );
+  });
 }
