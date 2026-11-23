@@ -90,8 +90,10 @@ void main() {
   test('same-snapshot transitions send nothing', () async {
     await startPush();
     await c.skipRest(); // no rest running
-    await c.reps(-100); // below 1
-    expect(port.rev, 0);
+    await c.setReps(1);
+    final rev = port.rev;
+    await c.reps(-1); // already at 1: clamps, nothing to send
+    expect(port.rev, rev);
   });
 
   test('rest ±15 and skip', () async {
@@ -409,7 +411,7 @@ void main() {
   test('a machine stack starts a third of the way up, not mid-list', () async {
     final plan = engine.suggest(gymId: gymId, muscleIds: const ['triceps']);
     final stackItem = plan.items.indexWhere((i) => i.unit == eng.LoadUnit.kg);
-    if (stackItem < 0) return; // no cable lift suggested for this kit today
+    expect(stackItem, greaterThanOrEqualTo(0), reason: 'a cable lift');
     await c.start(plan);
     for (var i = 0; i < stackItem; i++) {
       final ex = c.snapshot!.exercises[i];
@@ -423,5 +425,44 @@ void main() {
     );
     await c.load(1);
     expect(c.view()!.loadG, steps.loadsG[(steps.loadsG.length - 1) ~/ 3]);
+  });
+
+  test('reps and kg coalesced into one job: one submit at rev + 1', () async {
+    await startPush();
+    await c.load(1);
+    final r0 = c.view()!.reps;
+    final g0 = c.view()!.loadG!;
+    final a = c.reps(1); // runs now
+    final b = c.reps(1); // queued
+    final d = c.load(1); // joins the queued job: reps and kg together
+    await Future.wait([a, b, d]);
+    expect(c.lastError, isNull, reason: 'the stub enforces rev + 1');
+    expect(c.view()!.reps, r0 + 2);
+    expect(c.view()!.loadG, greaterThan(g0));
+  });
+
+  test('held − stops at 1 rather than dropping the batch', () async {
+    await startPush();
+    await c.load(1);
+    await c.setReps(6);
+    await Future.wait([for (var i = 0; i < 9; i++) c.reps(-1)]);
+    expect(c.view()!.reps, 1);
+  });
+
+  test('steppers recover after a step lands with no current set', () async {
+    await startPush();
+    await c.load(1);
+    // Log every set, so there is no current set, and press + meanwhile.
+    final all = <Future<void>>[];
+    for (final e in c.snapshot!.exercises) {
+      for (final _ in e.sets) {
+        all.add(c.done());
+      }
+    }
+    all.add(c.reps(1));
+    await Future.wait(all);
+    expect(c.view()!.allDone, isTrue);
+    await c.reps(1); // runs with no current set
+    expect(c.stepQueued, isFalse, reason: 'reset even with no set');
   });
 }

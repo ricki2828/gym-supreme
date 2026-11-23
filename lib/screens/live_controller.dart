@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show max;
 
 import 'package:flutter/foundation.dart';
 import 'package:gym_engine/cut2.dart' as c2;
@@ -90,6 +91,10 @@ class LiveController extends ChangeNotifier {
   int _pendingLoad = 0;
   bool _stepQueued = false;
 
+  /// A step job is queued and not yet run (tests: it must never stick).
+  @visibleForTesting
+  bool get stepQueued => _stepQueued;
+
   Future<void> reps(int delta) {
     _pendingReps += delta;
     return _flushSteps();
@@ -107,24 +112,38 @@ class LiveController extends ChangeNotifier {
   Future<void> _flushSteps() {
     if (_stepQueued) return _queue;
     _stepQueued = true;
-    return _onCurrent((s, set) {
+    return _enqueue(() async {
+      // Reset first, whatever happens below (no current set, finished...),
+      // so the steppers can never stay dead (review of #36 fixes).
       _stepQueued = false;
       final dr = _pendingReps;
       final dl = _pendingLoad;
       _pendingReps = 0;
       _pendingLoad = 0;
-      var next = s;
+      final s = _s;
+      if (s == null || s.finished) return;
+      final set = s.currentSet;
+      if (set == null) return;
+      int? reps;
+      int? loadG;
       if (dr != 0) {
-        final r = (set.targetReps ?? 0) + dr;
-        if (r >= 1) next = eng.Session.retarget(next, set.setId, reps: r);
+        // A held − stops at 1, it doesn't drop the whole batch.
+        final r = max(1, (set.targetReps ?? 0) + dr);
+        if (r != set.targetReps) reps = r;
       }
       if (dl != 0) {
         final g = _stepLoad(s, set, dl);
-        if (g != null && g != set.targetLoadG) {
-          next = eng.Session.retarget(next, set.setId, loadG: g);
-        }
+        if (g != null && g != set.targetLoadG) loadG = g;
       }
-      return next;
+      if (reps == null && loadG == null) return;
+      // One retarget, so the snapshot is exactly rev + 1 (two chained
+      // retargets made rev + 2, which the service refuses).
+      final next = reps != null && loadG != null
+          ? eng.Session.retarget(s, set.setId, reps: reps, loadG: loadG)
+          : reps != null
+          ? eng.Session.retarget(s, set.setId, reps: reps)
+          : eng.Session.retarget(s, set.setId, loadG: loadG);
+      await _submit(next);
     });
   }
 
