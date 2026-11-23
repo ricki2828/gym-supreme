@@ -144,6 +144,8 @@ class _GymSupremeAppState extends State<GymSupremeApp> {
           port: s.port,
           catalog: s.catalog,
           appVersion: s.appVersion,
+          // Cut 2: history for ghost + rotation (hidden while flags are off).
+          store: s.store,
         ),
         onOpenDiagnostics: showDiagnostics
             ? () => _nav.currentState!.push(

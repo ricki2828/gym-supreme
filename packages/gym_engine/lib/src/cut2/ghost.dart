@@ -79,11 +79,6 @@ class ExerciseGhost {
   }
 
   int get volumeGReps => sets.fold(0, (a, s) => a + s.volumeGReps);
-
-  /// Volume of sets with ordinal <= [ordinal].
-  int volumeThrough(int ordinal) => sets
-      .where((s) => s.setOrdinal <= ordinal)
-      .fold(0, (a, s) => a + s.volumeGReps);
 }
 
 /// The latest workout at [gymId] that started before [beforeMs] and has a
@@ -222,7 +217,8 @@ SetGhostLine compareSet({
   );
 }
 
-/// One done set this session, for the session total.
+/// One done set this session, for the session total. Leave skipped sets
+/// out (`doneSetsOf` does) and pass each ordinal once.
 typedef DoneSet = ({String exerciseId, int setOrdinal, int volumeGReps});
 
 /// The session-total line (N3): volume so far against what he had done by

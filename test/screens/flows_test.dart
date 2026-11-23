@@ -53,6 +53,15 @@ void main() {
 
   Future<void> tapText(WidgetTester tester, String text) async {
     final f = find.text(text);
+    // With cut-2 flags on, LiveScreen's lazy ListView may not have built
+    // Pause/Finish yet (ADD TIMER pushes them down): scroll them in.
+    if (f.evaluate().isEmpty && find.byType(Scrollable).evaluate().isNotEmpty) {
+      await tester.scrollUntilVisible(
+        f,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+    }
     await tester.ensureVisible(f.first);
     await tester.pumpAndSettle();
     await tester.tap(f.first);

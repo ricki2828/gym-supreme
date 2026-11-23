@@ -1,10 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:gym_engine/cut2.dart' as c2;
 import 'package:gym_engine/gym_engine.dart' as eng;
 import 'package:supreme_ui/supreme_ui.dart';
 
+import '../../app/feature_flags.dart';
 import '../../app/workout_port.dart';
+import '../../widgets/cut2/amrap_entry.dart';
+import '../../widgets/cut2/ghost_lines.dart';
+import '../../widgets/cut2/rotation_chip.dart';
+import '../../widgets/cut2/timer_panel.dart';
+import '../cut2/rotation_screen.dart';
+import '../cut2/timer_picker_screen.dart';
 import '../body_screen.dart';
 import '../engine_adapter.dart';
 import '../gym_setup_screen.dart';
@@ -25,6 +33,7 @@ class GymDeps {
     this.appVersion = '',
     int Function()? nowMs,
     int Function()? tzOffsetMin,
+    this.store,
   }) : nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch),
        tzOffsetMin =
            tzOffsetMin ?? (() => DateTime.now().timeZoneOffset.inMinutes);
@@ -36,7 +45,12 @@ class GymDeps {
   final int Function() nowMs;
   final int Function() tzOffsetMin;
 
+  /// History for the cut-2 ghost and rotation (lib/app passes the same
+  /// store as the engine's). Null hides both even with their flags on.
+  final eng.HistoryStore? store;
+
   LiveController liveController() => LiveController(
+    store: store,
     engine: engine,
     port: port,
     nowMs: nowMs,
@@ -87,6 +101,21 @@ class _GymRootState extends State<GymRoot> {
           // The workout is stored either way; a failed delete only leaves a
           // journal that the next open deletes. Not a restore failure.
           final uuid = r.snapshot?.workoutUuid;
+          // Cut 2: a workout finished while the app was dead (lock screen)
+          // still moves the rotation; idempotent per workout uuid.
+          final st = widget.deps.store;
+          final snap = r.snapshot;
+          if (Features.rotation &&
+              st != null &&
+              snap != null &&
+              snap.finished) {
+            try {
+              c2.rotationAfterFinish(st, snap.typeId, workoutUuid: uuid);
+            } on Object {
+              // Cosmetic: the pointer stays one step behind; he can tap a row in
+              // the rotation editor to correct it.
+            }
+          }
           if (uuid != null) {
             try {
               await port.deleteJournal(uuid);
@@ -505,7 +534,51 @@ class _PickerFlowState extends State<PickerFlow> {
           ? null
           : () => Navigator.of(context).pop(plan),
       onClose: () => Navigator.of(context).pop(),
+      sheetExtra: _rotationChip(),
     );
+  }
+
+  // ---- cut 2: rotation (Features.rotation) ----------------------------------
+
+  static final Map<String, String> _typeNames = {
+    for (final t in eng.workoutTypes) t.id: t.name,
+  };
+  static const Map<String, Color> _typeColours = {
+    'push': Lit.push,
+    'pull': Lit.pull,
+    'legs': Lit.legs,
+    'core': Lit.core,
+    'engine': Lit.engine,
+  };
+
+  Widget? _rotationChip() {
+    final st = widget.deps.store;
+    if (!Features.rotation || st == null) return null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: RotationChip(
+        rotation: c2.loadRotation(st),
+        names: _typeNames,
+        onTap: () => _editRotation(st),
+      ),
+    );
+  }
+
+  Future<void> _editRotation(eng.HistoryStore st) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => StatefulBuilder(
+          // Re-read from the store on every change: never a stale copy.
+          builder: (context, setLocal) => RotationScreen(
+            rotation: c2.loadRotation(st),
+            names: _typeNames,
+            colours: _typeColours,
+            onChanged: (r) => setLocal(() => c2.saveRotation(st, r)),
+          ),
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
   }
 }
 
@@ -567,6 +640,65 @@ class _LiveFlowState extends State<LiveFlow> {
     }
   }
 
+  // ---- cut 2 (each entry gated by its Features flag) ----------------------
+
+  /// Under the current set: the timer panel on a timer block, else the
+  /// ghost line. Null when both features are off.
+  Widget? _setExtra() {
+    final block = c.currentTimer;
+    if (Features.timers && block != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: TimerPanel(
+          block: block,
+          elapsedAt: c.timerElapsedMs,
+          running: c.timerRunning,
+          nowMs: c.nowMs,
+          onStart: c.startTimer,
+          onRound: c.markRound,
+          onFinish: () => _finishTimer(block),
+        ),
+      );
+    }
+    if (Features.ghost) {
+      final g = c.currentGhost();
+      if (g != null) return GhostSetLine(line: g, perHand: c.currentPerHand);
+    }
+    return null;
+  }
+
+  /// DONE on a timer set: start an armed block, else log it (AMRAP asks for
+  /// rounds). Any other set: a plain Done.
+  Future<void> _onDone() async {
+    final block = c.currentTimer;
+    if (block == null) return c.done();
+    if (!c.timerRunning && c.timerElapsedMs(c.nowMs()) == 0) {
+      return c.startTimer();
+    }
+    return _finishTimer(block);
+  }
+
+  Future<void> _addTimer() async {
+    if (_leaving) return;
+    final block = await Navigator.of(context).push(
+      MaterialPageRoute<c2.TimerBlock>(
+        builder: (_) => const TimerPickerScreen(),
+      ),
+    );
+    if (block != null && mounted && !_leaving) await c.addTimer(block);
+  }
+
+  Future<void> _finishTimer(c2.TimerBlock block) async {
+    if (_leaving) return;
+    if (block.type == c2.TimerType.amrap) {
+      final r = await askAmrapResult(context);
+      if (r == null || !mounted || _leaving) return;
+      await c.finishTimer(amrapRounds: r.rounds, amrapExtraReps: r.extraReps);
+    } else {
+      await c.finishTimer();
+    }
+  }
+
   Future<void> _pause() async {
     if (_leaving) return;
     _leaving = true;
@@ -595,13 +727,29 @@ class _LiveFlowState extends State<LiveFlow> {
             view: v,
             onReps: c.reps,
             onLoad: c.load,
-            onDone: c.done,
+            onDone: _onDone,
             onSkipSet: c.skipSet,
             onRestDelta: c.restDelta,
             onSkipRest: c.skipRest,
             onReorder: c.reorderUpNext,
             onPause: _pause,
             onFinish: _finish,
+            setExtra: _setExtra(),
+            actions: [
+              if (Features.timers &&
+                  c.active &&
+                  c.snapshot?.currentSet != null &&
+                  c.currentTimer == null)
+                BigButton(
+                  label: 'ADD TIMER',
+                  colour: Lit.ink.withValues(alpha: 0.12),
+                  ink: Lit.ink,
+                  fontSize: 22,
+                  height: 52,
+                  onTap: _addTimer,
+                  semanticLabel: 'Add a timer block to this exercise',
+                ),
+            ],
           ),
           if (c.lastError != null && c.lastError is! StaleRevException)
             Positioned(
@@ -647,8 +795,23 @@ class PostWorkoutFlow extends StatelessWidget {
         weekTypes: weekTypesOf(rows, localOf(deps.nowMs(), tz)),
         unitByExercise: units,
       ),
+      totalExtra: _ghostTotal(),
       onDone: () => Navigator.of(context).pop(),
     );
+  }
+
+  /// Cut 2 (Features.ghost): this workout against last time. Null hides it.
+  Widget? _ghostTotal() {
+    final st = deps.store;
+    if (!Features.ghost || st == null) return null;
+    final all = st.workouts();
+    final mine = [
+      for (final w in all)
+        if (w.uuid == uuid) w,
+    ];
+    if (mine.isEmpty) return null;
+    final t = c2.ghostTotalForRecord(mine.first, all);
+    return t == null ? null : GhostTotalLine(total: t);
   }
 }
 
