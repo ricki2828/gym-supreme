@@ -19,9 +19,12 @@ object NativeCounters {
     const val REST_ALERT_MAX_LATE_MS = "rest_alert_max_late_ms"
     const val REST_ALERTS_AUDIO_FAILED = "rest_alerts_audio_failed"
 
+    /** deleteJournal refused or failed (code in the log): a stored workout whose journal stays blocks every Start. */
+    const val JOURNAL_DELETE_FAILED = "journal_delete_failed"
+
     val KEYS = listOf(
         JOURNALS_LOST, JOURNAL_CORRUPT_LINES, JOURNAL_TORN_TAILS, REST_ALERTS_FIRED, REST_ALERTS_LATE,
-        REST_ALERTS_MISSED, REST_ALERT_MAX_LATE_MS, REST_ALERTS_AUDIO_FAILED,
+        REST_ALERTS_MISSED, REST_ALERT_MAX_LATE_MS, REST_ALERTS_AUDIO_FAILED, JOURNAL_DELETE_FAILED,
     )
 
     private fun prefs(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

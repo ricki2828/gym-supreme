@@ -47,11 +47,15 @@ class JournalStore(context: Context) {
 
     fun read(): Journal.Read = if (file.exists()) Journal.read(file.readText(Charsets.UTF_8)) else Journal.read("")
 
-    /** Delete only if the journal still belongs to [uuid] (Dart has stored that workout). */
+    /**
+     * Delete only if the journal still belongs to [uuid] (Dart has stored that workout). False if it
+     * is another workout's; throws [java.io.IOException] if the file could not be removed.
+     */
     fun deleteIf(uuid: String): Boolean {
         val last = read().last
         if (last != null && last.uuid != uuid) return false
-        return !file.exists() || file.delete()
+        if (file.exists() && !file.delete()) throw java.io.IOException("could not delete ${file.name}")
+        return true
     }
 
     /** Move an unreadable journal aside (kept for the log, counted as lost). */
