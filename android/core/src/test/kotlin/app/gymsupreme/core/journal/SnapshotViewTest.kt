@@ -9,8 +9,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SnapshotViewTest {
-    private fun set(id: String, state: String, load: Long?, reps: Long?) =
-        """{"set_id":"$id","set_ordinal":1,"kind":"reps","target_load_g":${load ?: "null"},"target_reps":${reps ?: "null"},"state":"$state","load_g":null,"reps":null,"completion":null,"source":null,"started_at_ms":null,"ended_at_ms":null,"offset_ms":null,"block":null}"""
+    private fun set(id: String, state: String, load: Long?, reps: Long?, ordinal: Int = 1) =
+        """{"set_id":"$id","set_ordinal":$ordinal,"kind":"reps","target_load_g":${load ?: "null"},"target_reps":${reps ?: "null"},"state":"$state","load_g":null,"reps":null,"completion":null,"source":null,"started_at_ms":null,"ended_at_ms":null,"offset_ms":null,"block":null}"""
 
     private fun ex(name: String, kind: String, vararg sets: String) =
         """{"exercise_id":"x","name":"$name","load_kind":"$kind","unilateral":false,"rest_s":90,"rep_lo":8,"rep_hi":12,"sets":[${sets.joinToString(",")}]}"""
@@ -25,7 +25,7 @@ class SnapshotViewTest {
             snap(
                 "active",
                 """{"set_id":"s2","ends_at_wall_ms":1800000090000,"duration_ms":90000}""",
-                ex("Dumbbell bench press", "dumbbell", set("s1", "done", 22500, 10), set("s2", "done", 22500, 10), set("s3", "pending", 22500, 10)),
+                ex("Dumbbell bench press", "dumbbell", set("s1", "done", 22500, 10, 1), set("s2", "done", 22500, 10, 2), set("s3", "pending", 22500, 10, 3)),
                 ex("Cable fly", "stack", set("s4", "pending", 15000, 12)),
             ),
         )
@@ -39,7 +39,7 @@ class SnapshotViewTest {
 
     @Test
     fun `skipped counts as handled, paused and no rest, all handled`() {
-        val v = SnapshotView.of(snap("paused", "null", ex("Lat pulldown", "stack", set("a", "skipped", 40000, 10), set("b", "done", 40000, 10))))
+        val v = SnapshotView.of(snap("paused", "null", ex("Lat pulldown", "stack", set("a", "skipped", 40000, 10, 1), set("b", "done", 40000, 10, 2))))
         assertTrue(v.paused)
         assertNull(v.rest)
         assertNull(v.current)

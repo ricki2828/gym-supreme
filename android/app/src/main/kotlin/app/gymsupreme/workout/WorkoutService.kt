@@ -450,7 +450,8 @@ class WorkoutService : Service() {
         main.post {
             tracker?.onFired(spec.key)
             // Only clear what this fire owned: a +15 s change may have armed a new rest meanwhile.
-            if (run == null || restRunnable === run) {
+            // A resume-grace fire (run == null) owns nothing armed: leave a rest armed since alone.
+            if ((run == null && restRunnable == null) || (run != null && restRunnable === run)) {
                 restRunnable = null
                 restArmedAt = null
                 restLock?.let { if (it.isHeld) it.release() }
