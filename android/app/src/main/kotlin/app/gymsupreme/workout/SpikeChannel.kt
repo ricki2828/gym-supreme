@@ -37,7 +37,7 @@ class SpikeChannel(private val activity: Activity, messenger: BinaryMessenger) :
                     result.success(null)
                 }
                 "stop" -> {
-                    WorkoutService.instance?.stopWorkout("app")
+                    if (WorkoutService.status.mode != WorkoutService.MODE_SESSION) WorkoutService.instance?.stopWorkout("app")
                     result.success(null)
                 }
                 "scan" -> hr.scan { r ->

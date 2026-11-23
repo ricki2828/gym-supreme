@@ -1,0 +1,5 @@
+# gym_engine API changes
+
+API v0 (C1, 23-Nov-2026): `lib/src/api.dart` (`GymApi` + view types), `GymEngine` over `HistoryStore` (`MemoryStore` fake; `SqliteStore` follows), `Session` transitions, `SessionSnapshot` schema 1.
+
+Breaking changes after C1 are listed here, newest first, with an hc ping to t5t and the UI lane.

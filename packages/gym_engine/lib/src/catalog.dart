@@ -37,6 +37,8 @@ class Exercise {
     required this.load,
     required this.unilateral,
     required this.cue,
+    this.mechanic = 'compound',
+    this.harderThan,
   });
   final String id;
   final String name;
@@ -48,6 +50,14 @@ class Exercise {
   final String load;
   final bool unilateral;
   final String cue;
+
+  /// `compound` or `isolation` (from the seed).
+  final String mechanic;
+
+  /// The easier variant this one progresses from (B7); null if none.
+  final String? harderThan;
+
+  bool get isCompound => mechanic != 'isolation';
 
   /// Bodyweight is present at every gym.
   bool availableWith(Set<String> kit) {
@@ -106,6 +116,8 @@ class Catalog {
           load: e['load'] as String,
           unilateral: e['unilateral'] as bool,
           cue: e['cue'] as String,
+          mechanic: (e['mechanic'] as String?) ?? 'compound',
+          harderThan: e['harder_than'] as String?,
         ),
     ];
     final c = Catalog(
@@ -127,6 +139,14 @@ class Catalog {
   final List<Exercise> exercises;
 
   Preset preset(String id) => presets.firstWhere((p) => p.id == id);
+
+  late final Map<String, Exercise> _byId = {for (final e in exercises) e.id: e};
+  late final Map<String, Equipment> _equipById = {
+    for (final e in equipment) e.id: e,
+  };
+
+  Exercise? exercise(String id) => _byId[id];
+  Equipment? equipmentById(String id) => _equipById[id];
 
   /// Unknown ids, duplicate ids, wrong muscle count. Empty means valid.
   List<String> validate() {
