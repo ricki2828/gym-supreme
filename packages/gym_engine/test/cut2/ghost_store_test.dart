@@ -76,6 +76,21 @@ void main() {
     );
   });
 
+  test('every exercise gets a key, null when it has no ghost', () {
+    // LiveController caches on containsKey: a missing key would re-read all
+    // history on every 1 s tick.
+    final live = Session.start(
+      plan('gym3'),
+      nowMs: 3 * day,
+      tzOffsetMin: 0,
+      workoutUuid: 'c',
+    );
+    final g = ghostsForSession(live, history);
+    expect(g.keys, ['db-press']);
+    expect(g.containsKey('db-press'), isTrue);
+    expect(g['db-press'], isNull);
+  });
+
   test('pending set: last time shown, nothing judged; done set: judged', () {
     var live = Session.start(
       plan('condo'),

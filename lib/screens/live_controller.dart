@@ -290,8 +290,9 @@ class LiveController extends ChangeNotifier {
     if (Features.rotation && st != null) {
       try {
         c2.rotationAfterFinish(st, done.typeId);
-      } on Object catch (e) {
-        lastError = e; // the workout is stored; only the pointer is stale
+      } on Object {
+        // Cosmetic: the workout is stored; only the rotation pointer is
+        // stale, and the next finish moves it again. No error banner.
       }
     }
     finishedUuid = done.workoutUuid;
