@@ -316,7 +316,11 @@ void main() {
       gymId: gymId,
       exerciseId: c.snapshot!.exercises.first.exerciseId,
     );
-    final mid = steps.loadsG[(steps.loadsG.length - 1) ~/ 2];
+    // Dumbbells start mid-list, machine stacks a third of the way up (the
+    // first push lift may be either, depending on the suggestion).
+    final n = steps.loadsG.length;
+    final stack = c.snapshot!.exercises.first.loadKind == 'stack';
+    final mid = steps.loadsG[stack ? (n - 1) ~/ 3 : (n - 1) ~/ 2];
     await c.load(-1);
     expect(c.view()!.loadG, mid);
     expect(mid, greaterThan(steps.loadsG.first));
