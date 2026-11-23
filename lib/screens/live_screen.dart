@@ -138,6 +138,9 @@ class LiveScreen extends StatelessWidget {
     }
     final bg = view.type?.colour ?? Lit.ground;
     final ink = view.type?.onColour ?? Lit.ink;
+    // Hand the set to the timer panel only when one is given: a block opened
+    // in a build without it falls back to the normal set controls.
+    final blockUi = view.timerBlock && setExtra != null;
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
@@ -158,7 +161,7 @@ class LiveScreen extends StatelessWidget {
                     ),
                     semanticsLabel: view.exerciseName,
                   ),
-                  if (!view.timerBlock) ...[
+                  if (!blockUi) ...[
                     const SizedBox(height: 14),
                     _Stepper(
                       value: view.unit == LoadUnit.timed
@@ -202,7 +205,7 @@ class LiveScreen extends StatelessWidget {
                     ),
                   ],
                   ?setExtra,
-                  if (!view.timerBlock) ...[
+                  if (!blockUi) ...[
                     const SizedBox(height: 18),
                     BigButton(
                       label: 'DONE',

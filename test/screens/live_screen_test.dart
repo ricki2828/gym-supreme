@@ -252,6 +252,9 @@ void main() {
       expect(find.text('DONE'), findsNothing);
       expect(find.text('SEC'), findsNothing);
       expect(find.textContaining('THEN REST'), findsNothing);
+      // No timer panel given (a build without cut 2): normal controls.
+      await tester.pumpWidget(app(LiveScreen(view: v)));
+      expect(find.text('DONE'), findsOneWidget);
       // A plank (timed, no block) keeps its stepper and DONE.
       await tester.pumpWidget(app(LiveScreen(view: base)));
       expect(find.text('DONE'), findsOneWidget);
