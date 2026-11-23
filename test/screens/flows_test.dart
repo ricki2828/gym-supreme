@@ -282,4 +282,24 @@ void main() {
       isTrue,
     );
   });
+
+  testWidgets('a preset adds its kit and keeps his dumbbell pairs', (
+    tester,
+  ) async {
+    final mine = engine
+        .gymFromPreset('condo')
+        .toggle('adjustable-bench') // he has no bench
+        .toggle('kettlebells')
+        .withWeights('dumbbells', const [3000, 9000, 26000]);
+    engine.saveGym(mine);
+    await pumpRoot(tester);
+    await tester.tap(find.text('Gyms'));
+    await tester.pumpAndSettle();
+    await tapText(tester, 'Condo gym');
+    await tapText(tester, 'SAVE · 6 ON THE FLOOR');
+    final g = engine.gym(mine.id)!;
+    expect(g.kit['dumbbells']!.weightsG, const [3000, 9000, 26000]);
+    expect(g.has('kettlebells'), isTrue, reason: 'his own tick kept');
+    expect(g.has('adjustable-bench'), isTrue, reason: 'preset pre-ticks');
+  });
 }

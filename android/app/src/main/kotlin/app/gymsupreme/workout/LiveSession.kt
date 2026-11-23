@@ -138,8 +138,31 @@ class LiveSession private constructor(private val context: Context) {
         return r.lastLine
     }
 
-    /** Dart stored workout [uuid]; the journal goes. False if the journal is another workout's. */
+    /**
+     * Dart stored workout [uuid]; the journal goes. False if the journal is another workout's.
+     * Every refusal, mismatch or IO failure counts in `journal_delete_failed` with its code in the
+     * log (t3x 23-Nov): a journal that will not go blocks every later Start with finish_pending.
+     */
     fun delete(uuid: String): Boolean {
+        val ok = try {
+            deleteChecked(uuid)
+        } catch (e: Refused) {
+            deleteFailed(uuid, e.code, e.message)
+            throw e
+        } catch (e: Exception) {
+            deleteFailed(uuid, "io_error", "${e.javaClass.simpleName}: ${e.message}")
+            throw Refused("io_error", "could not delete the journal: ${e.message}")
+        }
+        if (!ok) deleteFailed(uuid, "wrong_workout", "journal belongs to ${head?.uuid}")
+        return ok
+    }
+
+    private fun deleteFailed(uuid: String, code: String, message: String?) {
+        NativeCounters.add(context, NativeCounters.JOURNAL_DELETE_FAILED)
+        SpikeLog.write(context, SpikeLog.line("journal_delete_failed").put("uuid", uuid).put("code", code).put("message", message))
+    }
+
+    private fun deleteChecked(uuid: String): Boolean {
         val cur = current()
         if (cur != null && cur.uuid == uuid && !cur.finished && WorkoutService.status.running) {
             throw Refused("still_running", "finish or pause before deleting the journal")
