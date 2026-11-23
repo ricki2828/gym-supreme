@@ -58,17 +58,17 @@ class AppServices {
   /// the next pause retries.
   ///
   /// Never throws: a failure is counted (persist_failed) and the next pause
-  /// retries. Never writes an EMPTY database over a backup that was set
-  /// aside (refused or unrestored): the next Auto Backup would replace his
-  /// real cloud copy with nothing.
+  /// retries. Writes no snapshot while a backup is set aside (refused or
+  /// unrestored): the next Auto Backup would replace his real cloud copy.
   void persist() {
     try {
       store.checkpoint();
       final snap = snapshotPath;
       if (snap == null) return;
-      if (engine.counters().sessionsTotal == 0 && hasSetAsideBackup(snap)) {
-        return;
-      }
+      // While a backup is set aside, the cloud copy may be the only full
+      // copy of his data: write no snapshot at all (an empty or smaller db
+      // would replace it). Diagnostics shows backup_set_aside to resolve.
+      if (hasSetAsideBackup(snap)) return;
       store.writeSnapshot(snap);
     } on Object catch (e) {
       persistFailed++;
@@ -87,6 +87,9 @@ class AppServices {
     'restore_pending': restorePending ? 1 : 0,
     'restore_gave_up': restoreGaveUp,
     'persist_failed': persistFailed,
+    'backup_set_aside': snapshotPath != null && hasSetAsideBackup(snapshotPath!)
+        ? 1
+        : 0,
   };
 }
 

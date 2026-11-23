@@ -149,7 +149,7 @@ void main() {
     expect(restoreRetries(dir.path, pending: true), isFalse);
   });
 
-  test('persist never writes an empty db over a set-aside backup', () {
+  test('persist writes no snapshot while a backup is set aside', () {
     final dir = Directory.systemTemp.createTempSync('gs-guard');
     addTearDown(() => dir.deleteSync(recursive: true));
     final snap = snapshotPath(dir.path);
@@ -172,8 +172,9 @@ void main() {
     expect(
       File(snap).existsSync(),
       isFalse,
-      reason: 'empty db must not be snapshotted',
+      reason: 'no snapshot while a backup is set aside',
     );
+    expect(s.withAppCounters(const {})['backup_set_aside'], 1);
     expect(s.persistFailed, 0);
   });
 

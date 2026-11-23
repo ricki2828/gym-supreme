@@ -52,8 +52,8 @@ class BootErrorApp extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Your workouts have not been deleted. Send this error to '
-                  'Ricki\'s builder, then try again after the next update.',
+                  'Your workouts have not been deleted. Share this error with '
+                  'support, then try again after the next update.',
                 ),
                 const SizedBox(height: 12),
                 SelectableText(error, style: TextStyle(color: Lit.inkQuiet)),
