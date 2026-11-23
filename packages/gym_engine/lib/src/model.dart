@@ -339,11 +339,15 @@ class WorkoutRecord {
     this.pausedMs = 0,
     this.appVersion = '',
     this.swaps = 0,
+    this.editedAtMs,
   });
 
   final String uuid;
   final String gymId;
   final String? typeId;
+
+  /// When a set was last changed in history (schema v2); null = as logged.
+  final int? editedAtMs;
 
   /// The muscles he picked for this session.
   final List<String> muscles;

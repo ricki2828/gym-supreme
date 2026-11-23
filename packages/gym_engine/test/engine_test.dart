@@ -440,7 +440,7 @@ void engineTests() {
       native: {'rest_alerts_fired': 3},
     );
     final j = jsonDecode(x.json) as Map<String, Object?>;
-    expect(j['export_format'], 1);
+    expect(j['export_format'], 2);
     expect(j['snapshot_schema'], 1);
     expect((j['counters'] as Map)['native'], {'rest_alerts_fired': 3});
     expect((j['workouts'] as List), hasLength(1));

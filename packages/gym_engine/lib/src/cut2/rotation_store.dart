@@ -51,10 +51,44 @@ Rotation rotationAfterFinish(
       store.setting(rotationLastSettingKey) == jsonEncode(workoutUuid)) {
     return before;
   }
+  // A deleted workout never moves the rotation (recovery of a stale journal
+  // on open, 0.2.1 D1 R6).
+  if (workoutUuid != null &&
+      store.hasWorkout(workoutUuid) &&
+      store.workout(workoutUuid) == null) {
+    return before;
+  }
   final after = before.completed(typeId);
   if (after != before) saveRotation(store, after);
   if (workoutUuid != null) {
     store.saveSetting(rotationLastSettingKey, jsonEncode(workoutUuid));
   }
   return after;
+}
+
+/// Call when a workout is deleted (0.2.1 D1), with its [typeId] read before
+/// the delete. If it is the last workout the rotation advanced for, its type
+/// is in the rotation, and the pointer still sits right after that type (he
+/// has not dragged, skipped or tapped since), the pointer goes back to that
+/// type so it is suggested again. Otherwise nothing changes.
+///
+/// Returns the rotation as it was before, for undo ([saveRotation] it back),
+/// or null when nothing changed. `rotation_last_uuid` is left as is, so a
+/// stale journal of the deleted workout cannot advance it again.
+Rotation? rotationAfterDelete(
+  HistoryStore store,
+  String workoutUuid,
+  String? typeId,
+) {
+  if (typeId == null) return null;
+  if (store.setting(rotationLastSettingKey) != jsonEncode(workoutUuid)) {
+    return null;
+  }
+  final before = loadRotation(store);
+  final i = before.order.indexOf(typeId);
+  if (i < 0 || before.next != (i + 1) % before.order.length) return null;
+  final after = before.pointAt(typeId);
+  if (after == before) return null; // a one-type rotation: nothing to move
+  saveRotation(store, after);
+  return before;
 }

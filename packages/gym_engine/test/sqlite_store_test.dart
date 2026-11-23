@@ -43,7 +43,7 @@ void main() {
   test('fresh database migrates to the latest version', () {
     final s = SqliteStore.inMemory();
     expect(s.schemaVersion, latestSchemaVersion);
-    expect(latestSchemaVersion, 1);
+    expect(latestSchemaVersion, 2);
   });
 
   test('a newer database is refused, not downgraded', () {
@@ -156,7 +156,7 @@ void main() {
     b.close();
   });
 
-  test('v1 fixture DDL equals migration v1 (R7: fresh = upgraded)', () {
+  test('v2 fixture DDL equals migrations v1+v2; v1 upgraded = fresh (R7)', () {
     String schema(Database db) => db
         .select(
           "SELECT type, name, sql FROM sqlite_master "
@@ -171,8 +171,27 @@ void main() {
     final fresh = sqlite3.openInMemory();
     SqliteStore.migrate(fresh);
     final fixture = sqlite3.openInMemory()
-      ..execute(File('test/fixtures/db/v1.sql').readAsStringSync());
+      ..execute(File('test/fixtures/db/v2.sql').readAsStringSync());
     expect(schema(fixture), schema(fresh));
+    final upgraded = sqlite3.openInMemory()
+      ..execute(File('test/fixtures/db/v1.sql').readAsStringSync());
+    SqliteStore.migrate(upgraded);
+    expect(schema(upgraded), schema(fresh));
+  });
+
+  test('v2 fixture: deleted row hidden, tombstone and edit stamp read', () {
+    final s = SqliteStore.fromDatabase(
+      sqlite3.openInMemory()
+        ..execute(File('test/fixtures/db/v2.sql').readAsStringSync()),
+    );
+    addTearDown(s.close);
+    const live = '3f2b8c1e-4a5d-4e6f-9a7b-1c2d3e4f5a6b';
+    const gone = '7a1c9e2d-5b6f-4c3a-8d9e-0f1a2b3c4d5e';
+    expect(s.workouts().map((w) => w.uuid), [live]);
+    expect(s.workout(live)!.editedAtMs, 1795500000000);
+    expect(s.workout(gone), isNull);
+    expect(s.hasWorkout(gone), isTrue);
+    expect(s.deletedWorkoutUuids(), [gone]);
   });
 
   test(

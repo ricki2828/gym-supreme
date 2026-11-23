@@ -80,6 +80,13 @@ CREATE TABLE hr_sample (
   PRIMARY KEY (workout_uuid, t_ms)
 );
 ''',
+  // v2 (0.2.1). Soft delete and history edits: NULL = live / as logged.
+  // Only workouts() and workout() hide deleted rows; hasWorkout and the
+  // backup guard still see them.
+  '''
+ALTER TABLE workout ADD COLUMN deleted_at_ms INTEGER;
+ALTER TABLE workout ADD COLUMN edited_at_ms INTEGER;
+''',
 ];
 
 int get latestSchemaVersion => migrations.length;
@@ -170,6 +177,8 @@ class SqliteStore implements HistoryStore {
   /// Guard: never replaces a snapshot that has workouts with a db that has
   /// none (a caller that ignored [RestoreResult.retryLater] would otherwise
   /// overwrite the only backup with an empty db). Returns false then too.
+  /// Deleted (tombstoned) workouts count as rows here on purpose: deleting
+  /// the only workout must not freeze the backup.
   bool writeSnapshot(String path) {
     if (_workoutCount(db) == 0 && _snapshotWorkouts(path) > 0) return false;
     final tmp = File('$path.tmp'); // same dir: rename stays atomic
@@ -424,13 +433,16 @@ class SqliteStore implements HistoryStore {
     db.execute(
       'INSERT INTO workout (uuid, gym_id, type_id, muscles, started_at_ms, '
       'tz_offset_min, ended_at_ms, paused_ms, app_version, swaps, '
-      'snapshot_json) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(uuid) DO UPDATE SET '
+      'snapshot_json, edited_at_ms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) '
+      'ON CONFLICT(uuid) DO UPDATE SET '
       'gym_id = excluded.gym_id, type_id = excluded.type_id, '
       'muscles = excluded.muscles, started_at_ms = excluded.started_at_ms, '
       'tz_offset_min = excluded.tz_offset_min, '
       'ended_at_ms = excluded.ended_at_ms, paused_ms = excluded.paused_ms, '
       'app_version = excluded.app_version, swaps = excluded.swaps, '
-      'snapshot_json = coalesce(excluded.snapshot_json, snapshot_json)',
+      'snapshot_json = coalesce(excluded.snapshot_json, snapshot_json), '
+      // deleted_at_ms is never touched here: a re-save keeps the tombstone.
+      'edited_at_ms = coalesce(excluded.edited_at_ms, edited_at_ms)',
       [
         w.uuid,
         w.gymId,
@@ -443,6 +455,7 @@ class SqliteStore implements HistoryStore {
         w.appVersion,
         w.swaps,
         snapshotJson,
+        w.editedAtMs,
       ],
     );
     db.execute('DELETE FROM set_row WHERE workout_uuid = ?', [w.uuid]);
@@ -490,13 +503,20 @@ class SqliteStore implements HistoryStore {
     }
   });
 
+  /// Unfiltered on purpose: true for deleted uuids too (recovery).
   @override
   bool hasWorkout(String uuid) =>
       db.select('SELECT 1 FROM workout WHERE uuid = ?', [uuid]).isNotEmpty;
 
+  // The only two readers of workout rows for history. Every derived stat
+  // reads through them, so the deleted_at_ms filter here is the whole of
+  // soft delete (test: no other `FROM workout` reader).
   @override
   WorkoutRecord? workout(String uuid) {
-    final rows = db.select('SELECT * FROM workout WHERE uuid = ?', [uuid]);
+    final rows = db.select(
+      'SELECT * FROM workout WHERE uuid = ? AND deleted_at_ms IS NULL',
+      [uuid],
+    );
     if (rows.isEmpty) return null;
     return _readWorkouts(rows, {
       uuid:
@@ -515,15 +535,48 @@ class SqliteStore implements HistoryStore {
   List<WorkoutRecord> workouts() {
     final sets = _readSets(
       db.select(
-        'SELECT * FROM set_row ORDER BY workout_uuid, exercise_position, '
-        'set_ordinal',
+        'SELECT * FROM set_row WHERE workout_uuid IN '
+        '(SELECT uuid FROM workout WHERE deleted_at_ms IS NULL) '
+        'ORDER BY workout_uuid, exercise_position, set_ordinal',
       ),
     );
     return _readWorkouts(
-      db.select('SELECT * FROM workout ORDER BY started_at_ms, uuid'),
+      db.select(
+        'SELECT * FROM workout WHERE deleted_at_ms IS NULL '
+        'ORDER BY started_at_ms, uuid',
+      ),
       sets,
     );
   }
+
+  @override
+  bool deleteWorkout(String uuid, int atMs) => _tx(() {
+    db.execute(
+      'UPDATE workout SET deleted_at_ms = ? '
+      'WHERE uuid = ? AND deleted_at_ms IS NULL',
+      [atMs, uuid],
+    );
+    return db.updatedRows == 1;
+  });
+
+  @override
+  bool restoreWorkout(String uuid) => _tx(() {
+    db.execute(
+      'UPDATE workout SET deleted_at_ms = NULL '
+      'WHERE uuid = ? AND deleted_at_ms IS NOT NULL',
+      [uuid],
+    );
+    return db.updatedRows == 1;
+  });
+
+  @override
+  List<String> deletedWorkoutUuids() => [
+    for (final r in db.select(
+      'SELECT uuid FROM workout WHERE deleted_at_ms IS NOT NULL '
+      'ORDER BY deleted_at_ms, uuid',
+    ))
+      r['uuid'] as String,
+  ];
 
   @override
   List<HrSample> hrSamples(String uuid) => [
@@ -581,6 +634,7 @@ class SqliteStore implements HistoryStore {
         pausedMs: r['paused_ms'] as int,
         appVersion: r['app_version'] as String,
         swaps: r['swaps'] as int,
+        editedAtMs: r['edited_at_ms'] as int?,
         sets: sets[r['uuid'] as String] ?? const [],
       ),
   ];
