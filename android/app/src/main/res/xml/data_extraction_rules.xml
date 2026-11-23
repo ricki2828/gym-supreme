@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- API 31+. Same list as backup_rules.xml; see the comment there. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="file" path="backup/gym-snapshot.db" />
+        <include domain="sharedpref" path="gymsupreme.counters.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="file" path="backup/gym-snapshot.db" />
+        <include domain="sharedpref" path="gymsupreme.counters.xml" />
+    </device-transfer>
+</data-extraction-rules>
