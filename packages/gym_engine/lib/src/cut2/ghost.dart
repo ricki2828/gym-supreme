@@ -120,7 +120,7 @@ ExerciseGhost? ghostFor({
 
 /// How a set compares with the same ordinal last time.
 enum GhostVerdict {
-  /// More volume (or same volume and more load).
+  /// More volume; on equal volume more load, then more reps (bodyweight).
   ahead,
   level,
   behind,
@@ -179,6 +179,11 @@ SetGhostLine compareSet({
   } else if ((ld ?? 0) > 0) {
     v = GhostVerdict.ahead;
   } else if ((ld ?? 0) < 0) {
+    v = GhostVerdict.behind;
+  } else if ((rd ?? 0) > 0) {
+    // Same volume and load: bodyweight sets (no load, volume 0) land here.
+    v = GhostVerdict.ahead;
+  } else if ((rd ?? 0) < 0) {
     v = GhostVerdict.behind;
   } else {
     v = GhostVerdict.level;

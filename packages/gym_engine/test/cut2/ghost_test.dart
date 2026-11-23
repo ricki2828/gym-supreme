@@ -180,6 +180,29 @@ void main() {
       );
     });
 
+    test('bodyweight (no load): reps decide', () {
+      final bw = ghostFor(
+        gymId: 'g',
+        exerciseId: 'pull-up',
+        beforeMs: 10,
+        workouts: [
+          w('a', 'g', 1, [s('pull-up', 1, reps: 8)]),
+        ],
+      )!;
+      expect(
+        compareSet(ghost: bw, setOrdinal: 1, reps: 9).verdict,
+        GhostVerdict.ahead,
+      );
+      expect(
+        compareSet(ghost: bw, setOrdinal: 1, reps: 7).verdict,
+        GhostVerdict.behind,
+      );
+      expect(
+        compareSet(ghost: bw, setOrdinal: 1, reps: 8).verdict,
+        GhostVerdict.level,
+      );
+    });
+
     test('an extra set beyond last time is new', () {
       final l = compareSet(ghost: g, setOrdinal: 3, loadG: 22500, reps: 8);
       expect(l.verdict, GhostVerdict.newSet);
