@@ -15,3 +15,10 @@ abstract final class Features {
   static bool get rotation => _on('rotation');
   static bool get plateMath => _on('plates');
 }
+
+/// One startup log line (`GymSupreme/features ghost=1 ...`); the CI emulator
+/// smoke checks it against the GS_FEATURES the build was given.
+String featuresLogLine() =>
+    'GymSupreme/features timers=${Features.timers ? 1 : 0} '
+    'ghost=${Features.ghost ? 1 : 0} rotation=${Features.rotation ? 1 : 0} '
+    'plates=${Features.plateMath ? 1 : 0}';

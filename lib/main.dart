@@ -4,6 +4,7 @@ import 'package:supreme_ui/supreme_ui.dart';
 import 'app/db_probe.dart';
 import 'app/diagnostics_screen.dart';
 import 'app/e2e_driver.dart';
+import 'app/feature_flags.dart';
 import 'app/flavor.dart';
 import 'app/services.dart';
 import 'app/workout_port.dart';
@@ -13,6 +14,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // ignore: avoid_print
   print(probeSqlite());
+  // ignore: avoid_print
+  print(featuresLogLine());
   final AppServices services;
   try {
     services = await bootstrap();
