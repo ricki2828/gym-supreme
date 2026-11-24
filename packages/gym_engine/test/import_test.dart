@@ -426,6 +426,7 @@ void cases(HistoryStore Function() make) {
       final uuid = w['uuid'] as String;
       final started = w['started_at_ms'] as int;
       w['ended_at_ms'] = started - 60000;
+      w['paused_ms'] = 30000;
       final text = jsonEncode(j);
       final p = dst.previewImport(text);
       expect(p.workoutsAdded, 6);
@@ -436,6 +437,8 @@ void cases(HistoryStore Function() make) {
       final stored = dst.store.workout(uuid)!;
       expect(stored.startedAtMs, started);
       expect(stored.endedAtMs, started);
+      expect(stored.pausedMs, 0, reason: 'no negative duration');
+      expect(stored.durationMs, 0);
       // A second import skips it: nothing is clamped again.
       expect(dst.importBundle(text).endsClamped, 0);
     });
