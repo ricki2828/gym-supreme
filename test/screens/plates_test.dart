@@ -355,6 +355,59 @@ void main() {
       expect(saved, isEmpty);
     });
 
+    testWidgets('fits 320x580 at 1.3x text: counts and rows do not overflow', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(640, 1160);
+      tester.view.devicePixelRatio = 2.0;
+      tester.view.padding = const FakeViewPadding(top: 48);
+      tester.view.viewPadding = const FakeViewPadding(top: 48);
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      // The widest counts: two-figure numbers at the largest text.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlatePairsScreen(
+            pairsG: [
+              for (var i = 0; i < 10; i++) 20000,
+              for (var i = 0; i < 10; i++) 1250,
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('10'), findsNWidgets(2));
+      // Each count sits between its two 48 dp buttons without wrapping.
+      final box = tester.getSize(find.byKey(const Key('plates.count.20000')));
+      expect(box.height, lessThanOrEqualTo(60), reason: 'one line');
+      await tester.pumpWidget(
+        MaterialApp(
+          home: GymSetupScreen(
+            gyms: const [condo],
+            currentGymId: 'condo',
+            kit: {...condo.kit, 'barbell', 'plates'},
+            equipment: equipmentFixture,
+            presets: const [],
+            plateRows: const [
+              PlateRow(
+                id: 'plates',
+                name: 'Plates',
+                summary:
+                    '2 × 20 · 2 × 15 · 2 × 10 · 1 × 2.5 · 1 × 1.25 kg a side',
+              ),
+            ],
+            onEditPlates: (_) {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -4000));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'plate rows');
+    });
+
     test('summary reads largest first', () {
       expect(platePairsSummary([]), 'standard plates');
       expect(
