@@ -22,6 +22,11 @@ WorkoutType? workoutTypeOf(String? typeId) => switch (typeId) {
   _ => null,
 };
 
+/// A workout's gym name for display. The engine gives '' once the gym was
+/// deleted (the workout and its sets are kept), so say so rather than leave
+/// a hole after the date.
+String gymLabel(String name) => name.isEmpty ? 'Deleted gym' : name;
+
 LoadUnit unitOf(eng.LoadUnit u) => switch (u) {
   eng.LoadUnit.kg => LoadUnit.kg,
   eng.LoadUnit.ea => LoadUnit.kgEach,
@@ -238,7 +243,7 @@ PostWorkoutView postWorkoutViewOf(
   required Map<String, LoadUnit> unitByExercise,
 }) => PostWorkoutView(
   type: workoutTypeOf(row.typeId),
-  gymName: row.gymName,
+  gymName: gymLabel(row.gymName),
   durationS: s.durationMs ~/ 1000,
   volumeKg: s.volumeKg,
   volumeDeltaPct: s.volumeDeltaPct,
@@ -263,7 +268,7 @@ PostWorkoutView postWorkoutViewOf(
 HistoryRowView historyRowOf(eng.HistoryRow r) => HistoryRowView(
   uuid: r.uuid,
   startedAt: localOf(r.startedAtMs, r.tzOffsetMin),
-  gymName: r.gymName,
+  gymName: gymLabel(r.gymName),
   type: workoutTypeOf(r.typeId),
   durationS: r.durationMs ~/ 1000,
   volumeKg: r.volumeKg,
@@ -352,12 +357,15 @@ List<eng.Exercise> swapCandidates(
 /// The planned item for a swap: same set count, reps and rest as the lift
 /// it replaces; load prefilled from last time at this gym, else from his
 /// starting weight ([startLoadG], 0.3 S1: only when the lift has no history
-/// anywhere), else none.
+/// anywhere), else none. With [steps] (the gym's loads for the new lift) the
+/// last load snaps down to one the gym has, as progression does: a weight
+/// typed once, or from a since-changed bar or rack, is never prefilled.
 eng.PlannedItem swapItem(
   eng.Exercise e,
   eng.SnapshotExercise replacing, {
   eng.LastTime? last,
   int? startLoadG,
+  eng.LoadSteps? steps,
 }) {
   final pending = replacing.sets.where((x) => x.state == eng.SetState.pending);
   // From a timed lift, its targets are seconds: use a rep range instead.
@@ -367,9 +375,13 @@ eng.PlannedItem swapItem(
       : pending.isEmpty
       ? (replacing.repLo ?? 10)
       : (pending.first.targetReps ?? replacing.repLo ?? 10);
-  final load = last == null || last.sets.isEmpty
+  final lastLoad = last == null || last.sets.isEmpty
       ? startLoadG
       : last.sets.last.loadG;
+  final have = steps?.loadsG ?? const <int>[];
+  final load = lastLoad == null || have.isEmpty
+      ? lastLoad
+      : have.lastWhere((l) => l <= lastLoad, orElse: () => have.first);
   final unit = switch (e.load) {
     'dumbbell' => eng.LoadUnit.ea,
     'bodyweight' => eng.LoadUnit.bodyweight,
@@ -466,7 +478,7 @@ WorkoutDetailView workoutDetailOf(
     edited: w.editedAtMs != null,
     type: workoutTypeOf(w.typeId),
     startedAt: localOf(w.startedAtMs, w.tzOffsetMin),
-    gymName: gymName,
+    gymName: gymLabel(gymName),
     durationS: w.durationMs ~/ 1000,
     volumeKg: w.volumeGReps / 1000,
     lifts: lifts,

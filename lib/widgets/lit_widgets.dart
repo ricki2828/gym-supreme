@@ -218,7 +218,12 @@ class PlanList extends StatelessWidget {
     this.ruleColour,
     this.maxHeight,
     this.markFirst = false,
+    this.lockFirst = false,
   });
+
+  /// The first row cannot be dragged (a timer block runs on it): its handle
+  /// is dimmed and does nothing.
+  final bool lockFirst;
 
   /// Tags the first row "NOW" (the live screen's list starts with the
   /// current exercise).
@@ -246,12 +251,17 @@ class PlanList extends StatelessWidget {
     Widget row(int i) {
       final p = items[i];
       // A 48 x 48 drag target around the 18 dp bars (used mid-set).
+      final locked = lockFirst && i == 0;
       final handle = SizedBox(
         width: 44,
         height: 48,
         child: Align(
           alignment: Alignment.centerLeft,
-          child: Grip(colour: dark ? const Color(0xFF8A8F98) : Lit.ink),
+          child: Grip(
+            colour: locked
+                ? (dark ? const Color(0x558A8F98) : const Color(0x55121417))
+                : (dark ? const Color(0xFF8A8F98) : Lit.ink),
+          ),
         ),
       );
       return Container(
@@ -263,11 +273,12 @@ class PlanList extends StatelessWidget {
         child: Semantics(
           label:
               '${markFirst && i == 0 ? 'Current exercise: ' : ''}'
-              '${p.name}, ${prescription(p)}',
+              '${p.name}, ${prescription(p)}'
+              '${locked ? ', timer running, cannot be moved' : ''}',
           excludeSemantics: true,
           child: Row(
             children: [
-              if (onReorder != null)
+              if (onReorder != null && !locked)
                 ReorderableDragStartListener(index: i, child: handle)
               else
                 handle,

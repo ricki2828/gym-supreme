@@ -240,6 +240,12 @@ fin="$(e2e_lines | grep '"step":"finish"')"
 grep -q '"stored":true' <<< "$fin" && grep -q '"journal_gone":true' <<< "$fin" || { echo "e2e: finish not stored or journal left" >&2; exit 1; }
 [ "$(e2e_field uuid <<< "$fin")" = "$(e2e_field history_top <<< "$fin")" ] || { echo "e2e: finished workout is not the newest history row" >&2; exit 1; }
 fatal_check "$PKG" "e2e run"
+# Keep-screen-on (0.3 X1): the run started a session (on) and finished it (off); each call logs.
+awake_lines="$(svc_lines | grep '"event":"keep_screen_on"' || true)"
+[ "$(wc -l <<< "$awake_lines")" -ge 2 ] && head -n 1 <<< "$awake_lines" | grep -q '"on":true' \
+  && tail -n 1 <<< "$awake_lines" | grep -q '"on":false' \
+  || { echo "::error::API $sdk: keep_screen_on not on at start and off at finish" >&2; echo "$awake_lines" >&2; exit 1; }
+echo "keep screen on: $(wc -l <<< "$awake_lines") lines"
 # Crash-safe resume: start a workout, log a set, kill the process, relaunch, resume, finish.
 adb logcat -c || true
 e2e_cmd start_only
@@ -278,6 +284,9 @@ hist_after="$(num_of history_after <<< "$d")"
   || { echo "::error::API $sdk: discard changed the history count (was $count_before): $d" >&2; exit 1; }
 e2e_lines | grep '"step":"restart"' | grep -q '"accepted":true' \
   || { echo "::error::API $sdk: a start after discard was not accepted" >&2; exit 1; }
+# The discard drill ends with the screen flag off too (its last session is discarded).
+svc_lines | grep '"event":"keep_screen_on"' | tail -n 1 | grep -q '"on":false' \
+  || { echo "::error::API $sdk: discard left keep_screen_on set" >&2; svc_lines | grep keep_screen_on >&2; exit 1; }
 discarded_uuid="$(e2e_field uuid <<< "$d")"
 [ -n "$discarded_uuid" ] || { echo "::error::API $sdk: discard: no uuid" >&2; exit 1; }
 jdel="$(svc_lines | grep '"event":"journal_delete"' | grep -F "$discarded_uuid" || true)"  # captured: pipefail

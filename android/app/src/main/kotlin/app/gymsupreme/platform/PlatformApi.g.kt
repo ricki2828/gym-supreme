@@ -587,6 +587,15 @@ interface GymHostApi {
    * picker is open, the call returns null.
    */
   fun pickImportFile(callback: (Result<String?>) -> Unit)
+  /**
+   * Keep the screen on while a workout is being logged (0.3 X1): adds or
+   * clears FLAG_KEEP_SCREEN_ON on the activity window. Dart turns it on when
+   * a session starts or resumes and off when it pauses, finishes or is
+   * discarded (and when the controller goes away). Needs no permission and
+   * never fails; it logs `keep_screen_on` with `on` for CI. Calls with the
+   * current value are fine (idempotent).
+   */
+  fun setKeepScreenOn(on: Boolean)
 
   companion object {
     /** The codec used by GymHostApi. */
@@ -674,6 +683,24 @@ interface GymHostApi {
                 reply.reply(PlatformApiPigeonUtils.wrapResult(data))
               }
             }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.gym_supreme.GymHostApi.setKeepScreenOn$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val onArg = args[0] as Boolean
+            val wrapped: List<Any?> = try {
+              api.setKeepScreenOn(onArg)
+              listOf(null)
+            } catch (exception: Throwable) {
+              PlatformApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
           }
         } else {
           channel.setMessageHandler(null)

@@ -20,6 +20,10 @@ abstract final class Lit {
   static const Color engine = Color(0xFF6D3FE0);
   static const Color core = Color(0xFFFFB78F);
 
+  /// Rest screen: sand, deliberately none of the type colours or PB cyan, so
+  /// a Pull day's rest no longer reads as the Pull set screen it follows.
+  static const Color rest = Color(0xFFE4DDCB);
+
   /// Personal bests only.
   static const Color pb = Color(0xFF19E6FF);
   static const Color pbInk = Color(0xFF06252B);

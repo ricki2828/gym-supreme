@@ -9,6 +9,7 @@ import 'package:gym_engine/gym_engine.dart' as eng;
 import '../screens/live_controller.dart';
 import '../screens/notification_access.dart';
 import 'feature_flags.dart';
+import 'screen_awake.dart';
 import 'services.dart';
 
 /// Phase-1 exit e2e (CI emulator, dogfood/debug only). The real app flow
@@ -82,6 +83,7 @@ class E2eDriver {
     nowMs: () => DateTime.now().millisecondsSinceEpoch,
     tzOffsetMin: DateTime.now().timeZoneOffset.inMinutes,
     appVersion: s.appVersion,
+    awake: s.host == null ? null : HostScreenAwake(s.host!),
   );
 
   /// [command] is `<name>:<nonce>`; the nonce is echoed in every line so the

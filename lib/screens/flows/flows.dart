@@ -23,6 +23,7 @@ import '../live_screen.dart';
 import '../notification_access.dart';
 import '../picker_screen.dart';
 import '../post_workout_screen.dart';
+import '../screen_awake.dart';
 import '../starting_weights_screen.dart';
 import '../view_models.dart';
 import '../weight_list_screen.dart';
@@ -42,6 +43,7 @@ class GymDeps {
     this.notifications,
     this.persist,
     this.health,
+    this.screenAwake,
   }) : nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch),
        tzOffsetMin =
            tzOffsetMin ?? (() => DateTime.now().timeZoneOffset.inMinutes);
@@ -61,6 +63,9 @@ class GymDeps {
   /// without the host call) skips the ask and the banner.
   final NotificationAccess? notifications;
 
+  /// Keeps the screen on during a session (0.3 X1); null in tests.
+  final ScreenAwake? screenAwake;
+
   /// Writes the backup snapshot (AppServices.persist). Called after a delete,
   /// an undo and every edit, so the backup matches the history. Null in tests
   /// that do not care.
@@ -78,6 +83,7 @@ class GymDeps {
   }
 
   LiveController liveController() => LiveController(
+    awake: screenAwake,
     plateMath: Features.plateMath,
     store: store,
     engine: engine,
@@ -993,7 +999,7 @@ class _LiveFlowState extends State<LiveFlow> {
     }
     if (picked == null || !mounted || _leaving) return;
     final last = c.engine.lastTime(gymId: s.gymId, exerciseId: picked.id);
-    final ok = await c.swapCurrent(
+    final result = await c.swapCurrent(
       swapItem(
         picked,
         ex,
@@ -1003,12 +1009,14 @@ class _LiveFlowState extends State<LiveFlow> {
           gymId: s.gymId,
           exerciseId: picked.id,
         ),
+        // The prefill must be a load this gym has (as progression snaps).
+        steps: c.engine.loadSteps(gymId: s.gymId, exerciseId: picked.id),
       ),
       replacingId: ex.exerciseId,
     );
-    if (!ok && mounted && c.lastError == null) {
-      // A save failure shows the error banner instead; this is the case
-      // where the session moved on under the sheet.
+    if (result == SwapResult.moved && mounted) {
+      // A save failure ([SwapResult.failed]) shows the error banner instead;
+      // this is the case where the session moved on under the sheet.
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Not swapped: that exercise has a set logged now.'),
@@ -1281,6 +1289,95 @@ class _GymFlowState extends State<GymFlow> {
     setState(() => _gym = _gym.withWeights(id, list));
   }
 
+  /// The saved copy of the gym being edited, or null (first run, new gym).
+  eng.Gym? get _stored => widget.deps.engine.gym(_gym.id);
+
+  /// Rename now, for a saved gym: only the name is written (an unsaved kit
+  /// tick waits for the floor Save), so history shows the new name at once.
+  Future<void> _rename() async {
+    final text = TextEditingController(text: _gym.name);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename gym'),
+        content: TextField(
+          key: const Key('gym.rename.field'),
+          controller: text,
+          autofocus: true,
+          maxLength: 40,
+          textCapitalization: TextCapitalization.words,
+          onSubmitted: (v) => Navigator.of(ctx).pop(v),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            key: const Key('gym.rename.save'),
+            onPressed: () => Navigator.of(ctx).pop(text.text),
+            child: const Text('Rename'),
+          ),
+        ],
+      ),
+    );
+    // Not disposed here: the dialog is still animating out (as askNumber).
+    final next = name?.trim();
+    if (next == null || next.isEmpty || next == _gym.name || !mounted) return;
+    final stored = _stored;
+    if (stored != null) {
+      widget.deps.engine.saveGym(stored.copyWith(name: next));
+      widget.deps.persist?.call();
+    }
+    setState(() => _gym = _gym.copyWith(name: next));
+  }
+
+  /// Delete a saved gym after a confirm. Its workouts stay in history (with
+  /// "Deleted gym" where its name was). Never the last gym.
+  Future<void> _delete() async {
+    final stored = _stored;
+    final others = [
+      for (final g in widget.deps.engine.gyms())
+        if (g.id != _gym.id) g,
+    ];
+    if (stored == null || others.isEmpty) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete ${stored.name}?'),
+        content: const Text(
+          'Its kit list and weights go. Workouts you logged here stay in '
+          'your history.',
+        ),
+        actions: [
+          TextButton(
+            key: const Key('gym.delete.keep'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep it'),
+          ),
+          TextButton(
+            key: const Key('gym.delete.confirm'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFB3261E),
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    widget.deps.engine.deleteGym(stored.id);
+    widget.deps.persist?.call();
+    // Back to the gym the tab opened on if it is still there.
+    final next = others.firstWhere(
+      (g) => g.id == widget.gym?.id,
+      orElse: () => others.first,
+    );
+    setState(() => _use(next));
+    widget.onSaved(next.id);
+  }
+
   /// Bar weight and plate pairs rows (0.3 P1), only with the flag on and the
   /// kit ticked: a bar shows its weight, the plates their pairs.
   List<PlateRow> _plateRows() {
@@ -1374,6 +1471,8 @@ class _GymFlowState extends State<GymFlow> {
           widget.firstRun || widget.deps.engine.gym(_gym.id) == null
           ? null
           : () => openStartingWeights(context, widget.deps, _gym.id),
+      onRename: _stored == null ? null : _rename,
+      onDelete: _stored == null || gyms.length < 2 ? null : _delete,
       onPickGym: (id) => setState(() {
         _use(widget.deps.engine.gym(id) ?? _gym);
       }),

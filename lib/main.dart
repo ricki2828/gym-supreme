@@ -6,6 +6,7 @@ import 'app/diagnostics_screen.dart';
 import 'app/e2e_driver.dart';
 import 'app/feature_flags.dart';
 import 'app/flavor.dart';
+import 'app/screen_awake.dart';
 import 'app/services.dart';
 import 'app/workout_port.dart';
 import 'screens/flows/flows.dart';
@@ -150,6 +151,7 @@ class _GymSupremeAppState extends State<GymSupremeApp> {
           // Cut 2: history for ghost + rotation (hidden while flags are off).
           store: s.store,
           notifications: s.notifications,
+          screenAwake: s.host == null ? null : HostScreenAwake(s.host!),
           // Delete, undo and every edit refresh the backup snapshot.
           persist: s.persist,
           // 0.3 H1: finish, edit, delete and undo keep Health Connect in step.

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_supreme/screens/live_screen.dart';
 import 'package:gym_supreme/screens/view_models.dart';
+import 'package:supreme_ui/supreme_ui.dart';
 
 import 'fixtures.dart';
 import 'live_fixtures.dart';
@@ -97,6 +98,117 @@ void main() {
     }
     await tester.tap(find.text('DONE'));
     expect(done, 1);
+  });
+
+  testWidgets('starting weight (S1): a changed load says first time', (
+    tester,
+  ) async {
+    phone(tester);
+    await tester.pumpWidget(
+      app(
+        LiveScreen(
+          view: liveView(
+            loadG: 22000, // he stepped up from his typed 20
+            targetLoadG: null,
+            startingWeightG: 20000,
+          ),
+        ),
+      ),
+    );
+    expect(find.text('10 × 22 kg ea, first time'), findsOneWidget);
+    expect(find.textContaining('starting weight,'), findsNothing);
+  });
+
+  testWidgets('rest is its own colour, never a session type colour', (
+    tester,
+  ) async {
+    phone(tester);
+    for (final type in WorkoutType.values) {
+      await tester.pumpWidget(
+        app(LiveScreen(view: liveView(restLeftS: 60, type: type))),
+      );
+      final bg = tester.widget<Scaffold>(find.byType(Scaffold)).backgroundColor;
+      expect(Lit.sessionTypes, isNot(contains(bg)), reason: type.name);
+      expect(bg, isNot(Lit.pb));
+      expect(bg, Lit.rest);
+    }
+  });
+
+  group('rest screen: edit the next set (X1)', () {
+    testWidgets('reps and load steppers act on the next set', (tester) async {
+      phone(tester);
+      final reps = <int>[];
+      final load = <int>[];
+      await tester.pumpWidget(
+        app(
+          LiveScreen(
+            view: liveView(restLeftS: 60),
+            onReps: reps.add,
+            onLoad: load.add,
+            onSkipRest: () {},
+          ),
+        ),
+      );
+      expect(find.text('NEXT · SET 3 OF 3'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.bySemanticsLabel('More kilograms'),
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.bySemanticsLabel('More reps'));
+      await tester.tap(find.bySemanticsLabel('Less reps'));
+      await tester.tap(find.bySemanticsLabel('More kilograms'));
+      await tester.tap(find.bySemanticsLabel('Less kilograms'));
+      expect(reps, [1, -1]);
+      expect(load, [1, -1]);
+    });
+
+    testWidgets('not offered for a timer block or without handlers', (
+      tester,
+    ) async {
+      phone(tester);
+      await tester.pumpWidget(
+        app(
+          LiveScreen(
+            view: liveView(restLeftS: 60, timerBlock: true),
+            onReps: (_) {},
+            onLoad: (_) {},
+          ),
+        ),
+      );
+      expect(find.bySemanticsLabel('More reps'), findsNothing);
+      await tester.pumpWidget(app(LiveScreen(view: liveView(restLeftS: 60))));
+      expect(find.bySemanticsLabel('More reps'), findsNothing);
+    });
+
+    testWidgets('fits 320x580 at 1.3x text with no overflow', (tester) async {
+      tester.view.physicalSize = const Size(640, 1160);
+      tester.view.devicePixelRatio = 2.0;
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pumpWidget(
+        app(
+          LiveScreen(
+            view: liveView(restLeftS: 60),
+            onReps: (_) {},
+            onLoad: (_) {},
+            onSkipRest: () {},
+            onRestDelta: (_) {},
+            onFinish: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.scrollUntilVisible(
+        find.bySemanticsLabel('More kilograms'),
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.bySemanticsLabel('More kilograms'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 
   testWidgets('cold start: Done waits for a weight', (tester) async {

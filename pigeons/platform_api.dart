@@ -75,6 +75,14 @@ abstract class GymHostApi {
   /// picker is open, the call returns null.
   @async
   String? pickImportFile();
+
+  /// Keep the screen on while a workout is being logged (0.3 X1): adds or
+  /// clears FLAG_KEEP_SCREEN_ON on the activity window. Dart turns it on when
+  /// a session starts or resumes and off when it pauses, finishes or is
+  /// discarded (and when the controller goes away). Needs no permission and
+  /// never fails; it logs `keep_screen_on` with `on` for CI. Calls with the
+  /// current value are fine (idempotent).
+  void setKeepScreenOn(bool on);
 }
 
 /// Cut-1 live workout contract (t3x decision 23-Nov, integration doc ruling 1).
