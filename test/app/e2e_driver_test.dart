@@ -201,6 +201,91 @@ void main() {
     expect(e2['deleted'], [d['deleted']]);
   });
 
+  test('export_dump then import.<bundle> on a fresh store: same digest, '
+      'tombstone not resurrected, re-import adds 0', () async {
+    final a = SqliteStore.inMemory();
+    addTearDown(a.close);
+    final sa = services(a, AlertingStubPort());
+    final lines = <String>[];
+    await E2eDriver(sa, out: lines.add).run('delete:d1');
+    await E2eDriver(sa, out: lines.add).run('delete:d2');
+    final gone = [
+      for (final m in lines.map(step))
+        if (m['step'] == 'delete') m['deleted'],
+    ];
+    lines.clear();
+    await E2eDriver(sa, out: lines.add).run('export_dump:x');
+    final dump = lines.map(step).firstWhere((m) => m['step'] == 'export_dump');
+    expect(dump['count'], 2);
+    final chunks = [
+      for (final m in lines.map(step))
+        if (m['step'] == 'chunk') m,
+    ];
+    expect(chunks, hasLength(dump['chunks']));
+    for (final c in chunks) {
+      expect((c['data'] as String).length, lessThanOrEqualTo(600));
+    }
+    final b64 = chunks.map((c) => c['data']).join();
+    expect(b64.length, dump['chars']);
+    expect(b64, isNot(contains(':')), reason: 'the command splits on ":"');
+
+    final b = SqliteStore.inMemory();
+    addTearDown(b.close);
+    final sb = services(b, AlertingStubPort());
+    lines.clear();
+    await E2eDriver(sb, out: lines.add).run('import.$b64:y');
+    expect(lines.map(step).last['step'], 'ok', reason: lines.join('\n'));
+    final imp = lines.map(step).firstWhere((m) => m['step'] == 'import');
+    expect(imp['added'], 2);
+    expect(imp['preview_added'], 2);
+    expect(imp['digest'], dump['digest']);
+    expect(imp['count'], 2);
+    final uuids = [for (final h in sb.engine.history()) h.uuid];
+    for (final u in gone) {
+      expect(uuids, isNot(contains(u)));
+    }
+    lines.clear();
+    await E2eDriver(sb, out: lines.add).run('import.$b64:z');
+    final again = lines.map(step).firstWhere((m) => m['step'] == 'import');
+    expect(again['added'], 0);
+    expect(again['skipped_existing'], 2);
+    expect(again['digest'], dump['digest']);
+    // Tombstone: delete one here, import again: it stays deleted.
+    lines.clear();
+    await E2eDriver(sb, out: lines.add).run('delete_one:t');
+    final del = lines.map(step).firstWhere((m) => m['step'] == 'delete_one');
+    expect(del['count'], 1);
+    lines.clear();
+    await E2eDriver(sb, out: lines.add).run('import.$b64:u');
+    final third = lines.map(step).firstWhere((m) => m['step'] == 'import');
+    expect(third['added'], 0);
+    expect(third['skipped_deleted'], 1);
+    expect(third['skipped_existing'], 1);
+    expect(third['count'], 1);
+    expect(third['digest'], del['digest']);
+    expect(
+      sb.engine.history().map((h) => h.uuid),
+      isNot(contains(del['deleted'])),
+    );
+  });
+
+  test('an error line puts the error first and cuts a long command', () async {
+    final b = SqliteStore.inMemory();
+    addTearDown(b.close);
+    final lines = <String>[];
+    await E2eDriver(
+      services(b, AlertingStubPort()),
+      out: lines.add,
+    ).run('import.${'A' * 5000}:e');
+    final m = step(lines.single);
+    expect(m['step'], 'error');
+    expect(
+      m.keys.toList().indexOf('error'),
+      lessThan(m.keys.toList().indexOf('command')),
+    );
+    expect((m['command'] as String).length, lessThan(50));
+  });
+
   test('history lists stored workouts for the restore drill', () async {
     final store = SqliteStore.inMemory();
     addTearDown(store.close);

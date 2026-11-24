@@ -157,6 +157,17 @@ void main() {
         device: device,
       ),
     ),
+    'diagnostics (import)': Scaffold(
+      body: DiagnosticsPanel(
+        appVersion: 'x',
+        gate: gate,
+        native: native,
+        device: device,
+        onExportJson: noop,
+        onExportCsv: noop,
+        onImport: noop,
+      ),
+    ),
   };
 
   for (final e in screens.entries) {
