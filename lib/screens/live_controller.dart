@@ -308,7 +308,9 @@ class LiveController extends ChangeNotifier {
     });
     // Only an attempted submit can fail; a stale error from an earlier tap
     // must not turn "the session moved on" into "failed".
-    if (!swapped) return SwapResult.moved;
+    // A quiet stale-rev catch-up (a lock-screen tap won) dropped the swap:
+    // the session moved on under the sheet, not a save failure.
+    if (!swapped || _caughtUp) return SwapResult.moved;
     return lastError == null ? SwapResult.swapped : SwapResult.failed;
   }
 

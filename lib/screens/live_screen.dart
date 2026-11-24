@@ -1089,7 +1089,6 @@ class _RestScreen extends StatelessWidget {
               style: LitType.display(40, ink),
             ),
             Text(next.toUpperCase(), style: LitType.display(40, ink)),
-            ?nextEdit,
             const SizedBox(height: 20),
             Row(
               children: [
@@ -1116,6 +1115,13 @@ class _RestScreen extends StatelessWidget {
                 ),
               ],
             ),
+            // Below Skip rest, so editing the next set never pushes it off a
+            // small screen (the UI e2e looks for it).
+            if (nextEdit != null) ...[
+              const SizedBox(height: 14),
+              Text('CHANGE THE NEXT SET', style: LitType.cap(13, ink)),
+              nextEdit!,
+            ],
             if ((view.undoLabel != null && onUndo != null) || onDoLater != null)
               Align(
                 alignment: Alignment.centerLeft,

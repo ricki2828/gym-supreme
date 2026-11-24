@@ -185,6 +185,27 @@ void main() {
     expect(find.byKey(const Key('gym.delete')), findsNothing);
   });
 
+  testWidgets('Rename and Delete fit 320x580 at 1.3x text', (tester) async {
+    tester.view.physicalSize = const Size(640, 1160);
+    tester.view.devicePixelRatio = 2.0;
+    tester.view.padding = const FakeViewPadding(top: 48);
+    tester.view.viewPadding = const FakeViewPadding(top: 48);
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GymFlow(deps: deps, gym: away, onSaved: saved.add),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    final rename = tester.getRect(find.byKey(const Key('gym.rename')));
+    final delete = tester.getRect(find.byKey(const Key('gym.delete')));
+    expect(delete.right, lessThanOrEqualTo(320));
+    expect(rename.overlaps(delete), isFalse, reason: 'wraps, never overlaps');
+  });
+
   testWidgets('first run: no rename, no delete', (tester) async {
     phone(tester);
     await tester.pumpWidget(

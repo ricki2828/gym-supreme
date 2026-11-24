@@ -125,6 +125,29 @@ void main() {
     expect(logged.loadG, c.snapshot!.exercises.first.sets[1].loadG);
   });
 
+  test(
+    '+/- on a rest that already ended changes nothing and sends nothing',
+    () async {
+      await startPush();
+      await c.load(1);
+      await c.done();
+      final rest = c.snapshot!.rest!;
+      final rev = port.rev;
+      // The rest ended 40 s ago (he was away from the screen).
+      now = rest.endsAtWallMs + 40000;
+      await c.restDelta(15);
+      await c.restDelta(30);
+      expect(port.rev, rev, reason: 'no submit, so no fresh alert is armed');
+      expect(c.snapshot!.rest!.endsAtWallMs, rest.endsAtWallMs);
+      expect(c.lastError, isNull);
+      // While it still runs, it moves as before.
+      now = rest.endsAtWallMs - 10000;
+      await c.restDelta(15);
+      expect(c.snapshot!.rest!.endsAtWallMs, rest.endsAtWallMs + 15000);
+      expect(port.rev, rev + 1);
+    },
+  );
+
   test('rest ±15 and skip', () async {
     await startPush();
     await c.load(1);

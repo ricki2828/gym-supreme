@@ -163,7 +163,7 @@ class GymSetupScreen extends StatelessWidget {
                     onAdd: onAddGym,
                   ),
                   if (onRename != null || onDelete != null)
-                    Row(
+                    Wrap(
                       children: [
                         if (onRename != null)
                           TextButton.icon(
