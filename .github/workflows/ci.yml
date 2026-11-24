@@ -25,6 +25,7 @@ env:
   DOGFOOD_PKG: app.gymsupreme.dogfood
   # Cut-2 features compiled ON in the dogfood build (lib/app/feature_flags.dart). Set with the repo
   # variable GS_FEATURES (e.g. ghost,rotation) only on t3x's call; empty = all off (APK 0.1).
+  # build-dogfood and emulator replace it with tools/ci_features.sh (pull requests add lockdone).
   GS_FEATURES: ${{ vars.GS_FEATURES || '' }}
   # Pinned base for the schema v1 -> v2 migration install-over (API 36 emulator job). A real 0.2.0
   # (schema v1) APK; dogfood-latest is already v2 so it cannot prove the migration.
@@ -216,6 +217,11 @@ jobs:
       has_prev: ${{ steps.prev.outputs.has_prev }}
     steps:
       - uses: actions/checkout@v4
+      - name: Effective GS_FEATURES (pull requests add lockdone; main keeps the repo variable)
+        run: |
+          f="$(tools/ci_features.sh)"
+          echo "GS_FEATURES=$f" >> "$GITHUB_ENV"
+          echo "GS_FEATURES for this ${{ github.event_name }} build: '${f:-none (all off)}' (repo variable: '${GS_FEATURES}')"
       - name: Free runner disk
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift
@@ -343,6 +349,11 @@ jobs:
         api-level: [29, 33, 34, 36]
     steps:
       - uses: actions/checkout@v4
+      - name: Effective GS_FEATURES (pull requests add lockdone; main keeps the repo variable)
+        run: |
+          f="$(tools/ci_features.sh)"
+          echo "GS_FEATURES=$f" >> "$GITHUB_ENV"
+          echo "GS_FEATURES for this ${{ github.event_name }} build: '${f:-none (all off)}' (repo variable: '${GS_FEATURES}')"
       - name: Download this run's dogfood x64 APK (and build N-1)
         env:
           GH_TOKEN: ${{ github.token }}
