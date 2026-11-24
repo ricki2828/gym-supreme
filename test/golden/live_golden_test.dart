@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_supreme/screens/live_screen.dart';
+import 'package:gym_supreme/screens/view_models.dart';
 import 'package:supreme_ui/supreme_ui.dart';
 
 import '../screens/fixtures.dart';
@@ -47,6 +48,16 @@ void main() {
     (t) => shot(t, 'cold_start', liveView(loadG: 12000, targetLoadG: null)),
   );
   testWidgets('rest', (t) => shot(t, 'rest', liveView(restLeftS: 75)));
+  // X1: rest used to be the Pull blue, so on a Pull day it looked like the
+  // set screen it follows.
+  testWidgets(
+    'rest on a Pull day',
+    (t) => shot(
+      t,
+      'rest_pull',
+      liveView(restLeftS: 75, type: WorkoutType.pull, name: 'Lat pulldown'),
+    ),
+  );
   testWidgets('all done', (t) => shot(t, 'all_done', liveView(allDone: true)));
   testWidgets(
     'set at 1.3x text',

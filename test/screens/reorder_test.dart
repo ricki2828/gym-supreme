@@ -343,5 +343,33 @@ void main() {
       expect(find.byKey(const Key('live.do_later')), findsNothing);
       expect(find.text('ORDER · DRAG TO REORDER'), findsNothing);
     });
+
+    testWidgets('the row-0 handle is dead while a timer block runs', (
+      tester,
+    ) async {
+      phone(tester);
+      Future<int> handles({required bool timer}) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: LiveScreen(
+              view: liveView(timerBlock: timer),
+              onReorder: (_, _) {},
+              onFinish: () {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await reveal(tester, find.text('NOW'));
+        return find.byType(ReorderableDragStartListener).evaluate().length;
+      }
+
+      final all = await handles(timer: false);
+      expect(all, liveView().queue.length);
+      expect(await handles(timer: true), all - 1, reason: 'row 0 locked');
+      expect(
+        find.bySemanticsLabel(RegExp('timer running, cannot be moved')),
+        findsOneWidget,
+      );
+    });
   });
 }

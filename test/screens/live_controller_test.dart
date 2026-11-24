@@ -97,6 +97,34 @@ void main() {
     expect(port.rev, rev);
   });
 
+  test('edit the next set while resting: rest keeps running', () async {
+    await startPush();
+    await c.load(1);
+    await c.done();
+    final rest = c.snapshot!.rest!;
+    final set = c.snapshot!.currentSet!;
+    final reps = c.view()!.reps;
+    final load = c.view()!.loadG;
+    await c.reps(2);
+    await c.load(1);
+    expect(c.lastError, isNull);
+    expect(c.snapshot!.currentSet!.setId, set.setId, reason: 'the next set');
+    expect(c.view()!.reps, reps + 2);
+    expect(c.view()!.loadG, isNot(load));
+    expect(c.view()!.restLeftS, isNotNull, reason: 'still resting');
+    expect(
+      c.snapshot!.rest!.endsAtWallMs,
+      rest.endsAtWallMs,
+      reason: 'unmoved',
+    );
+    // Done then logs what he set for it.
+    await c.skipRest();
+    await c.done();
+    final logged = c.snapshot!.exercises.first.sets[1];
+    expect(logged.reps, reps + 2);
+    expect(logged.loadG, c.snapshot!.exercises.first.sets[1].loadG);
+  });
+
   test('rest ±15 and skip', () async {
     await startPush();
     await c.load(1);
@@ -555,16 +583,45 @@ void main() {
     final cur = s0.exercises.first;
     final kit = engine.gym(gymId)!.equipmentIds;
     final opt = swapCandidates(catalog, s0, cur.exerciseId, kit).first;
-    final ok = await c.swapCurrent(
+    final r = await c.swapCurrent(
       swapItem(opt, cur),
       replacingId: 'something-else',
     );
-    expect(ok, isFalse);
+    expect(r, SwapResult.moved);
     expect(c.snapshot!.exercises.first.exerciseId, cur.exerciseId);
     expect(
       await c.swapCurrent(swapItem(opt, cur), replacingId: cur.exerciseId),
-      isTrue,
+      SwapResult.swapped,
     );
+  });
+
+  test('swapCurrent says swapped, moved or failed', () async {
+    await startPush();
+    final s0 = c.snapshot!;
+    final cur = s0.exercises.first;
+    final kit = engine.gym(gymId)!.equipmentIds;
+    final opts = swapCandidates(catalog, s0, cur.exerciseId, kit);
+    // failed: the save is refused, the exercise is unchanged, the banner has
+    // the reason.
+    port.failNext['submitSnapshot'] = WorkoutPortException('io');
+    expect(await c.swapCurrent(swapItem(opts.first, cur)), SwapResult.failed);
+    expect(c.lastError, isA<WorkoutPortException>());
+    expect(c.snapshot!.exercises.first.exerciseId, cur.exerciseId);
+    // swapped
+    expect(await c.swapCurrent(swapItem(opts.first, cur)), SwapResult.swapped);
+    expect(c.lastError, isNull);
+    expect(c.snapshot!.exercises.first.exerciseId, opts.first.id);
+    // moved: a set is logged now, so the engine refuses; a stale error from
+    // an earlier tap does not turn that into "failed".
+    await c.load(1);
+    await c.done();
+    port.failNext['submitSnapshot'] = WorkoutPortException('io');
+    await c.reps(1); // leaves lastError set
+    expect(c.lastError, isNotNull);
+    final r = await c.swapCurrent(
+      swapItem(opts.last, c.snapshot!.exercises.first),
+    );
+    expect(r, SwapResult.moved);
   });
 
   test('swap candidates exclude timed and distance; from timed uses reps', () {

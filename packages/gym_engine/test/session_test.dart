@@ -305,6 +305,20 @@ void main() {
     expect(s.exercises[0].sets[1].startedAtMs, t0 + 80000);
   });
 
+  test('extendRest moves a running rest; an ended rest is left alone', () {
+    final s = Session.done(start(), 'u:0', nowMs: t0 + 1000);
+    final end = s.rest!.endsAtWallMs;
+    final more = Session.extendRest(s, 30000, nowMs: end - 5000);
+    expect(more.rest!.endsAtWallMs, end + 30000);
+    expect(more.rev, s.rev + 1);
+    final less = Session.extendRest(s, -15000, nowMs: end - 5000);
+    expect(less.rest!.endsAtWallMs, end - 5000, reason: 'clamped to now');
+    // Ended 31 s ago: +30 s does nothing (no new rest, no rev, no alert).
+    expect(Session.extendRest(s, 30000, nowMs: end + 31000), same(s));
+    // Ended exactly now: also nothing.
+    expect(Session.extendRest(s, 15000, nowMs: end), same(s));
+  });
+
   test('done can log an explicit null load; omitted = target', () {
     var s = Session.done(start(), 'u:0', nowMs: t0 + 1, loadG: null);
     expect(s.exercises[0].sets[0].loadG, isNull);

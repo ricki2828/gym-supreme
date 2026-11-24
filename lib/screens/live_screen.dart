@@ -346,7 +346,22 @@ class LiveScreen extends StatelessWidget {
         onReorder: onReorder,
         onDoLater: view.canDoLater ? onDoLater : null,
         onUndo: onUndo,
-        finishBar: _finishBar(context, Lit.ink, Lit.pull),
+        // Edit the next set while resting (X1): the current set is the next
+        // one, so the same steppers apply. Not for a timer block.
+        nextEdit: view.timerBlock || (onReps == null && onLoad == null)
+            ? null
+            : Column(
+                children: [
+                  const SizedBox(height: 10),
+                  _repsStepper(context, ink: Lit.ink, bg: Lit.rest, size: 56),
+                  if (view.unit == LoadUnit.kg ||
+                      view.unit == LoadUnit.kgEach) ...[
+                    const SizedBox(height: 6),
+                    _loadStepper(context, ink: Lit.ink, bg: Lit.rest, size: 56),
+                  ],
+                ],
+              ),
+        finishBar: _finishBar(context, Lit.ink, Lit.rest),
       );
     }
     final bg = view.type?.colour ?? Lit.ground;
@@ -378,72 +393,11 @@ class LiveScreen extends StatelessWidget {
                   ),
                   if (!blockUi) ...[
                     const SizedBox(height: 14),
-                    _Stepper(
-                      value: view.unit == LoadUnit.timed
-                          ? clock(view.reps)
-                          : '${view.reps}',
-                      unit: view.unit == LoadUnit.timed ? 'SEC' : 'REPS',
-                      size: 96,
-                      ink: ink,
-                      bg: bg,
-                      label: view.unit == LoadUnit.timed ? 'seconds' : 'reps',
-                      onMinus: onReps == null || view.reps <= 1
-                          ? null
-                          : () => onReps!(-1),
-                      onPlus: onReps == null ? null : () => onReps!(1),
-                      onEdit: onTypeReps == null
-                          ? null
-                          : () async {
-                              final timed = view.unit == LoadUnit.timed;
-                              final forSet = view.setId;
-                              final v = await askNumber(
-                                context,
-                                title: timed ? 'Seconds' : 'Reps',
-                                unit: timed ? 'sec' : 'reps',
-                                initial: view.reps,
-                                max: timed ? 3600 : 200,
-                              );
-                              if (v != null && v >= 1) {
-                                onTypeReps!(v.round(), forSet);
-                              }
-                            },
-                    ),
+                    _repsStepper(context, ink: ink, bg: bg, size: 96),
                     if (view.unit == LoadUnit.kg ||
                         view.unit == LoadUnit.kgEach) ...[
                       const SizedBox(height: 8),
-                      _Stepper(
-                        value: view.loadG == null ? '–' : kg(view.loadG!),
-                        unit: view.unit == LoadUnit.kgEach ? 'KG EA' : 'KG',
-                        size: 150,
-                        ink: ink,
-                        bg: bg,
-                        label: 'kilograms',
-                        onMinus: onLoad == null || !view.canLoadDown
-                            ? null
-                            : () => onLoad!(-1),
-                        onPlus: onLoad == null || !view.canLoadUp
-                            ? null
-                            : () => onLoad!(1),
-                        onEdit: onTypeLoad == null
-                            ? null
-                            : () async {
-                                final forSet = view.setId;
-                                final v = await askNumber(
-                                  context,
-                                  title: view.unit == LoadUnit.kgEach
-                                      ? 'Kilograms, each'
-                                      : 'Kilograms',
-                                  unit: 'kg',
-                                  initial: view.loadG == null
-                                      ? null
-                                      : view.loadG! / 1000,
-                                  decimals: true,
-                                );
-                                if (v != null) {
-                                  onTypeLoad!((v * 1000).round(), forSet);
-                                }
-                              },
-                      ),
+                      _loadStepper(context, ink: ink, bg: bg, size: 150),
                     ],
                     const SizedBox(height: 10),
                     Text(
@@ -499,6 +453,7 @@ class LiveScreen extends StatelessWidget {
                     PlanList(
                       items: view.queue,
                       markFirst: true,
+                      lockFirst: view.timerBlock,
                       onReorder: onReorder,
                       ruleColour: ink.withValues(alpha: 0.25),
                     ),
@@ -515,6 +470,74 @@ class LiveScreen extends StatelessWidget {
     );
   }
 
+  /// The reps (or seconds) stepper for the current set: the set screen at 96,
+  /// and under NEXT on the rest screen (the next set is the current one).
+  Widget _repsStepper(
+    BuildContext context, {
+    required Color ink,
+    required Color bg,
+    required double size,
+  }) => _Stepper(
+    value: view.unit == LoadUnit.timed ? clock(view.reps) : '${view.reps}',
+    unit: view.unit == LoadUnit.timed ? 'SEC' : 'REPS',
+    size: size,
+    ink: ink,
+    bg: bg,
+    label: view.unit == LoadUnit.timed ? 'seconds' : 'reps',
+    onMinus: onReps == null || view.reps <= 1 ? null : () => onReps!(-1),
+    onPlus: onReps == null ? null : () => onReps!(1),
+    onEdit: onTypeReps == null
+        ? null
+        : () async {
+            final timed = view.unit == LoadUnit.timed;
+            final forSet = view.setId;
+            final v = await askNumber(
+              context,
+              title: timed ? 'Seconds' : 'Reps',
+              unit: timed ? 'sec' : 'reps',
+              initial: view.reps,
+              max: timed ? 3600 : 200,
+            );
+            if (v != null && v >= 1) {
+              onTypeReps!(v.round(), forSet);
+            }
+          },
+  );
+
+  /// The load stepper for the current set (kg or kg each).
+  Widget _loadStepper(
+    BuildContext context, {
+    required Color ink,
+    required Color bg,
+    required double size,
+  }) => _Stepper(
+    value: view.loadG == null ? '–' : kg(view.loadG!),
+    unit: view.unit == LoadUnit.kgEach ? 'KG EA' : 'KG',
+    size: size,
+    ink: ink,
+    bg: bg,
+    label: 'kilograms',
+    onMinus: onLoad == null || !view.canLoadDown ? null : () => onLoad!(-1),
+    onPlus: onLoad == null || !view.canLoadUp ? null : () => onLoad!(1),
+    onEdit: onTypeLoad == null
+        ? null
+        : () async {
+            final forSet = view.setId;
+            final v = await askNumber(
+              context,
+              title: view.unit == LoadUnit.kgEach
+                  ? 'Kilograms, each'
+                  : 'Kilograms',
+              unit: 'kg',
+              initial: view.loadG == null ? null : view.loadG! / 1000,
+              decimals: true,
+            );
+            if (v != null) {
+              onTypeLoad!((v * 1000).round(), forSet);
+            }
+          },
+  );
+
   String _doneSub() {
     if (view.blockTitle != null) return view.blockTitle!;
     final load = loadLabel(view.loadG, view.unit);
@@ -526,7 +549,9 @@ class LiveScreen extends StatelessWidget {
         : (load.isEmpty ? '$work reps' : '$work × $load');
     if (view.coldStart) {
       if (view.loadG == null) return 'Set a weight first';
-      return view.startingWeightG != null
+      // "starting weight" only while the load is still it; once he has
+      // changed the load it is a first time at a new weight.
+      return view.startingWeightG != null && view.loadG == view.startingWeightG
           ? '$what, starting weight'
           : '$what, first time';
     }
@@ -1001,7 +1026,11 @@ class _RestScreen extends StatelessWidget {
     this.onDoLater,
     this.onUndo,
     this.finishBar,
+    this.nextEdit,
   });
+
+  /// Steppers for the next set's reps and load; null hides them.
+  final Widget? nextEdit;
   final LiveView view;
   final ValueChanged<int>? onRestDelta;
   final VoidCallback? onSkipRest;
@@ -1012,7 +1041,7 @@ class _RestScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const bg = Lit.pull;
+    const bg = Lit.rest;
     const ink = Lit.ink;
     final left = view.restLeftS!;
     final load = loadLabel(view.loadG, view.unit);
@@ -1060,6 +1089,7 @@ class _RestScreen extends StatelessWidget {
               style: LitType.display(40, ink),
             ),
             Text(next.toUpperCase(), style: LitType.display(40, ink)),
+            ?nextEdit,
             const SizedBox(height: 20),
             Row(
               children: [
@@ -1103,6 +1133,7 @@ class _RestScreen extends StatelessWidget {
               PlanList(
                 items: view.queue,
                 markFirst: true,
+                lockFirst: view.timerBlock,
                 onReorder: onReorder,
                 ruleColour: ink.withValues(alpha: 0.25),
               ),

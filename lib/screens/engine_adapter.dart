@@ -22,6 +22,11 @@ WorkoutType? workoutTypeOf(String? typeId) => switch (typeId) {
   _ => null,
 };
 
+/// A workout's gym name for display. The engine gives '' once the gym was
+/// deleted (the workout and its sets are kept), so say so rather than leave
+/// a hole after the date.
+String gymLabel(String name) => name.isEmpty ? 'Deleted gym' : name;
+
 LoadUnit unitOf(eng.LoadUnit u) => switch (u) {
   eng.LoadUnit.kg => LoadUnit.kg,
   eng.LoadUnit.ea => LoadUnit.kgEach,
@@ -236,7 +241,7 @@ PostWorkoutView postWorkoutViewOf(
   required Map<String, LoadUnit> unitByExercise,
 }) => PostWorkoutView(
   type: workoutTypeOf(row.typeId),
-  gymName: row.gymName,
+  gymName: gymLabel(row.gymName),
   durationS: s.durationMs ~/ 1000,
   volumeKg: s.volumeKg,
   volumeDeltaPct: s.volumeDeltaPct,
@@ -261,7 +266,7 @@ PostWorkoutView postWorkoutViewOf(
 HistoryRowView historyRowOf(eng.HistoryRow r) => HistoryRowView(
   uuid: r.uuid,
   startedAt: localOf(r.startedAtMs, r.tzOffsetMin),
-  gymName: r.gymName,
+  gymName: gymLabel(r.gymName),
   type: workoutTypeOf(r.typeId),
   durationS: r.durationMs ~/ 1000,
   volumeKg: r.volumeKg,
@@ -464,7 +469,7 @@ WorkoutDetailView workoutDetailOf(
     edited: w.editedAtMs != null,
     type: workoutTypeOf(w.typeId),
     startedAt: localOf(w.startedAtMs, w.tzOffsetMin),
-    gymName: gymName,
+    gymName: gymLabel(gymName),
     durationS: w.durationMs ~/ 1000,
     volumeKg: w.volumeGReps / 1000,
     lifts: lifts,

@@ -274,6 +274,25 @@ void main() {
     expect(await port.readPendingJournal(), isNull);
   });
 
+  test('a colliding Finish never shows a stale-rev error on the way', () async {
+    final c = await started();
+    final seen = <Object?>[];
+    c.addListener(() => seen.add(c.lastError));
+    port.collisions = 1;
+    expect(await c.finish(), isNotNull);
+    expect(seen, isNotEmpty, reason: 'the catch-up notified');
+    expect(seen.whereType<Object>(), isEmpty, reason: 'no banner flash');
+  });
+
+  test('a colliding Pause never shows a stale-rev error on the way', () async {
+    final c = await started();
+    final seen = <Object?>[];
+    c.addListener(() => seen.add(c.lastError));
+    port.collisions = 1;
+    expect(await c.pause(), isTrue);
+    expect(seen.whereType<Object>(), isEmpty, reason: 'no banner flash');
+  });
+
   test('Finish colliding twice says so and works on the next tap', () async {
     final c = await started();
     port.collisions = 2;
