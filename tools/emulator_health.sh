@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Health Connect drill (0.3 H1), after tools/emulator_smoke.sh on the same emulator.
 # `health` on (pull requests, tools/ci_features.sh):
-#  - API 34+ (Health Connect is part of Android): grant WRITE_EXERCISE with pm grant (the
-#    permission screen cannot be tapped in CI), then the e2e `health` command turns the switch on
+#  - API 34+ (Health Connect is part of Android): `health_ask` turns the switch on from scratch;
+#    the permission screen must open in front of the app (it cannot be tapped in CI, so the script
+#    grants WRITE_EXERCISE with pm grant and backs out), and Kotlin must then report it granted and
+#    the switch on. Then the e2e `health` command
 #    and finishes, edits, deletes, undoes and backfills one workout through HealthSync. Kotlin must
 #    answer `ok` to every write (finish, edit, undo, backfill) and to the delete. Read-back is not
 #    possible: the app declares no read permission (the gate allows exactly WRITE_EXERCISE).
@@ -14,12 +16,10 @@ set -euo pipefail
 PKG="${1:?package}"
 . "$(dirname "$0")/emulator_common.sh"
 sdk="$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
-flag_on() {
-  local x
-  for x in $(tr ',' ' ' <<< "${GS_FEATURES:-}"); do
-    [ "$x" = "all" ] && return 0
-    [ "$x" = "$1" ] && return 0
-  done
+flag_on() { # like core/flags/FeatureSet: `all` only as the whole string, else trimmed names
+  local raw="${GS_FEATURES:-}" x
+  [ "$raw" = "all" ] && return 0
+  for x in $(tr ',' ' ' <<< "$raw"); do [ "$x" = "$1" ] && return 0; done
   return 1
 }
 health=0; flag_on health && health=1
@@ -39,11 +39,36 @@ e2e_wait() { # e2e_wait <step> <seconds>
   done
   echo "::error::API $sdk health: no $1 step within $2 s" >&2; e2e_lines | tail -n 12 >&2; timeout 60 adb logcat -d | tail -n 60 >&2; exit 1
 }
-str_of() { sed -n "s/.*\"$1\":\"\([^\"]*\)\".*/\1/p" | head -1; }
-step() { e2e_lines | grep "\"step\":\"$1\"" | tail -1; }
+str_of() { sed -n "s/.*\"$1\":\"\([^\"]*\)\".*/\1/p" | head -1 || true; }
+step() { e2e_lines | grep "\"step\":\"$1\"" | tail -1 || true; }
 
 if [ "$health" = 1 ] && [ "$sdk" -ge 34 ]; then
+  # The permission screen, from the switch (review P1, PR #61: Android 14+ asks via
+  # requestPermissions, not the client's androidx contract).
+  adb shell pm revoke "$PKG" android.permission.health.WRITE_EXERCISE > /dev/null 2>&1 || true
+  adb logcat -c || true
+  e2e_cmd health_ask
+  shown=""
+  for i in $(seq 1 30); do
+    shown="$(svc_lines | grep -oE '\{"event":"health_permission(_shown|_error)"[^}]*\}' | tail -1 || true)"
+    [ -n "$shown" ] && break
+    sleep 1
+  done
+  echo "H1 API $sdk: $shown"
+  grep -q 'health_permission_shown' <<< "$shown" || { echo "::error::API $sdk health: the switch did not open the permission screen" >&2; svc_lines | tail -n 20 >&2; exit 1; }
+  sleep 3
+  focus="$(adb shell dumpsys window | tr -d '\r' | grep -m1 -E 'mCurrentFocus' || true)"
+  echo "H1 API $sdk: focus $focus"
+  grep -qiE 'permissioncontroller|healthconnect|health' <<< "$focus" || { echo "::error::API $sdk health: no permission screen in front ($focus)" >&2; exit 1; }
+  ! svc_lines | grep -q '"event":"health_permission_error"' || { echo "::error::API $sdk health: permission request threw" >&2; exit 1; }
   echo "pm grant WRITE_EXERCISE: $(adb shell pm grant "$PKG" android.permission.health.WRITE_EXERCISE 2>&1 | tr -d '\r' || true)"
+  adb shell input keyevent KEYCODE_BACK
+  e2e_wait health_asked 30
+  asked="$(step health_asked)"
+  echo "H1 API $sdk: after the screen: $asked"
+  svc_lines | grep -F '"event":"health_permission"' | grep -q '"asked":true' || { echo "::error::API $sdk health: no health_permission asked=true line" >&2; exit 1; }
+  grep -q '"granted":true' <<< "$asked" && grep -q '"enabled":true' <<< "$asked" || { echo "::error::API $sdk health: granted outside but the switch is not on: $asked" >&2; exit 1; }
+  fatal_check "$PKG" "health permission screen"
 fi
 adb logcat -c || true
 e2e_cmd health
@@ -74,12 +99,10 @@ if [ "$sdk" -lt 34 ]; then
   fi
 fi
 [ "$avail" = "available" ] || { echo "::error::API $sdk health: Health Connect not available on API 34+ ($avail)" >&2; exit 1; }
-if ! grep -q '"granted":true' <<< "$st"; then
-  echo "::warning::API $sdk health: pm grant did not grant WRITE_EXERCISE; the write is not proven on this image" >&2
-  fatal_check "$PKG" "health drill (not granted)"
-  exit 0
-fi
+grep -q '"granted":true' <<< "$st" || { echo "::error::API $sdk health: WRITE_EXERCISE not granted: $st" >&2; exit 1; }
 grep -q '"enabled":true' <<< "$st" || { echo "::error::API $sdk health: granted but the switch did not turn on" >&2; exit 1; }
+# `ok` = Health Connect took the call without an exception. It cannot be read back (no read
+# permission), and an insert at an older version would be ignored silently, still `ok`.
 w="$(writes_ok)"
 d="$(svc_lines | grep -F '"event":"health_delete"' | grep -c '"outcome":"ok"' || true)"
 bf="$(step health_backfill)"

@@ -76,6 +76,10 @@ class MainActivity : FlutterActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == HEALTH_REQUEST_CODE) {
+            resolveHealth(permissions.filterIndexed { i, _ -> grantResults.getOrNull(i) == PackageManager.PERMISSION_GRANTED }.toSet())
+            return
+        }
         if (requestCode != NOTIF_REQUEST_CODE) return
         val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
         resolveNotif(granted && notificationsEnabled(), if (grantResults.isEmpty()) "cancelled" else null)
@@ -102,7 +106,14 @@ class MainActivity : FlutterActivity() {
         }
         healthCallback = callback
         try {
-            startActivityForResult(healthContract.createIntent(this, permissions), HEALTH_REQUEST_CODE)
+            // Android 14+: health permissions are runtime permissions. The client's contract builds
+            // an androidx `REQUEST_PERMISSIONS` intent there, which only a ComponentActivity's
+            // result registry can launch; this is a plain FlutterActivity (review P1, PR #61).
+            if (Build.VERSION.SDK_INT >= 34) {
+                requestPermissions(permissions.toTypedArray(), HEALTH_REQUEST_CODE)
+            } else {
+                startActivityForResult(healthContract.createIntent(this, permissions), HEALTH_REQUEST_CODE)
+            }
         } catch (e: Exception) {
             SpikeLog.write(this, SpikeLog.line("health_permission_error").put("message", e.javaClass.simpleName))
             resolveHealth(emptySet())

@@ -18,6 +18,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** Shows Health Connect's permission screen; answers the permissions granted afterwards, or null if one is already open. */
 fun interface HealthPrompter {
@@ -37,6 +39,9 @@ class HealthApiImpl(
     private val prompter: HealthPrompter,
 ) : HealthApi {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /** Writes and deletes run one at a time, in call order: a fast delete + UNDO lands in that order. */
+    private val io = Mutex()
 
     private val prefs get() = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -164,10 +169,14 @@ class HealthApiImpl(
     }
 
     override fun writeSessions(sessions: List<HealthSession>, callback: (Result<HealthResult>) -> Unit) {
-        scope.launch {
+        scope.launch { io.withLock { write(sessions, callback) } }
+    }
+
+    private suspend fun write(sessions: List<HealthSession>, callback: (Result<HealthResult>) -> Unit) {
+        run {
             refusal()?.let {
                 reply("health_write", callback, it, 0, sessions.size)
-                return@launch
+                return
             }
             var n = 0
             try {
@@ -186,10 +195,14 @@ class HealthApiImpl(
     }
 
     override fun deleteSessions(clientRecordIds: List<String>, callback: (Result<HealthResult>) -> Unit) {
-        scope.launch {
+        scope.launch { io.withLock { delete(clientRecordIds, callback) } }
+    }
+
+    private suspend fun delete(clientRecordIds: List<String>, callback: (Result<HealthResult>) -> Unit) {
+        run {
             refusal()?.let {
                 reply("health_delete", callback, it, 0, clientRecordIds.size)
-                return@launch
+                return
             }
             var n = 0
             try {

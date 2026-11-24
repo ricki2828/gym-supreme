@@ -20,13 +20,21 @@ android.permission.FOREGROUND_SERVICE_SPECIAL_USE
 android.permission.POST_NOTIFICATIONS
 android.permission.VIBRATE
 android.permission.WAKE_LOCK"
-case ",${GS_FEATURES:-}," in
-  *,health,* | ,all,)
-    allowed="$allowed
+# Parsed like core/flags/FeatureSet: `all` only as the whole string, else trimmed comma names.
+health_on() {
+  local raw="${GS_FEATURES:-}" x
+  [ "$raw" = "all" ] && return 0
+  IFS=',' read -ra xs <<< "$raw"
+  for x in "${xs[@]}"; do x="${x#"${x%%[![:space:]]*}"}"; x="${x%"${x##*[![:space:]]}"}"; [ "$x" = health ] && return 0; done
+  return 1
+}
+if health_on; then
+  allowed="$allowed
 android.permission.health.WRITE_EXERCISE"
-    echo "health flag on: WRITE_EXERCISE required" ;;
-  *) echo "health flag off: no Health Connect permission allowed" ;;
-esac
+  echo "health flag on: WRITE_EXERCISE required"
+else
+  echo "health flag off: no Health Connect permission allowed"
+fi
 # Allowed but not required: androidx.core adds it when a dependency registers receivers.
 optional="$PKG.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
 dump="$("$BT/aapt" dump permissions "$APK")"

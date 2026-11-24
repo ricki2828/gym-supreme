@@ -88,8 +88,10 @@ class HealthSync {
   }
 
   /// "Send past workouts": every workout in history, idempotent by uuid
-  /// (an unchanged one is ignored by Health Connect). Null when nothing
-  /// was sent (flag or switch off).
+  /// (an unchanged one is ignored by Health Connect), then a delete for
+  /// every deleted workout, so a delete that failed or happened while the
+  /// switch was off is caught up. Returns the write's result; null when
+  /// nothing was sent (flag or switch off).
   Future<HealthResult?> backfill() async {
     if (!flag) return null;
     if (status == null) await refresh();
@@ -98,6 +100,8 @@ class HealthSync {
       final all = [for (final w in store.workouts()) healthSessionOf(w)];
       final r = await api.writeSessions(all);
       _note(r, write: true);
+      final gone = store.deletedWorkoutUuids();
+      if (gone.isNotEmpty) _note(await api.deleteSessions(gone), write: false);
       return r;
     } on Object catch (e) {
       failed++;

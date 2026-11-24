@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -12,19 +14,18 @@ val dartDefines: String = (project.findProperty("dart-defines") as String?) ?: "
 
 // The same GS_FEATURES, decoded here for the one manifest decision Gradle makes (0.3 H1): the
 // Health Connect permission and privacy screen merge into the dogfood flavour only when the build
-// has `health` (or `all`). Without it the merged manifest is exactly what it was before H1, and
-// tools/check_manifest_permissions.sh forbids the permission.
-val gsFeatures: Set<String> = dartDefines.split(',')
+// has `health`. Without it the merged manifest is exactly what it was before H1, and
+// tools/check_manifest_permissions.sh forbids the permission. Parsed exactly like
+// core/flags/FeatureSet (and Dart, the gate, the emulator scripts): `all` only as the whole
+// string, otherwise a comma list of trimmed names.
+val gsFeaturesRaw: String = dartDefines.split(',')
     .filter { it.isNotBlank() }
-    .mapNotNull { runCatching { String(java.util.Base64.getDecoder().decode(it), Charsets.UTF_8) }.getOrNull() }
+    .mapNotNull { runCatching { String(Base64.getDecoder().decode(it), Charsets.UTF_8) }.getOrNull() }
     .firstOrNull { it.startsWith("GS_FEATURES=") }
     ?.removePrefix("GS_FEATURES=")
-    ?.split(',')
-    ?.map { it.trim() }
-    ?.filter { it.isNotEmpty() }
-    ?.toSet()
-    ?: emptySet()
-val healthManifest: Boolean = "health" in gsFeatures || "all" in gsFeatures
+    ?: ""
+val healthManifest: Boolean =
+    gsFeaturesRaw == "all" || "health" in gsFeaturesRaw.split(',').map { it.trim() }
 
 android {
     // Permanent ids (plan 6.5): namespace and applicationId app.gymsupreme.

@@ -51,6 +51,9 @@ import 'services.dart';
 ///   and backfill one workout, each through [HealthSync]; logs the status
 ///   and the counts. Kotlin logs one `health_write` / `health_delete` line
 ///   per call. Without Health Connect it logs the status and stops.
+/// - `health_ask`: turns the switch on from scratch, so Health Connect's
+///   permission screen opens (the script grants and backs out of it); logs
+///   `health_asked` with the status once Kotlin answers.
 class E2eDriver {
   E2eDriver(this.s, {void Function(String line)? out}) : _out = out ?? print;
 
@@ -121,6 +124,13 @@ class E2eDriver {
           await _history();
         case 'health':
           await _health();
+        case 'health_ask':
+          final st = await s.health?.setEnabled(true);
+          _log('health_asked', {
+            'availability': st?.availability.name,
+            'granted': st?.granted,
+            'enabled': st?.enabled,
+          });
         default:
           _log('unknown', {'command': name});
       }

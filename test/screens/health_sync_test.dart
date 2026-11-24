@@ -303,6 +303,24 @@ void main() {
       },
     );
 
+    test(
+      'backfill also deletes a workout deleted while the switch was off',
+      () async {
+        final kept = await finished();
+        final gone = await finished();
+        expect(engine.deleteWorkout(gone), isNotNull);
+        expect(
+          api.calls,
+          isEmpty,
+          reason: 'switch off: the delete was not sent',
+        );
+        await switchOn();
+        await health.backfill();
+        expect(api.calls, ['w:$kept@0', 'd:$gone']);
+        expect(health.deleted, 1);
+      },
+    );
+
     test('backfill with the switch off sends nothing', () async {
       await finished();
       expect(await health.backfill(), isNull);
