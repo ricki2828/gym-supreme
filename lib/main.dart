@@ -150,6 +150,8 @@ class _GymSupremeAppState extends State<GymSupremeApp> {
           // Cut 2: history for ghost + rotation (hidden while flags are off).
           store: s.store,
           notifications: s.notifications,
+          // Delete, undo and every edit refresh the backup snapshot.
+          persist: s.persist,
         ),
         onOpenDiagnostics: showDiagnostics
             ? () => _nav.currentState!.push(

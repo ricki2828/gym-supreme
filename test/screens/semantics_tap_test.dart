@@ -140,6 +140,12 @@ void main() {
       ),
     ),
     'workout detail': WorkoutDetailScreen(view: pushDetail),
+    'workout detail (editable)': WorkoutDetailScreen(
+      view: pushDetail,
+      onDelete: noop,
+      onEditSet: (_, _, _) {},
+      onRemoveSet: noop1,
+    ),
     'post': PostWorkoutScreen(view: pushDone, onDone: noop),
     'history': HistoryScreen(rows: historyRows, onOpen: noop1),
     'body': const BodyScreen(muscles: bodyMuscles),
@@ -204,6 +210,47 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('discard.confirm')), findsOneWidget);
+    expect(missing(tester), isEmpty);
+  });
+
+  Future<void> editableDetail(WidgetTester tester) async {
+    phone(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WorkoutDetailScreen(
+          view: pushDetail,
+          onDelete: noop,
+          onEditSet: (_, _, _) {},
+          onRemoveSet: noop1,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('detail menu, set sheet and confirms: every enabled button '
+      'has a tap action', (tester) async {
+    await editableDetail(tester);
+    // Overflow menu.
+    await tester.tap(find.byKey(const Key('detail.menu')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('detail.delete')), findsOneWidget);
+    expect(missing(tester), isEmpty);
+    await tester.tap(find.byKey(const Key('detail.delete')));
+    await tester.pumpAndSettle();
+    // Delete confirm.
+    expect(find.byKey(const Key('delete.confirm')), findsOneWidget);
+    expect(missing(tester), isEmpty);
+    await tester.tap(find.byKey(const Key('delete.keep')));
+    await tester.pumpAndSettle();
+    // A set row, its sheet, the remove confirm.
+    await tester.tap(find.byKey(const Key('set.0')).first);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('edit.remove')), findsOneWidget);
+    expect(missing(tester), isEmpty);
+    await tester.tap(find.byKey(const Key('edit.remove')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('remove.confirm')), findsOneWidget);
     expect(missing(tester), isEmpty);
   });
 
