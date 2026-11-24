@@ -116,8 +116,7 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
+          # The runner executes each script line with sh; emulator_common.sh is bash.
           script: |
-            . tools/emulator_common.sh && boot_wait && adb install -r apk/app-x86_64-dogfood-release.apk
-            if [ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" -ge 33 ]; then adb shell pm grant "$DOGFOOD_PKG" android.permission.POST_NOTIFICATIONS; fi
-            . tools/emulator_common.sh && launch "$DOGFOOD_PKG"
+            bash -c '. tools/emulator_common.sh && boot_wait && adb install -r apk/app-x86_64-dogfood-release.apk && launch "$DOGFOOD_PKG"'
             tools/emulator_emom.sh "$DOGFOOD_PKG" 20 60000 10000
