@@ -22,7 +22,7 @@ void main() {
     final files = dir.listSync().whereType<File>().where(
       (f) => f.path.contains('snapshot_v1_'),
     );
-    expect(files.length, 5);
+    expect(files.length, 6);
     for (final f in files) {
       final text = f.readAsStringSync();
       expect(text.endsWith('\n'), isTrue, reason: f.path);

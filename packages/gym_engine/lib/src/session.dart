@@ -261,12 +261,15 @@ class Session {
   /// The plan values stay. A +/- on this set and then Done is `adjusted`
   /// (B4). A changed value also carries forward to the lift's later pending
   /// sets ([_carryForward]); Done on those is judged against the carried
-  /// value (see [done]). No-op when nothing changes.
+  /// value (see [done]). No-op when nothing changes. [typed] marks the set
+  /// `entry: typed` (a value typed on the number pad) so Done logs `typed`
+  /// even after a restart; undo clears it.
   static SessionSnapshot retarget(
     SessionSnapshot s,
     String setId, {
     Object? loadG = _keep,
     Object? reps = _keep,
+    bool typed = false,
   }) {
     if (s.finished) return s;
     final at = _find(s, setId);
@@ -281,7 +284,13 @@ class Session {
         s,
         at.e,
         at.s,
-        set.copyWith(targetLoadG: load, targetReps: r),
+        // [typed]: he typed the value (number pad), so the set remembers it
+        // in the snapshot; +/- keeps whatever is there.
+        set.copyWith(
+          targetLoadG: load,
+          targetReps: r,
+          entry: typed ? SetEntry.typed : set.entry,
+        ),
       ),
       at.e,
       at.s,

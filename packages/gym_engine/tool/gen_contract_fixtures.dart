@@ -82,12 +82,23 @@ Map<String, SessionSnapshot> cases() {
   f = Session.done(f, '$uuid:3', nowMs: t0 + 700000, loadG: 25000, reps: 12);
   f = Session.skip(f, '$uuid:4', nowMs: t0 + 760000);
   final finished = Session.finish(f, nowMs: t0 + 800000);
+  // 0.3 X1: the same moment as mid_set, but the 20 kg was TYPED on the number
+  // pad, so the pending set carries the optional `entry: "typed"` key (the
+  // only fixture that has it; the five above are 0.2-shaped and must keep
+  // decoding without it).
+  final typed = Session.retarget(
+    Session.skipRest(resting, nowMs: t0 + 300000),
+    '$uuid:2',
+    loadG: 20000,
+    typed: true,
+  );
   return {
     'snapshot_v1_fresh': fresh,
     'snapshot_v1_resting': resting,
     'snapshot_v1_mid_set': midSet,
     'snapshot_v1_paused': paused,
     'snapshot_v1_finished': finished,
+    'snapshot_v1_typed': typed,
   };
 }
 
