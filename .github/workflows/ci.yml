@@ -346,7 +346,9 @@ jobs:
           [ -f prev-x86_64-dogfood.apk ] && files+=(prev-x86_64-dogfood.apk)
           tools/ci_release.sh put "ci-apk-${{ github.run_id }}" "ci apks ${{ github.run_id }}" "Dogfood APKs, run ${{ github.run_id }}, sha ${{ github.sha }}. Deleted after 2 days." "${files[@]}"
           # The fetch step sets publish=false when dogfood-latest is already newer than this build.
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ steps.prev.outputs.publish }}" != "false" ]; then
+          # A manual dispatch on main publishes too: a docs-only push skips the build, so a
+          # dispatch is how a release build is made after one (0.3.0, 24-Nov).
+          if { [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; } && [ "${{ github.ref }}" = "refs/heads/main" ] && [ "${{ steps.prev.outputs.publish }}" != "false" ]; then
             tools/ci_release.sh put dogfood-latest "Dogfood APK $sha7" "Latest dogfood build from main. sha ${{ github.sha }}, CI run ${{ github.run_id }}. arm64 for the phone, x64 for the emulators; replaced on every main push." --replace-assets "$out/gym-supreme-dogfood-$sha7-arm64.apk" "$out/gym-supreme-dogfood-$sha7-x64.apk"
           fi
 
