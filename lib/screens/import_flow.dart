@@ -132,6 +132,12 @@ List<String> importLines(eng.ImportCounts c, {required bool applied}) {
     if (c.deletedInFile > 0)
       '${n(c.deletedInFile, 'workout', 'workouts')} deleted on the other '
           'phone: not imported.',
+    if (c.startingWeightsAdded > 0)
+      '${n(c.startingWeightsAdded, 'starting weight', 'starting weights')} '
+          '${applied ? 'added' : 'to add'}.',
+    if (c.startingWeightsKept > 0)
+      '${n(c.startingWeightsKept, 'starting weight is', 'starting weights are')} '
+          'already set here: yours kept.',
     if (c.endsClamped > 0)
       '${n(c.endsClamped, 'workout', 'workouts')} had a clock change: '
           'duration set to 0.',

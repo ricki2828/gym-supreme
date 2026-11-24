@@ -16,6 +16,8 @@ export 'src/import.dart'
 export 'src/model.dart';
 export 'src/session.dart';
 export 'src/snapshot.dart';
+export 'src/starting_weights.dart'
+    show StartingWeightLift, startingWeightMaxG, startingWeightsSettingKey;
 export 'src/store.dart';
 
 /// Bumped when the Kotlin/Dart journal contract changes.

@@ -17,7 +17,9 @@ LiveView liveView({
   bool canSwap = false,
   int doneSets = 0,
   int leftSets = 0,
+  int? startingWeightG,
 }) => LiveView(
+  startingWeightG: startingWeightG,
   undoLabel: undoLabel,
   canSwap: canSwap,
   type: WorkoutType.push,
