@@ -10,6 +10,7 @@ import 'package:gym_supreme/screens/history_screen.dart';
 import 'package:gym_supreme/screens/live_screen.dart';
 import 'package:gym_supreme/screens/picker_screen.dart';
 import 'package:gym_supreme/screens/post_workout_screen.dart';
+import 'package:gym_supreme/screens/starting_weights_screen.dart';
 import 'package:gym_supreme/screens/view_models.dart';
 import 'package:gym_supreme/screens/weight_list_screen.dart';
 import 'package:gym_supreme/screens/workout_detail_screen.dart';
@@ -84,7 +85,28 @@ void main() {
       onPreset: noop1,
       onToggle: noop1,
       onEditWeights: noop1,
+      onStartingWeights: noop,
       onSave: noop,
+    ),
+    'starting weights': StartingWeightsScreen(
+      rows: const [
+        StartingWeightRow(
+          exerciseId: 'a',
+          name: 'Incline Dumbbell Press',
+          unit: LoadUnit.kgEach,
+          section: 'Push',
+          loadG: 20000,
+        ),
+        StartingWeightRow(
+          exerciseId: 'b',
+          name: 'Triceps Pushdown',
+          unit: LoadUnit.kg,
+          section: 'More lifts',
+          hasHistory: true,
+        ),
+      ],
+      onEdit: noop1,
+      onClear: noop1,
     ),
     'live': LiveScreen(
       view: liveView(),

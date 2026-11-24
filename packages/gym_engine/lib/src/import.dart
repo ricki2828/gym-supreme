@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'api.dart';
 import 'model.dart';
 import 'snapshot.dart';
+import 'starting_weights.dart';
 
 /// The newest database schema an export may come from. Kept in step with
 /// `latestSchemaVersion` in sqlite_store.dart (test: import_test.dart).
@@ -41,6 +42,8 @@ class ImportCounts {
     required this.settingsRestored,
     required this.deletedInFile,
     this.endsClamped = 0,
+    this.startingWeightsAdded = 0,
+    this.startingWeightsKept = 0,
   });
 
   final int exportFormat;
@@ -77,8 +80,19 @@ class ImportCounts {
   /// during the session) and were imported with the end set to the start.
   final int endsClamped;
 
+  /// Starting weights (0.3 S1) for lifts that had none on this phone.
+  final int startingWeightsAdded;
+
+  /// Starting weights in the file for lifts that already have one here:
+  /// his own kept.
+  final int startingWeightsKept;
+
   /// Nothing to add: importing would change nothing.
-  bool get isNoOp => workoutsAdded == 0 && gymsAdded == 0 && !settingsRestored;
+  bool get isNoOp =>
+      workoutsAdded == 0 &&
+      gymsAdded == 0 &&
+      startingWeightsAdded == 0 &&
+      !settingsRestored;
 }
 
 /// One workout of the file, ready for `HistoryStore.upsertWorkout`.
@@ -100,10 +114,15 @@ class ImportBundle {
     required this.workouts,
     required this.settings,
     required this.deletedInFile,
+    this.startingWeights = const {},
   });
 
   final int exportFormat;
   final List<Gym> gyms;
+
+  /// `starting_weights` (0.3 S1, optional in format 2): exercise id to
+  /// grams. Empty when the file has none (any 0.2.x export).
+  final Map<String, int> startingWeights;
   final List<ImportWorkout> workouts;
 
   /// Null when the file carries no `settings` object.
@@ -208,12 +227,28 @@ ImportBundle parseImportBundle(String text) {
       }
       deletedInFile = l.length;
     }
+    final starting = <String, int>{};
+    for (final (i, x)
+        in r.list(root, 'starting_weights', optional: true).indexed) {
+      final sr = _Reader('starting_weights[$i]');
+      final m = sr.map(x);
+      final id = sr.str(m, 'exercise_id');
+      final g = sr.int_(m, 'load_g');
+      if (!validStartingWeight(g)) {
+        throw _Bad('starting weight for $id is out of range ($g g)');
+      }
+      if (starting.containsKey(id)) {
+        throw _Bad('starting weight for $id appears twice');
+      }
+      starting[id] = g;
+    }
     return ImportBundle(
       exportFormat: format,
       gyms: gyms,
       workouts: workouts,
       settings: settings,
       deletedInFile: deletedInFile,
+      startingWeights: starting,
     );
   } on _Bad catch (e) {
     throw ImportRefused('This export is damaged: ${e.what}. Nothing imported.');

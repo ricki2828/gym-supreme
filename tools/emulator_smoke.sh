@@ -213,6 +213,20 @@ fin="$(wait_for '"event":"selftest_session".*"step":"finish".*"finished":true,"d
 echo "session finish: $fin"
 fatal_check "$PKG" session
 
+# Starting weights (0.3 S1), before the flows below log anything: a 20 kg starting weight on a chest lift
+# with no history must be the planned load and the live set's target; the workout is discarded
+# and the weight cleared, so nothing is left behind for the flows below.
+adb logcat -c || true
+e2e_cmd start_weight
+e2e_wait ok 90
+e2e_lines | sed 's/^/e2e start_weight: /'
+sw="$(e2e_lines | grep '"step":"start_weight"')"
+for k in start_load_g plan_load_g target_load_g; do
+  grep -q "\"$k\":20000" <<< "$sw" || { echo "::error::starting weight: $k is not 20000 g: $sw" >&2; exit 1; }
+done
+e2e_lines | grep '"step":"start_weight_done"' | grep -q '"discarded":true' || { echo "::error::starting weight drill: workout not discarded" >&2; exit 1; }
+fatal_check "$PKG" "e2e start_weight"
+
 # Phase-1 exit e2e (lib/app/e2e_driver.dart): the real Dart flow through LiveController, the
 # SQLite store and the WorkoutService, driven by the gym_e2e launch extra (dogfood/debug only).
 # Each command carries a nonce that the driver echoes in every line: only lines from THIS

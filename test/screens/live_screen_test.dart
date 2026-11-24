@@ -68,6 +68,37 @@ void main() {
     expect(load, [-1]);
   });
 
+  testWidgets('starting weight (S1): says so, never "first time"', (
+    tester,
+  ) async {
+    phone(tester);
+    var done = 0;
+    for (final (unit, label) in [
+      (LoadUnit.kgEach, '20 kg ea'),
+      (LoadUnit.kg, '20 kg'),
+    ]) {
+      await tester.pumpWidget(
+        app(
+          LiveScreen(
+            view: liveView(
+              loadG: 20000,
+              targetLoadG: null, // still a cold start for the metric
+              startingWeightG: 20000,
+              unit: unit,
+            ),
+            onDone: () => done++,
+          ),
+        ),
+      );
+      expect(find.text('Starting weight you set: $label.'), findsOneWidget);
+      expect(find.textContaining('First time here'), findsNothing);
+      expect(find.text('10 × $label, starting weight'), findsOneWidget);
+      expect(find.textContaining('first time'), findsNothing);
+    }
+    await tester.tap(find.text('DONE'));
+    expect(done, 1);
+  });
+
   testWidgets('cold start: Done waits for a weight', (tester) async {
     phone(tester);
     var done = 0;

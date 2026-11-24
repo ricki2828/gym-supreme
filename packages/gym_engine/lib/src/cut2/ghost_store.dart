@@ -5,6 +5,7 @@ library;
 
 import '../model.dart';
 import '../snapshot.dart';
+import '../starting_weights.dart';
 import 'ghost.dart';
 
 GhostInputWorkout ghostInputFromRecord(WorkoutRecord w) => GhostInputWorkout(
@@ -26,22 +27,34 @@ GhostInputWorkout ghostInputFromRecord(WorkoutRecord w) => GhostInputWorkout(
 );
 
 /// One ghost per exercise in the live session (null = no earlier session at
-/// this gym with it: hidden). Keyed by exercise id.
+/// this gym with it: hidden). Keyed by exercise id. A lift with no logged
+/// history at any gym and a starting weight in [startingWeights] (0.3 S1)
+/// gets a starting-weight ghost instead of none.
 Map<String, ExerciseGhost?> ghostsForSession(
   SessionSnapshot live,
-  Iterable<WorkoutRecord> history,
-) {
-  final inputs = [for (final w in history) ghostInputFromRecord(w)];
-  return {
-    for (final e in live.exercises)
-      e.exerciseId: ghostFor(
-        gymId: live.gymId,
-        exerciseId: e.exerciseId,
-        beforeMs: live.startedAtMs,
-        workouts: inputs,
-        currentUuid: live.workoutUuid,
-      ),
-  };
+  Iterable<WorkoutRecord> history, {
+  Map<String, int> startingWeights = const {},
+}) {
+  final records = history.toList();
+  final inputs = [for (final w in records) ghostInputFromRecord(w)];
+  ExerciseGhost? of(String id) {
+    final g = ghostFor(
+      gymId: live.gymId,
+      exerciseId: id,
+      beforeMs: live.startedAtMs,
+      workouts: inputs,
+      currentUuid: live.workoutUuid,
+    );
+    if (g != null) return g;
+    final start = startingWeights[id];
+    if (start == null) return null;
+    final others = records.where((w) => w.uuid != live.workoutUuid);
+    return hasLoggedHistory(id, others)
+        ? null
+        : ExerciseGhost.startingWeight(id, start);
+  }
+
+  return {for (final e in live.exercises) e.exerciseId: of(e.exerciseId)};
 }
 
 /// The done, non-timed sets of the live session for [sessionTotal]. Skipped

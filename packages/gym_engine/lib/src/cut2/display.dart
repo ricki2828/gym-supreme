@@ -27,6 +27,7 @@ String? ghostSetText(SetGhostLine l, {bool perHand = false}) {
   if (l.verdict == GhostVerdict.newSet) return 'New set — none last time';
   final then = loadReps(l.ghostLoadG, l.ghostReps, perHand: perHand);
   if (then.isEmpty) return null;
+  if (l.baseline) return 'Starting weight $then';
   final deltas = <String>[
     if (l.loadDeltaG case final d? when d != 0)
       '${d > 0 ? '+' : '−'}${formatKg(d.abs())} kg',
@@ -44,6 +45,8 @@ String? ghostSetText(SetGhostLine l, {bool perHand = false}) {
 
 /// Screen-reader label: words, no symbols.
 String ghostSetSemantics(SetGhostLine l) => switch (l.verdict) {
+  _ when l.baseline =>
+    'Your starting weight, ${_spoken(l.ghostLoadG, l.ghostReps)}',
   GhostVerdict.newSet => 'No set at this number last time',
   GhostVerdict.pending when _spoken(l.ghostLoadG, l.ghostReps).isEmpty =>
     'No values from last time',

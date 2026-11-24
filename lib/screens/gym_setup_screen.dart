@@ -76,6 +76,7 @@ class GymSetupScreen extends StatelessWidget {
     this.onPreset,
     this.onToggle,
     this.onEditWeights,
+    this.onStartingWeights,
     this.onSave,
   });
 
@@ -101,6 +102,10 @@ class GymSetupScreen extends StatelessWidget {
 
   /// Opens the weight list editor for a kit id.
   final ValueChanged<String>? onEditWeights;
+
+  /// Opens the starting weights (0.3 S1). Null hides the entry (first run:
+  /// the gym is not saved yet).
+  final VoidCallback? onStartingWeights;
   final VoidCallback? onSave;
 
   @override
@@ -189,6 +194,26 @@ class GymSetupScreen extends StatelessWidget {
                             ? null
                             : () => onEditWeights!(w.id),
                       ),
+                  ],
+                  if (onStartingWeights != null) ...[
+                    const SizedBox(height: 18),
+                    Text('STARTING WEIGHTS', style: LitType.display(30)),
+                    const SizedBox(height: 4),
+                    Text(
+                      'What you lift now, so first sessions start there.',
+                      style: LitType.body(14, Lit.inkSecondary),
+                    ),
+                    const SizedBox(height: 6),
+                    OutlinedButton.icon(
+                      key: const Key('gym.starting_weights'),
+                      onPressed: onStartingWeights,
+                      icon: const Icon(Icons.edit),
+                      label: const Text('Set starting weights'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Lit.ink,
+                        minimumSize: const Size(48, 48),
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 14),
                   Text(

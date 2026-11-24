@@ -30,6 +30,7 @@ class LiveView {
     this.canDoLater = false,
     required this.elapsedS,
     this.lastTime,
+    this.startingWeightG,
     this.canLoadUp = true,
     this.canLoadDown = true,
     this.restLeftS,
@@ -64,6 +65,12 @@ class LiveView {
 
   /// "Last time 3 × 10 · 22 kg ea", or null.
   final String? lastTime;
+
+  /// The starting weight he typed for this lift (0.3 S1) when it seeded
+  /// this session: no history anywhere. Still a cold start for the one-tap
+  /// metric, but the screen says where the load came from instead of
+  /// "first time".
+  final int? startingWeightG;
   final bool canLoadUp, canLoadDown;
 
   /// Rest after this set, seconds.
@@ -440,7 +447,10 @@ class LiveScreen extends StatelessWidget {
                     ],
                     const SizedBox(height: 10),
                     Text(
-                      view.coldStart
+                      view.coldStart && view.startingWeightG != null
+                          ? 'Starting weight you set: '
+                                '${loadLabel(view.startingWeightG, view.unit)}.'
+                          : view.coldStart
                           ? 'First time here. Pick a starting weight; '
                                 'the app remembers it.'
                           : (view.lastTime ?? 'No history at this gym yet.'),
@@ -515,7 +525,10 @@ class LiveScreen extends StatelessWidget {
         ? work
         : (load.isEmpty ? '$work reps' : '$work × $load');
     if (view.coldStart) {
-      return view.loadG == null ? 'Set a weight first' : '$what, first time';
+      if (view.loadG == null) return 'Set a weight first';
+      return view.startingWeightG != null
+          ? '$what, starting weight'
+          : '$what, first time';
     }
     return view.asPlanned ? '$what, as planned' : '$what, changed';
   }

@@ -15,6 +15,7 @@ import 'cut2/rotation_store.dart';
 import 'import.dart';
 import 'model.dart';
 import 'snapshot.dart';
+import 'starting_weights.dart';
 import 'store.dart';
 
 /// Weighted sets a muscle needs in one workout to count as "trained hard"
@@ -219,6 +220,7 @@ class GymEngine implements GymApi {
     ];
     final status = muscleStatus(gymId: gymId);
     final workouts = store.workouts();
+    final starts = startingWeights(); // S1, read once for every item
     final historyCount = <String, int>{};
     for (final w in workouts.where((w) => w.gymId == gymId)) {
       for (final id in {for (final s in w.doneSets) s.exerciseId}) {
@@ -478,6 +480,8 @@ class GymEngine implements GymApi {
           restS: restOf(e),
           status: status,
           picked: picked,
+          starts: starts,
+          workouts: workouts,
         ),
     ];
     return SessionPlan(
@@ -497,6 +501,8 @@ class GymEngine implements GymApi {
     required int restS,
     required Map<String, MuscleStatus> status,
     required List<String> picked,
+    required Map<String, int> starts,
+    required List<WorkoutRecord> workouts,
   }) {
     final (lo, hi) = repRange(e);
     final unit = unitFor(e);
@@ -513,6 +519,32 @@ class GymEngine implements GymApi {
               'rested.';
 
     if (last == null || last.sets.isEmpty) {
+      // S1: a starting weight he typed seeds the first session of a lift
+      // with no logged history anywhere.
+      final start = _startingLoad(gymId, e.id, starts, workouts);
+      if (start != null) {
+        final typed = starts[e.id]!;
+        final snapped = typed == start
+            ? ''
+            : ' Nearest weight here is ${_kg(start, unit)}.';
+        return PlannedItem(
+          exerciseId: e.id,
+          name: e.name,
+          unit: unit,
+          sets: [
+            for (var i = 0; i < sets; i++)
+              PlannedSet(loadG: start, reps: lo + 2),
+          ],
+          repLo: lo,
+          repHi: hi,
+          restS: restS,
+          primary: e.primary,
+          reason:
+              '$restLine Starting weight you set: ${_kg(typed, unit)}.'
+              '$snapped',
+          loadFromStartingWeight: true,
+        );
+      }
       return PlannedItem(
         exerciseId: e.id,
         name: e.name,
@@ -687,6 +719,114 @@ class GymEngine implements GymApi {
       );
     }
     return null;
+  }
+
+  // ---------------------------------------------------- starting weights
+
+  @override
+  Map<String, int> startingWeights() => loadStartingWeights(store);
+
+  @override
+  void setStartingWeight(String exerciseId, int? loadG) {
+    final e = catalog.exercise(exerciseId);
+    if (e == null) throw ArgumentError('unknown exercise $exerciseId');
+    final unit = unitFor(e);
+    if (unit != LoadUnit.kg && unit != LoadUnit.ea) {
+      throw ArgumentError('$exerciseId takes no weight');
+    }
+    if (loadG != null && !validStartingWeight(loadG)) {
+      throw ArgumentError('starting weight out of range: $loadG g');
+    }
+    final all = {...startingWeights()};
+    if (loadG == null) {
+      if (all.remove(exerciseId) == null) return;
+    } else {
+      all[exerciseId] = loadG;
+    }
+    saveStartingWeights(store, all);
+  }
+
+  @override
+  int? startingLoad({required String gymId, required String exerciseId}) =>
+      _startingLoad(gymId, exerciseId, startingWeights(), store.workouts());
+
+  /// [startingLoad] with the stored weights and history read once by the
+  /// caller (suggest builds every item from one read).
+  int? _startingLoad(
+    String gymId,
+    String exerciseId,
+    Map<String, int> starts,
+    List<WorkoutRecord> workouts,
+  ) {
+    final typed = starts[exerciseId];
+    if (typed == null) return null;
+    // An import can carry an id this build treats as unloaded: never give
+    // a bodyweight or timed lift a load.
+    final e = catalog.exercise(exerciseId);
+    if (e == null) return null;
+    final unit = unitFor(e);
+    if (unit != LoadUnit.kg && unit != LoadUnit.ea) return null;
+    if (hasLoggedHistory(exerciseId, workouts)) return null;
+    final steps = loadSteps(gymId: gymId, exerciseId: exerciseId);
+    if (steps.loadsG.isEmpty) return typed;
+    // Same rule as progression: the load must exist at this gym, so snap
+    // down to the nearest one it has (the lightest if all are heavier).
+    return steps.loadsG.lastWhere(
+      (l) => l <= typed,
+      orElse: () => steps.loadsG.first,
+    );
+  }
+
+  @override
+  List<StartingWeightLift> startingWeightLifts({required String gymId}) {
+    final stored = startingWeights();
+    final workouts = store.workouts();
+    final order = loadRotation(store).order;
+    final types = [
+      for (final id in order.isEmpty ? defaultRotationOrder : order)
+        if (workoutType(id) case final t? when t.muscles.isNotEmpty) t,
+    ];
+    final out = <StartingWeightLift>[];
+    final seen = <String>{};
+    StartingWeightLift row(Exercise e, String? typeId) => StartingWeightLift(
+      exerciseId: e.id,
+      name: e.name,
+      unit: unitFor(e),
+      typeId: typeId,
+      loadG: stored[e.id],
+      hasHistory: hasLoggedHistory(e.id, workouts),
+    );
+    // First the lifts his next session of each type would plan (the
+    // picker's seed: stored sessions + 1), then every other loaded lift this
+    // gym has, so a lift a later seed rotates in is never missing.
+    final seed = counters().sessionsTotal + 1;
+    for (final t in types) {
+      final plan = suggest(
+        gymId: gymId,
+        muscleIds: t.muscles,
+        typeId: t.id,
+        minutes: 60,
+        seed: seed,
+      );
+      for (final item in plan.items) {
+        if (item.unit != LoadUnit.kg && item.unit != LoadUnit.ea) continue;
+        final e = catalog.exercise(item.exerciseId);
+        if (e != null && seen.add(e.id)) out.add(row(e, t.id));
+      }
+    }
+    final kit = store.gym(gymId)?.equipmentIds ?? const <String>{};
+    final rest = [
+      for (final e in catalog.exercises)
+        if (!seen.contains(e.id) &&
+            (stored.containsKey(e.id) ||
+                (e.availableWith(kit) &&
+                    (unitFor(e) == LoadUnit.kg || unitFor(e) == LoadUnit.ea))))
+          e,
+    ]..sort((a, b) => a.name.compareTo(b.name));
+    for (final e in rest) {
+      out.add(row(e, null));
+    }
+    return out;
   }
 
   // ----------------------------------------------------- finish, resume
@@ -1098,6 +1238,13 @@ class GymEngine implements GymApi {
       ],
       'workouts': [for (final w in workouts) _workoutJson(w)],
       'deleted_workout_uuids': store.deletedWorkoutUuids(),
+      // 0.3 S1, additive in format 2 (0.2.x imports ignore the key).
+      'starting_weights': [
+        for (final e
+            in (startingWeights().entries.toList()
+              ..sort((a, b) => a.key.compareTo(b.key))))
+          {'exercise_id': e.key, 'load_g': e.value},
+      ],
     };
     final json = const JsonEncoder.withIndent(' ').convert(bundle);
     return ExportFiles(json: json, csv: _csv(gyms, workouts));
@@ -1240,6 +1387,19 @@ class GymEngine implements GymApi {
         jsonEncode(store.settings().toJson()) == defaults &&
         jsonEncode(fileSettings.toJson()) != defaults;
     if (write && restore) store.saveSettings(fileSettings);
+    // Starting weights: added for lifts without one here; his own kept.
+    final mine = startingWeights();
+    var startAdded = 0, startKept = 0;
+    final merged = {...mine};
+    for (final e in b.startingWeights.entries) {
+      if (mine.containsKey(e.key)) {
+        startKept++;
+      } else {
+        startAdded++;
+        merged[e.key] = e.value;
+      }
+    }
+    if (write && startAdded > 0) saveStartingWeights(store, merged);
     return ImportCounts(
       exportFormat: b.exportFormat,
       workoutsInFile: b.workouts.length,
@@ -1252,6 +1412,8 @@ class GymEngine implements GymApi {
       settingsRestored: restore,
       deletedInFile: b.deletedInFile,
       endsClamped: clamped,
+      startingWeightsAdded: startAdded,
+      startingWeightsKept: startKept,
     );
   }
 
