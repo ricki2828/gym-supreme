@@ -215,6 +215,104 @@ void main() {
     expect(g.ghostLoadG, 20000);
   });
 
+  test('live: Do later and a drag keep the starting-weight target', () async {
+    final l = firstLift();
+    engine.setStartingWeight(l.exerciseId, 20000);
+    final plan = engine.suggest(
+      gymId: gymId,
+      muscleIds: eng.workoutType(l.typeId)!.muscles,
+      typeId: l.typeId,
+      minutes: 60,
+    );
+    final item = plan.items.firstWhere((i) => i.exerciseId == l.exerciseId);
+    final other = plan.items.firstWhere((i) => i.exerciseId != l.exerciseId);
+    final c = LiveController(
+      store: store,
+      engine: engine,
+      port: FlakyPort(),
+      nowMs: () => now,
+      tzOffsetMin: 480,
+      tick: const Duration(days: 1),
+    );
+    addTearDown(c.dispose);
+    await c.start(
+      eng.SessionPlan(
+        gymId: plan.gymId,
+        typeId: plan.typeId,
+        muscles: plan.muscles,
+        items: [other, item],
+        uncovered: const [],
+        estimatedMinutes: plan.estimatedMinutes,
+      ),
+    );
+    String currentId() =>
+        c.snapshot!.exercises[c.snapshot!.current!.exercise].exerciseId;
+    expect(currentId(), other.exerciseId);
+    // Do later: the starting-weight lift becomes current, target intact.
+    await c.doLater();
+    expect(c.lastError, isNull);
+    expect(currentId(), l.exerciseId);
+    expect(c.snapshot!.currentSet!.targetLoadG, 20000);
+    expect(c.currentGhost()!.baseline, isTrue);
+    expect(c.currentGhost()!.ghostLoadG, 20000);
+    // Drag the other lift back to the front, then this one again.
+    await c.reorderQueue(1, 0);
+    expect(currentId(), other.exerciseId);
+    await c.reorderQueue(1, 0);
+    expect(currentId(), l.exerciseId);
+    expect(c.snapshot!.currentSet!.targetLoadG, 20000);
+    expect(c.currentGhost()!.baseline, isTrue);
+    // Logging it keeps 20 kg; it is the first real set of that lift.
+    now += 60000;
+    await c.done();
+    final done = c.snapshot!.exercises
+        .firstWhere((e) => e.exerciseId == l.exerciseId)
+        .sets
+        .first;
+    expect(done.loadG, 20000);
+    // Not an engine suggestion: a cold start, out of the one-tap rate.
+    expect(done.completion, eng.Completion.coldStart);
+  });
+
+  testWidgets('dumbbells read per hand (kg ea), stack lifts plain kg', (
+    tester,
+  ) async {
+    final lifts = engine.startingWeightLifts(gymId: gymId);
+    final db = lifts.firstWhere((l) => l.unit == eng.LoadUnit.ea);
+    final stack = lifts.firstWhere((l) => l.unit == eng.LoadUnit.kg);
+    expect(catalog.exercise(db.exerciseId)!.load, 'dumbbell');
+    engine.setStartingWeight(db.exerciseId, 20000);
+    engine.setStartingWeight(stack.exerciseId, 30000);
+    phone(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StartingWeightsFlow(engine: engine, gymId: gymId),
+      ),
+    );
+    await tester.pumpAndSettle();
+    Future<void> reveal(String id) => tester.scrollUntilVisible(
+      find.byKey(Key('start.row.$id')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await reveal(db.exerciseId);
+    expect(valueOf(tester, db.exerciseId).data, '20 kg ea');
+    await tapKey(tester, 'start.row.${db.exerciseId}');
+    expect(find.text('kg ea'), findsOneWidget, reason: 'pad suffix');
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const Key('start.list')),
+      const Offset(0, 5000),
+    );
+    await tester.pumpAndSettle();
+    await reveal(stack.exerciseId);
+    expect(valueOf(tester, stack.exerciseId).data, '30 kg');
+    await tapKey(tester, 'start.row.${stack.exerciseId}');
+    expect(find.text('kg'), findsOneWidget, reason: 'pad suffix');
+    expect(find.text('kg ea'), findsNothing);
+  });
+
   testWidgets('Gyms tab: the entry opens the screen for that gym', (
     tester,
   ) async {

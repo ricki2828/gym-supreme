@@ -194,6 +194,25 @@ Map<String, (SessionSnapshot, List<Map<String, Object?>>)> lockCases() {
       PlannedSet(loadG: 40000, reps: 10),
     ]),
   ]);
+  // S1: a starting weight seeds the target only (plan_load_g null), so the
+  // first lock-screen Done is a cold start like the app's.
+  final fromStart = _start([
+    PlannedItem(
+      exerciseId: 'incline-db-press',
+      name: 'Incline DB Press',
+      unit: LoadUnit.ea,
+      sets: const [
+        PlannedSet(loadG: 20000, reps: 10),
+        PlannedSet(loadG: 20000, reps: 10),
+      ],
+      repLo: 8,
+      repHi: 12,
+      restS: 90,
+      reason: '',
+      primary: const ['chest'],
+      loadFromStartingWeight: true,
+    ),
+  ]);
   final bodyweight = _start([
     _item('push-up', 'Push-up', LoadUnit.bodyweight, const [
       PlannedSet(loadG: null, reps: 12),
@@ -250,6 +269,10 @@ Map<String, (SessionSnapshot, List<Map<String, Object?>>)> lockCases() {
     'lockscreen_v1_cold_start_then_carried': (
       pushdown,
       [_step('done', 3, 460000), _step('done', 4, 560000)],
+    ),
+    'lockscreen_v1_cold_start_from_starting_weight': (
+      fromStart,
+      [_step('done', 0, 95000), _step('done', 1, 230000)],
     ),
     'lockscreen_v1_after_pause': (
       Session.resume(

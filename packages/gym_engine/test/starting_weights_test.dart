@@ -246,6 +246,89 @@ void main() {
         expect(r.store.workouts().length, 6);
       });
 
+      group('metric: a starting weight is a cold start', () {
+        SessionSnapshot started() {
+          final plan = r.engine.suggest(
+            gymId: r.g1,
+            muscleIds: const ['chest', 'front-delts', 'triceps'],
+            typeId: 'push',
+            minutes: 60,
+          );
+          final item = plan.items.firstWhere((i) => i.exerciseId == incline);
+          expect(item.loadFromStartingWeight, isTrue);
+          final bench = plan.items.firstWhere((i) => i.exerciseId == d.bench);
+          expect(bench.loadFromStartingWeight, isFalse, reason: 'history');
+          return Session.start(
+            SessionPlan(
+              gymId: plan.gymId,
+              typeId: plan.typeId,
+              muscles: plan.muscles,
+              items: [item, bench],
+              uncovered: const [],
+              estimatedMinutes: plan.estimatedMinutes,
+            ),
+            nowMs: r.now,
+            tzOffsetMin: 480,
+            workoutUuid: 'cold',
+          );
+        }
+
+        setUp(() => r.engine.setStartingWeight(incline, 20000));
+
+        test('plan load stays null, the target carries it', () {
+          final s = started();
+          final sets = s.exercises.first.sets;
+          expect(sets.map((x) => x.planLoadG).toSet(), {null});
+          expect(sets.map((x) => x.targetLoadG).toSet(), {20000});
+          // Engine-suggested lifts are untouched.
+          expect(s.exercises[1].sets.first.planLoadG, isNotNull);
+        });
+
+        for (final source in [SetSource.app, SetSource.lockscreen]) {
+          test('first Done (${source.name}) logs cold_start; the next one is '
+              'judged as usual', () {
+            var s = started();
+            final ids = [for (final x in s.exercises.first.sets) x.setId];
+            s = Session.done(s, ids[0], nowMs: r.now + 60000, source: source);
+            var set = s.exercises.first.sets[0];
+            expect(set.completion, Completion.coldStart);
+            expect(set.loadG, 20000);
+            s = Session.done(s, ids[1], nowMs: r.now + 180000, source: source);
+            set = s.exercises.first.sets[1];
+            expect(set.completion, Completion.tapUnchanged);
+          });
+        }
+
+        test('an added set before any Done stays without a plan load', () {
+          var s = started();
+          s = Session.addSet(s, 0);
+          expect(s.exercises.first.sets.last.planLoadG, isNull);
+          expect(s.exercises.first.sets.last.targetLoadG, 20000);
+        });
+
+        test('the one-tap rate leaves it out', () {
+          var s = started();
+          final ids = [
+            for (final e in s.exercises)
+              for (final x in e.sets) x.setId,
+          ];
+          for (var i = 0; i < ids.length; i++) {
+            s = Session.done(s, ids[i], nowMs: r.now + (i + 1) * 60000);
+          }
+          s = Session.finish(s, nowMs: r.now + 3600000);
+          final before = r.engine.counters();
+          r.engine.saveFinished(s);
+          final after = r.engine.counters();
+          expect(after.coldStartSets - before.coldStartSets, 1);
+          expect(after.doneSets - before.doneSets, ids.length);
+          expect(
+            after.tapUnchangedSets - before.tapUnchangedSets,
+            ids.length - 1,
+            reason: 'the starting-weight set is not a one-tap',
+          );
+        });
+      });
+
       group('ghost', () {
         SessionSnapshot live(String gymId) => Session.start(
           r.engine.suggest(

@@ -220,6 +220,7 @@ class GymEngine implements GymApi {
     ];
     final status = muscleStatus(gymId: gymId);
     final workouts = store.workouts();
+    final starts = startingWeights(); // S1, read once for every item
     final historyCount = <String, int>{};
     for (final w in workouts.where((w) => w.gymId == gymId)) {
       for (final id in {for (final s in w.doneSets) s.exerciseId}) {
@@ -479,6 +480,8 @@ class GymEngine implements GymApi {
           restS: restOf(e),
           status: status,
           picked: picked,
+          starts: starts,
+          workouts: workouts,
         ),
     ];
     return SessionPlan(
@@ -498,6 +501,8 @@ class GymEngine implements GymApi {
     required int restS,
     required Map<String, MuscleStatus> status,
     required List<String> picked,
+    required Map<String, int> starts,
+    required List<WorkoutRecord> workouts,
   }) {
     final (lo, hi) = repRange(e);
     final unit = unitFor(e);
@@ -516,9 +521,9 @@ class GymEngine implements GymApi {
     if (last == null || last.sets.isEmpty) {
       // S1: a starting weight he typed seeds the first session of a lift
       // with no logged history anywhere.
-      final start = startingLoad(gymId: gymId, exerciseId: e.id);
+      final start = _startingLoad(gymId, e.id, starts, workouts);
       if (start != null) {
-        final typed = startingWeights()[e.id]!;
+        final typed = starts[e.id]!;
         final snapped = typed == start
             ? ''
             : ' Nearest weight here is ${_kg(start, unit)}.';
@@ -537,6 +542,7 @@ class GymEngine implements GymApi {
           reason:
               '$restLine Starting weight you set: ${_kg(typed, unit)}.'
               '$snapped',
+          loadFromStartingWeight: true,
         );
       }
       return PlannedItem(
@@ -741,8 +747,18 @@ class GymEngine implements GymApi {
   }
 
   @override
-  int? startingLoad({required String gymId, required String exerciseId}) {
-    final typed = startingWeights()[exerciseId];
+  int? startingLoad({required String gymId, required String exerciseId}) =>
+      _startingLoad(gymId, exerciseId, startingWeights(), store.workouts());
+
+  /// [startingLoad] with the stored weights and history read once by the
+  /// caller (suggest builds every item from one read).
+  int? _startingLoad(
+    String gymId,
+    String exerciseId,
+    Map<String, int> starts,
+    List<WorkoutRecord> workouts,
+  ) {
+    final typed = starts[exerciseId];
     if (typed == null) return null;
     // An import can carry an id this build treats as unloaded: never give
     // a bodyweight or timed lift a load.
@@ -750,7 +766,7 @@ class GymEngine implements GymApi {
     if (e == null) return null;
     final unit = unitFor(e);
     if (unit != LoadUnit.kg && unit != LoadUnit.ea) return null;
-    if (hasLoggedHistory(exerciseId, store.workouts())) return null;
+    if (hasLoggedHistory(exerciseId, workouts)) return null;
     final steps = loadSteps(gymId: gymId, exerciseId: exerciseId);
     if (steps.loadsG.isEmpty) return typed;
     // Same rule as progression: the load must exist at this gym, so snap

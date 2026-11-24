@@ -9,6 +9,9 @@ packages/gym_engine/API_CHANGES.md and contracts/CHANGES.md.
   your next push, pull and legs sessions use at that gym first, then every other loaded lift there. Type what you lift now, once; the first
   session of that lift starts there. Once you log it, your history takes over (delete that history
   and it falls back). Not a workout: no PBs, streak or history. Export and import carry them.
+  The first set logged from a starting weight counts as a cold start (like a first time with no
+  weight), so the one-tap rate still measures only the app's own suggestions; the same holds for
+  Done on the lock screen.
 
 ## 0.2.2
 

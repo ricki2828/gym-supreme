@@ -68,7 +68,10 @@ class Session {
                   kind: item.unit == LoadUnit.timed
                       ? SetKind.timed
                       : SetKind.reps,
-                  planLoadG: item.sets[i].loadG,
+                  // A starting weight is not an engine suggestion (S1).
+                  planLoadG: item.loadFromStartingWeight
+                      ? null
+                      : item.sets[i].loadG,
                   planReps: item.sets[i].reps,
                   targetLoadG: item.sets[i].loadG,
                   targetReps: item.sets[i].reps,
@@ -302,7 +305,11 @@ class Session {
       setId: '${s.workoutUuid}:${_nextSetNumber(s)}',
       setOrdinal: ex.sets.length + 1,
       kind: last?.kind ?? SetKind.reps,
-      planLoadG: last?.loadG ?? last?.targetLoadG,
+      // Nothing logged on a set with no engine load (a cold start, or a
+      // starting weight, S1): the added set has none either.
+      planLoadG:
+          last?.loadG ??
+          (last != null && last.planLoadG == null ? null : last?.targetLoadG),
       planReps: last?.reps ?? last?.targetReps,
       targetLoadG: last?.loadG ?? last?.targetLoadG,
       targetReps: last?.reps ?? last?.targetReps,
@@ -368,7 +375,7 @@ class Session {
             setId: '${s.workoutUuid}:${n++}',
             setOrdinal: i + 1,
             kind: item.unit == LoadUnit.timed ? SetKind.timed : SetKind.reps,
-            planLoadG: item.sets[i].loadG,
+            planLoadG: item.loadFromStartingWeight ? null : item.sets[i].loadG,
             planReps: item.sets[i].reps,
             targetLoadG: item.sets[i].loadG,
             targetReps: item.sets[i].reps,

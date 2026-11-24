@@ -389,6 +389,11 @@ eng.PlannedItem swapItem(
     restS: replacing.restS,
     reason: 'Swapped in for ${replacing.name}.',
     primary: e.primary,
+    // S1: a starting weight is not an engine suggestion (cold start).
+    loadFromStartingWeight:
+        unit != eng.LoadUnit.bodyweight &&
+        (last == null || last.sets.isEmpty) &&
+        startLoadG != null,
   );
 }
 

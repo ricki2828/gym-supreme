@@ -76,12 +76,20 @@ class PlannedItem {
     required this.restS,
     required this.reason,
     required this.primary,
+    this.loadFromStartingWeight = false,
   });
 
   final String exerciseId;
   final String name;
   final LoadUnit unit;
   final List<PlannedSet> sets;
+
+  /// The loads came from his starting weight (0.3 S1), not from the engine.
+  /// `Session.start` then leaves `plan_load_g` null and puts the load in the
+  /// target only, so the first Done is a `cold_start` (in the app and on the
+  /// lock screen alike) and the one-tap rate measures engine suggestions
+  /// only.
+  final bool loadFromStartingWeight;
   final int repLo;
   final int repHi;
   final int restS;
