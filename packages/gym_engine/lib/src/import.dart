@@ -87,7 +87,8 @@ class ImportWorkout {
   final WorkoutRecord record;
   final List<HrSample> hr;
 
-  /// The file's end was before its start; [record] ends at its start.
+  /// The file's end was before its start; [record] ends at its start, with
+  /// no pause (duration 0).
   final bool endClamped;
 }
 
@@ -321,12 +322,14 @@ ImportWorkout _workout(Map<String, Object?> j) {
   // Workout start and end are both wall-clock reads, so a clock step back
   // during a session can leave end < start in a real export: clamp the end
   // to the start rather than refusing the whole file. Set times keep their
-  // ordering check above (the session caps those).
+  // ordering check above (the session caps those). A clamped workout's
+  // pause is zeroed too, so its duration is 0, never negative.
   final fileEnded = w.int_(j, 'ended_at_ms');
   final endClamped = fileEnded < started;
   final ended = endClamped ? started : fileEnded;
-  final paused = w.intOr(j, 'paused_ms', 0);
-  if (paused < 0) throw _Bad('workout $uuid: a negative pause');
+  final filePaused = w.intOr(j, 'paused_ms', 0);
+  if (filePaused < 0) throw _Bad('workout $uuid: a negative pause');
+  final paused = endClamped ? 0 : filePaused;
   return ImportWorkout(
     WorkoutRecord(
       uuid: uuid,

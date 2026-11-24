@@ -23,6 +23,7 @@ eng.ImportCounts counts({
   int hr = 0,
   bool settings = false,
   int deletedInFile = 0,
+  int clamped = 0,
 }) => eng.ImportCounts(
   exportFormat: 2,
   workoutsInFile: added + existing + deleted,
@@ -34,6 +35,7 @@ eng.ImportCounts counts({
   hrSamplesAdded: hr,
   settingsRestored: settings,
   deletedInFile: deletedInFile,
+  endsClamped: clamped,
 );
 
 /// Records what the flow called.
@@ -184,6 +186,32 @@ void main() {
       find.textContaining('2 workouts deleted on the other phone: not '),
       findsOneWidget,
     );
+  });
+
+  testWidgets('clamped clock-change workouts are spelled out in confirm '
+      'and result', (tester) async {
+    await start(
+      tester,
+      preview: (_) => counts(clamped: 2),
+      apply: (_) => counts(clamped: 1),
+    );
+    expect(find.text('Import this export?'), findsOneWidget);
+    expect(
+      find.textContaining('2 workouts had a clock change: duration set to 0.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('import.confirm')));
+    await tester.pumpAndSettle();
+    expect(find.text('Imported'), findsOneWidget);
+    expect(
+      find.textContaining('1 workout had a clock change: duration set to 0.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('no clamped workouts: no clock-change line', (tester) async {
+    await start(tester);
+    expect(find.textContaining('clock change'), findsNothing);
   });
 
   testWidgets('picker refusals read as plain words', (tester) async {

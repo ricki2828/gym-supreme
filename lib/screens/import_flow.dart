@@ -132,6 +132,9 @@ List<String> importLines(eng.ImportCounts c, {required bool applied}) {
     if (c.deletedInFile > 0)
       '${n(c.deletedInFile, 'workout', 'workouts')} deleted on the other '
           'phone: not imported.',
+    if (c.endsClamped > 0)
+      '${n(c.endsClamped, 'workout', 'workouts')} had a clock change: '
+          'duration set to 0.',
   ];
 }
 
