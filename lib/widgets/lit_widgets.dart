@@ -217,7 +217,12 @@ class PlanList extends StatelessWidget {
     this.dark = false,
     this.ruleColour,
     this.maxHeight,
+    this.markFirst = false,
   });
+
+  /// Tags the first row "NOW" (the live screen's list starts with the
+  /// current exercise).
+  final bool markFirst;
 
   /// When set, the list scrolls inside this height instead of growing.
   final double? maxHeight;
@@ -256,7 +261,9 @@ class PlanList extends StatelessWidget {
           border: Border(top: BorderSide(color: rule)),
         ),
         child: Semantics(
-          label: '${p.name}, ${prescription(p)}',
+          label:
+              '${markFirst && i == 0 ? 'Current exercise: ' : ''}'
+              '${p.name}, ${prescription(p)}',
           excludeSemantics: true,
           child: Row(
             children: [
@@ -265,9 +272,16 @@ class PlanList extends StatelessWidget {
               else
                 handle,
               Expanded(
-                child: Text(
-                  p.name,
-                  style: LitType.body(14, fg, FontWeight.w700),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // The tag sits above the name, not beside it: a 320 dp
+                    // phone at 1.3x text has no room for another word in the row.
+                    if (markFirst && i == 0)
+                      Text('NOW', style: LitType.cap(11, fg)),
+                    Text(p.name, style: LitType.body(14, fg, FontWeight.w700)),
+                  ],
                 ),
               ),
               const SizedBox(width: 8),

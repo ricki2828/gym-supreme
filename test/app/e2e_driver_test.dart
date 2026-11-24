@@ -201,6 +201,39 @@ void main() {
     expect(e2['deleted'], [d['deleted']]);
   });
 
+  test('reorder, then the journal comes back reordered (R1)', () async {
+    final store = SqliteStore.inMemory();
+    addTearDown(store.close);
+    final port = AlertingStubPort();
+    final s = services(store, port);
+    final lines = <String>[];
+    await E2eDriver(s, out: lines.add).run('reorder:r');
+    final r = lines.map(step).firstWhere((m) => m['step'] == 'reorder');
+    final before = (r['before'] as List).cast<String>();
+    expect(r['order'], [before[1], before[0], ...before.skip(2)]);
+    expect(r['current'], before[1]);
+    expect(
+      (r['done_per'] as List)[1],
+      1,
+      reason: 'the logged set moved with it',
+    );
+    // "Another process": a fresh driver over the same journal.
+    lines.clear();
+    await E2eDriver(s, out: lines.add).run('reorder_check:c');
+    final steps = lines.map(step).map((m) => m['step']).toList();
+    expect(steps, [
+      'recover',
+      'reorder_resumed',
+      'ok',
+    ], reason: lines.join('\n'));
+    final c = lines.map(step).firstWhere((m) => m['step'] == 'reorder_resumed');
+    expect(c['order'], r['order']);
+    expect(c['current'], r['current']);
+    expect(c['done_per'], r['done_per']);
+    expect(c['view_exercise'], c['current_name']);
+    expect(await port.readPendingJournal(), isNull);
+  });
+
   test('history lists stored workouts for the restore drill', () async {
     final store = SqliteStore.inMemory();
     addTearDown(store.close);
