@@ -378,6 +378,7 @@ jobs:
             if [ "$INSTALL_OVER" = "true" ]; then tools/emulator_install_over.sh apk/prev-x86_64-dogfood.apk apk/app-x86_64-dogfood-release.apk "$DOGFOOD_PKG"; else echo "install-over not run on this job (API ${{ matrix.api-level }}, has_prev=${{ needs.build-dogfood.outputs.has_prev }})"; fi
             if [ "${{ matrix.api-level }}" = "36" ]; then tools/emulator_migration_over.sh "apk/$MIGRATION_BASE_APK" apk/app-x86_64-dogfood-release.apk "$DOGFOOD_PKG"; fi
             tools/emulator_smoke.sh apk/app-x86_64-dogfood-release.apk "$DOGFOOD_PKG"
+            tools/emulator_import.sh apk/app-x86_64-dogfood-release.apk "$DOGFOOD_PKG"
 
   ui-e2e:
     # Widget-driven flow on a real device (t60's integration_test/ui_flow_test.dart): picker tap

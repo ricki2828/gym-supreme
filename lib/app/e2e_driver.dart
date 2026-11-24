@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show gzip;
 
 import 'package:flutter/widgets.dart';
 import 'package:gym_engine/cut2.dart' as c2;
@@ -30,6 +31,12 @@ import 'services.dart';
 ///   leave `history` (not `isStored`, which stays true for deleted ones).
 /// - `export_check`: the export's workout count and tombstones.
 /// - `ask`: the one-time notification ask (0.1.1).
+/// - `pick`: opens the import file picker (GymHostApi.pickImportFile); the
+///   script backs out of it and checks the native and Dart result (0.3 I1).
+/// - `export_dump`: the JSON export, gzip + base64, in numbered `chunk`
+///   lines, with the history digest (import drill, 0.3 I1).
+/// - `import.<base64 gzip export>`: preview + import of that bundle, then
+///   persist and log the counts and the history digest (import drill).
 /// - `history`: list stored workouts and whether a journal is pending
 ///   (restore drill, 0.2; discard check, 0.2.1).
 class E2eDriver {
@@ -86,6 +93,12 @@ class E2eDriver {
           _log('ok');
         case 'ask':
           await _ask();
+        case 'pick':
+          await _pick();
+        case 'export_dump':
+          _exportDump();
+        case _ when name.startsWith('import.'):
+          _import(name.substring('import.'.length));
         case 'history':
           await _history();
         default:
@@ -262,6 +275,61 @@ class E2eDriver {
       'history_count': rows.length,
     });
     _exportCheck();
+    _log('ok');
+  }
+
+  /// What history looks like to him: every row and the counters. Equal on
+  /// two phones means equal history.
+  Map<String, Object?> _digest() {
+    final rows = s.engine.history(limit: 1000);
+    final c = s.engine.counters();
+    final text = jsonEncode([
+      for (final r in rows) [r.uuid, r.startedAtMs, r.volumeKg, r.setCount],
+      [c.sessionsTotal, c.doneSets, c.tapUnchangedSets, c.coldStartSets],
+    ]);
+    return {'count': rows.length, 'digest': eng.tieHash(0, text)};
+  }
+
+  void _exportDump() {
+    final json = s.engine.export(appVersion: s.appVersion).json;
+    final b64 = base64.encode(gzip.encode(utf8.encode(json)));
+    const size = 600; // well under the logcat line cap
+    final n = (b64.length + size - 1) ~/ size;
+    _log('export_dump', {..._digest(), 'chunks': n, 'chars': b64.length});
+    for (var i = 0; i < n; i++) {
+      final end = (i + 1) * size;
+      _log('chunk', {
+        'i': i,
+        'data': b64.substring(i * size, end > b64.length ? b64.length : end),
+      });
+    }
+    _log('ok');
+  }
+
+  void _import(String b64) {
+    final text = utf8.decode(gzip.decode(base64.decode(b64)));
+    final p = s.engine.previewImport(text);
+    final r = s.engine.importBundle(text);
+    s.persist();
+    _log('import', {
+      ..._digest(),
+      'preview_added': p.workoutsAdded,
+      'added': r.workoutsAdded,
+      'skipped_existing': r.skippedExisting,
+      'skipped_deleted': r.skippedDeleted,
+      'gyms_added': r.gymsAdded,
+      'format': r.exportFormat,
+    });
+    _log('ok');
+  }
+
+  /// Opens the real picker; the script presses BACK, so null is expected.
+  Future<void> _pick() async {
+    final host = s.host;
+    if (host == null) throw StateError('no GymHostApi');
+    _log('pick_open');
+    final text = await host.pickImportFile();
+    _log('pick', {'result': text == null ? 'null' : 'text'});
     _log('ok');
   }
 

@@ -201,6 +201,57 @@ void main() {
     expect(e2['deleted'], [d['deleted']]);
   });
 
+  test('export_dump then import.<bundle> on a fresh store: same digest, '
+      'tombstone not resurrected, re-import adds 0', () async {
+    final a = SqliteStore.inMemory();
+    addTearDown(a.close);
+    final sa = services(a, AlertingStubPort());
+    final lines = <String>[];
+    await E2eDriver(sa, out: lines.add).run('delete:d1');
+    await E2eDriver(sa, out: lines.add).run('delete:d2');
+    final gone = [
+      for (final m in lines.map(step))
+        if (m['step'] == 'delete') m['deleted'],
+    ];
+    lines.clear();
+    await E2eDriver(sa, out: lines.add).run('export_dump:x');
+    final dump = lines.map(step).firstWhere((m) => m['step'] == 'export_dump');
+    expect(dump['count'], 2);
+    final chunks = [
+      for (final m in lines.map(step))
+        if (m['step'] == 'chunk') m,
+    ];
+    expect(chunks, hasLength(dump['chunks']));
+    for (final c in chunks) {
+      expect((c['data'] as String).length, lessThanOrEqualTo(600));
+    }
+    final b64 = chunks.map((c) => c['data']).join();
+    expect(b64.length, dump['chars']);
+    expect(b64, isNot(contains(':')), reason: 'the command splits on ":"');
+
+    final b = SqliteStore.inMemory();
+    addTearDown(b.close);
+    final sb = services(b, AlertingStubPort());
+    lines.clear();
+    await E2eDriver(sb, out: lines.add).run('import.$b64:y');
+    expect(lines.map(step).last['step'], 'ok', reason: lines.join('\n'));
+    final imp = lines.map(step).firstWhere((m) => m['step'] == 'import');
+    expect(imp['added'], 2);
+    expect(imp['preview_added'], 2);
+    expect(imp['digest'], dump['digest']);
+    expect(imp['count'], 2);
+    final uuids = [for (final h in sb.engine.history()) h.uuid];
+    for (final u in gone) {
+      expect(uuids, isNot(contains(u)));
+    }
+    lines.clear();
+    await E2eDriver(sb, out: lines.add).run('import.$b64:z');
+    final again = lines.map(step).firstWhere((m) => m['step'] == 'import');
+    expect(again['added'], 0);
+    expect(again['skipped_existing'], 2);
+    expect(again['digest'], dump['digest']);
+  });
+
   test('history lists stored workouts for the restore drill', () async {
     final store = SqliteStore.inMemory();
     addTearDown(store.close);

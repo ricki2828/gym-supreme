@@ -9,3 +9,4 @@
 - 2026-11-23: refusal code `io_error` (real I/O failure, e.g. deleteJournal), native counter `journal_delete_failed` (#19). Additive. Lane A doc, native lane code.
 - 2026-11-23: `GymHostApi.requestNotificationPermission()` (@async bool; POST_NOTIFICATIONS on API 33+, notificationsEnabled below; refusal code `already_pending`). Additive. Native lane.
 - 2026-11-24: `GymHostApi.pickImportFile()` (@async String?; I1 import). ACTION_OPEN_DOCUMENT, no permission; returns the file text (strict UTF-8) or null on cancel / activity gone; refusal codes `already_pending`, `too_large` (over 16 MiB), `io_error`. Logcat `import_pick_shown`, `import_pick` (result picked|cancelled|too_large|io_error|no_picker|activity_gone). Additive. Lane E/U (I1).
+- 2026-11-24: export `export_format` 2 gains an optional per-workout `hr` list of `[t_ms, bpm]` (left out when empty; additive). Import (I1) reads format 1 and 2, refuses newer format / schema / snapshot schema. Lane E/U (I1).
