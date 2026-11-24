@@ -96,6 +96,53 @@ void main() {
       ),
     );
 
+    // R2: finish exercise 1 through the real UI; its last set puts "What's
+    // next?" on the rest screen. Tap a DO NOW row, and the picked exercise is
+    // the default (and, after Start now, the current one).
+    var logged = 1;
+    var guard = 0;
+    while (guard++ < 10) {
+      await _tap(tester, find.text('DONE'));
+      logged++;
+      await _waitFor(tester, 'rest_$logged', find.text('SKIP REST'));
+      if (find.text("WHAT'S NEXT?").evaluate().isNotEmpty) break;
+      await _tap(tester, find.text('SKIP REST'));
+      await _waitFor(tester, 'after_rest_$logged', find.text('DONE'));
+    }
+    expect(find.text("WHAT'S NEXT?"), findsOneWidget);
+    final pickRow = find.byKey(const Key('whatsnext.pick.1'));
+    if (pickRow.evaluate().isEmpty) {
+      await tester.scrollUntilVisible(
+        pickRow,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+    }
+    final pickedName = tester
+        .widget<Text>(
+          find.descendant(of: pickRow, matching: find.byType(Text)).first,
+        )
+        .data!;
+    await _tap(tester, pickRow);
+    await tester.fling(
+      find.byType(Scrollable).first,
+      const Offset(0, 1500),
+      3000,
+    );
+    await _settle(tester);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('whatsnext.default')),
+        matching: find.text(pickedName.toUpperCase()),
+      ),
+      findsOneWidget,
+      reason: 'the tapped exercise is now the default',
+    );
+    await _tap(tester, find.byKey(const Key('whatsnext.start')));
+    await _waitFor(tester, 'picked_current', find.text('DONE'));
+    expect(find.text(pickedName.toUpperCase()), findsWidgets);
+    step('whatsnext_picked', {'picked': pickedName, 'sets_logged': logged});
+
     // Item 6: finish → post-workout (B1 order inside the controller).
     // Finish is pinned under the list (item 2); with sets left it asks.
     final allDone = find.text('FINISH').evaluate().isNotEmpty;
@@ -130,7 +177,7 @@ void main() {
     expect(journal, isNull, reason: 'journal deleted after the save');
     if (before.isNotEmpty) expect(row.uuid, isNot(before.first.uuid));
     expect(row.typeId, 'push');
-    expect(row.setCount, 1);
+    expect(row.setCount, logged);
     expect(summary.musclesLit, contains('chest'));
 
     // Back on Today.

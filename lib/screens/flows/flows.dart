@@ -874,10 +874,22 @@ class _LiveFlowState extends State<LiveFlow> {
   /// or exit animation would pop GymRoot itself.
   bool _leaving = false;
 
+  bool _left = false;
+  int _leaveTries = 0;
+
   void _leave([String? uuid]) {
-    if (!mounted) return;
+    if (!mounted || _left) return;
     final route = ModalRoute.of(context);
-    if (route == null || !route.isCurrent) return;
+    if (route == null || !route.isActive) return;
+    if (!route.isCurrent) {
+      // A sheet or dialog is over the live screen (a lock-screen Finish landed
+      // under it): close down to this route, then leave on the next frame.
+      if (_leaveTries++ > 5) return;
+      Navigator.of(context).popUntil((r) => r == route);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _leave(uuid));
+      return;
+    }
+    _left = true;
     Navigator.of(context).pop(uuid);
   }
 
@@ -1025,6 +1037,16 @@ class _LiveFlowState extends State<LiveFlow> {
     }
   }
 
+  /// "Up next · Change order": the reorder sheet over the live screen. It
+  /// reads the controller again on every change, so a move shows at once.
+  Future<void> _changeOrder() => showReorderSheet(
+    context,
+    listenable: c,
+    view: c.view,
+    onMove: c.reorderQueue,
+    onMoveItem: c.moveQueueItem,
+  );
+
   /// Pause, then delete the journal; leaves with no uuid (nothing to
   /// summarise). If the delete fails the workout stays paused and Today
   /// offers it as Resume (the failure is said there).
@@ -1090,6 +1112,9 @@ class _LiveFlowState extends State<LiveFlow> {
             onSkipRest: c.skipRest,
             onReorder: c.reorderQueue,
             onDoLater: c.doLater,
+            onPickNext: c.pickNow,
+            onMoveItem: c.moveQueueItem,
+            onChangeOrder: _changeOrder,
             onPause: _pause,
             onFinish: _finish,
             onDiscard: c.active ? _discard : null,

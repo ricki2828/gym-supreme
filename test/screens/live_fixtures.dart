@@ -21,6 +21,8 @@ LiveView liveView({
   WorkoutType type = WorkoutType.push,
   bool timerBlock = false,
   String? plateLine,
+  bool atExerciseEnd = false,
+  bool canDoLater = true,
 }) => LiveView(
   timerBlock: timerBlock,
   plateLine: plateLine,
@@ -31,9 +33,12 @@ LiveView liveView({
   exerciseName: name,
   lift: 1,
   lifts: 5,
-  set: 3,
+  // A boundary starts a fresh exercise: set 1 of N, all of it still to do.
+  set: atExerciseEnd ? 1 : 3,
   sets: 3,
-  rail: const [SetTile.done, SetTile.done, SetTile.current],
+  rail: atExerciseEnd
+      ? const [SetTile.current, SetTile.pending, SetTile.pending]
+      : const [SetTile.done, SetTile.done, SetTile.current],
   reps: reps,
   loadG: loadG,
   unit: unit,
@@ -43,7 +48,8 @@ LiveView liveView({
   restS: 90,
   upNext: pushPlan.items.sublist(1),
   queue: pushPlan.items,
-  canDoLater: true,
+  canDoLater: canDoLater,
+  atExerciseEnd: atExerciseEnd,
   elapsedS: 12 * 60 + 40,
   restLeftS: restLeftS,
   allDone: allDone,

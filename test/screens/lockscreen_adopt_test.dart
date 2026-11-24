@@ -402,6 +402,20 @@ void main() {
     expect(await tester.runAsync(port.readPendingJournal), isNull);
     expect(engine.history(), isEmpty);
   });
+
+  testWidgets('a lock-screen Finish with the Change order sheet open still '
+      'leads to the summary', (tester) async {
+    await liveWithOneSet(tester);
+    await tapKey(tester, 'live.change_order');
+    expect(find.byType(ReorderSheet), findsOneWidget);
+    final h = await head();
+    port.foreignWrite(eng.Session.finish(h, nowMs: now += 1000).encode());
+    await tester.pumpAndSettle();
+    expect(find.byType(ReorderSheet), findsNothing);
+    expect(find.byType(LiveScreen), findsNothing);
+    expect(find.byType(PostWorkoutScreen), findsOneWidget);
+    expect(engine.history(), hasLength(1));
+  });
 }
 
 /// Before each of the next [collisions] submits, a lock-screen Done (or Skip

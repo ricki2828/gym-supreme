@@ -262,7 +262,10 @@ void main() {
       expect(v.queue.length, v.upNext.length + 1);
       expect(v.queue.first.name, v.exerciseName);
       await reveal(tester, find.text('NOW'));
-      expect(find.text('ORDER · DRAG TO REORDER'), findsOneWidget);
+      expect(
+        find.text('ORDER · HOLD A ROW TO DRAG, OR USE ITS MENU'),
+        findsOneWidget,
+      );
       expect(find.text('NOW'), findsOneWidget);
       await endLive(tester);
     });
@@ -341,7 +344,10 @@ void main() {
         ),
       );
       expect(find.byKey(const Key('live.do_later')), findsNothing);
-      expect(find.text('ORDER · DRAG TO REORDER'), findsNothing);
+      expect(
+        find.text('ORDER · HOLD A ROW TO DRAG, OR USE ITS MENU'),
+        findsNothing,
+      );
     });
 
     testWidgets('the row-0 handle is dead while a timer block runs', (
@@ -360,7 +366,10 @@ void main() {
         );
         await tester.pumpAndSettle();
         await reveal(tester, find.text('NOW'));
-        return find.byType(ReorderableDragStartListener).evaluate().length;
+        return find
+            .byType(ReorderableDelayedDragStartListener)
+            .evaluate()
+            .length;
       }
 
       final all = await handles(timer: false);

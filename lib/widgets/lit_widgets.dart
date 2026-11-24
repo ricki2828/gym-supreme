@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:supreme_ui/supreme_ui.dart';
 
@@ -219,7 +220,19 @@ class PlanList extends StatelessWidget {
     this.maxHeight,
     this.markFirst = false,
     this.lockFirst = false,
+    this.moveMenu = false,
+    this.onMoveItem,
   });
+
+  /// Move up / down from the row menu, by exercise id (live lists): resolved
+  /// by the owner at the moment it runs, not by the index the row had when it
+  /// was drawn. Without it the menu falls back to [onReorder] with indexes.
+  final void Function(String exerciseId, int delta)? onMoveItem;
+
+  /// Live lists: a 48 dp handle that starts a drag after a short hold, a
+  /// long-press anywhere on the row, and a Move up / Move down menu on every
+  /// row (the sure way when a drag will not take). Off for the picker.
+  final bool moveMenu;
 
   /// The first row cannot be dragged (a timer block runs on it): its handle
   /// is dimmed and does nothing.
@@ -250,51 +263,106 @@ class PlanList extends StatelessWidget {
     ];
     Widget row(int i) {
       final p = items[i];
-      // A 48 x 48 drag target around the 18 dp bars (used mid-set).
       final locked = lockFirst && i == 0;
-      final handle = SizedBox(
-        width: 44,
-        height: 48,
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Grip(
-            colour: locked
-                ? (dark ? const Color(0x558A8F98) : const Color(0x55121417))
-                : (dark ? const Color(0xFF8A8F98) : Lit.ink),
-          ),
-        ),
+      final grip = Grip(
+        colour: locked
+            ? (dark ? const Color(0x558A8F98) : const Color(0x55121417))
+            : (dark ? const Color(0xFF8A8F98) : Lit.ink),
       );
-      return Container(
-        key: ValueKey(keys[i]),
-        constraints: const BoxConstraints(minHeight: 48),
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: rule)),
-        ),
-        child: Semantics(
-          label:
-              '${markFirst && i == 0 ? 'Current exercise: ' : ''}'
-              '${p.name}, ${prescription(p)}'
-              '${locked ? ', timer running, cannot be moved' : ''}',
+      // The handle: an opaque 48 x 56 target around the 18 dp bars.
+      final handle = moveMenu
+          ? Container(
+              key: Key('plan.handle.$i'),
+              width: 48,
+              height: 56,
+              color: Colors.transparent,
+              alignment: Alignment.center,
+              child: grip,
+            )
+          : SizedBox(
+              width: 44,
+              height: 48,
+              child: Align(alignment: Alignment.centerLeft, child: grip),
+            );
+      final label =
+          '${markFirst && i == 0 ? 'Current exercise: ' : ''}'
+          '${p.name}, ${prescription(p)}'
+          '${locked ? ', timer running, cannot be moved' : ''}';
+      final text = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // The tag sits above the name, not beside it: a 320 dp phone at
+          // 1.3x text has no room for another word in the row.
+          if (markFirst && i == 0) Text('NOW', style: LitType.cap(11, fg)),
+          Text(p.name, style: LitType.body(14, fg, FontWeight.w700)),
+          if (moveMenu)
+            Text(prescription(p), style: LitType.body(13, fg, FontWeight.w600)),
+        ],
+      );
+      final live = onReorder != null && !locked;
+      Widget body;
+      if (moveMenu) {
+        final canUp = i > 0 && !locked && !(lockFirst && i == 1);
+        final canDown = i < items.length - 1 && !locked;
+        // The label covers the text only: the handle and the menu are
+        // siblings, so the menu keeps its own tap action.
+        body = Row(
+          children: [
+            live ? _HandleDrag(index: i, child: handle) : handle,
+            Expanded(
+              child: Semantics(
+                label: label,
+                excludeSemantics: true,
+                child: text,
+              ),
+            ),
+            SizedBox(
+              width: 48,
+              height: 48,
+              child: PopupMenuButton<int>(
+                key: Key('plan.menu.$i'),
+                padding: EdgeInsets.zero,
+                tooltip: 'Move ${p.name}',
+                enabled:
+                    (onReorder != null || onMoveItem != null) &&
+                    (canUp || canDown),
+                icon: Icon(Icons.more_vert, color: fg),
+                onSelected: (d) => onMoveItem != null
+                    ? onMoveItem!(p.exerciseId, d)
+                    : onReorder!(i, i + d),
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    key: Key('plan.up.$i'),
+                    value: -1,
+                    enabled: canUp,
+                    child: const Text('Move up'),
+                  ),
+                  PopupMenuItem(
+                    key: Key('plan.down.$i'),
+                    value: 1,
+                    enabled: canDown,
+                    child: const Text('Move down'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+        if (live) {
+          body = ReorderableDelayedDragStartListener(index: i, child: body);
+        }
+      } else {
+        body = Semantics(
+          label: label,
           excludeSemantics: true,
           child: Row(
             children: [
-              if (onReorder != null && !locked)
+              if (live)
                 ReorderableDragStartListener(index: i, child: handle)
               else
                 handle,
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // The tag sits above the name, not beside it: a 320 dp
-                    // phone at 1.3x text has no room for another word in the row.
-                    if (markFirst && i == 0)
-                      Text('NOW', style: LitType.cap(11, fg)),
-                    Text(p.name, style: LitType.body(14, fg, FontWeight.w700)),
-                  ],
-                ),
-              ),
+              Expanded(child: text),
               const SizedBox(width: 8),
               Text(
                 prescription(p).toUpperCase(),
@@ -302,7 +370,16 @@ class PlanList extends StatelessWidget {
               ),
             ],
           ),
+        );
+      }
+      return Container(
+        key: ValueKey(keys[i]),
+        constraints: BoxConstraints(minHeight: moveMenu ? 56 : 48),
+        padding: EdgeInsets.symmetric(vertical: moveMenu ? 4 : 0),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: rule)),
         ),
+        child: body,
       );
     }
 
@@ -334,4 +411,16 @@ class PlanList extends StatelessWidget {
     );
     return capped(list);
   }
+}
+
+/// The row's drag handle: a drag starts after a 120 ms hold, which beats the
+/// page's own scroll (an immediate drag lost to it, so it took several tries).
+class _HandleDrag extends ReorderableDragStartListener {
+  const _HandleDrag({required super.index, required super.child});
+  @override
+  MultiDragGestureRecognizer createRecognizer() =>
+      DelayedMultiDragGestureRecognizer(
+        delay: const Duration(milliseconds: 120),
+        debugOwner: this,
+      );
 }

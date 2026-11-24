@@ -461,6 +461,33 @@ class LiveController extends ChangeNotifier {
   /// still has sets to do. A no-op with nothing else waiting.
   Future<void> doLater() => reorderQueue(0, 1);
 
+  /// "What's next?" pick: the exercise at [queueIndex] of the pending list
+  /// becomes the first pending one and the rest keep their relative order
+  /// (the same result as "Do later" for index 1). One `Session.reorder`, so
+  /// rev, journal and lock-screen Done follow it. Rest keeps running.
+  ///
+  /// Taken by exercise id, resolved to a place in the list INSIDE the
+  /// transition, so a lock-screen Done or a double tap that moved things first
+  /// can never move the wrong exercise: absent or already current is a no-op.
+  Future<void> pickNow(String exerciseId) => _transition((s) {
+    final pend = pendingExercises(s);
+    final i = pend.indexWhere((x) => s.exercises[x].exerciseId == exerciseId);
+    if (i <= 0) return s;
+    if (_currentHasBlock(s)) return s;
+    return eng.Session.reorder(s, pend[i], pend[0]);
+  });
+
+  /// One step up (-1) or down (+1) in the pending list for the sheet's menu,
+  /// by exercise id and resolved inside the transition like [pickNow].
+  Future<void> moveQueueItem(String exerciseId, int delta) => _transition((s) {
+    final pend = pendingExercises(s);
+    final i = pend.indexWhere((x) => s.exercises[x].exerciseId == exerciseId);
+    final to = i + delta;
+    if (i < 0 || to < 0 || to >= pend.length) return s;
+    if ((i == 0 || to == 0) && _currentHasBlock(s)) return s;
+    return eng.Session.reorder(s, pend[i], pend[to]);
+  });
+
   bool _currentHasBlock(eng.SessionSnapshot s) => s.currentSet?.block != null;
 
   /// True when the journal holds the paused snapshot (safe to leave). The

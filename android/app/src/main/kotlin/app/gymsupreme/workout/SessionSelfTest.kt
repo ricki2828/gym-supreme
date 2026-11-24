@@ -41,6 +41,13 @@ object SessionSelfTest {
                     val rev = live.start(JsonWriter.write(snapshot(uuid, now, now + REST_MS)))
                     line.put("uuid", uuid).put("rev", rev).put("ok", true)
                 }
+                "start_pick" -> {
+                    // R2: the journal as it is after "What's next?" picked the third exercise.
+                    val now = System.currentTimeMillis()
+                    val uuid = UUID.randomUUID().toString()
+                    val rev = live.start(JsonWriter.write(pickSnapshot(uuid, now, now + REST_MS)))
+                    line.put("uuid", uuid).put("rev", rev).put("ok", true)
+                }
                 "pending" -> {
                     val json = live.readPending()
                     line.put("found", json != null).put("ok", json != null)
@@ -53,6 +60,10 @@ object SessionSelfTest {
                             .map { it as Map<*, *> }.filter { it["state"] == "done" && it["source"] == "lockscreen" }
                         line.put("lockscreen_sets", lock.size)
                         lock.firstOrNull()?.let { line.put("lock_load_g", it["load_g"] as? Long).put("lock_reps", it["reps"] as? Long).put("lock_completion", it["completion"] as? String) }
+                        // R2: which exercise the lock-screen set belongs to.
+                        (s["exercises"] as List<*>).map { it as Map<*, *> }
+                            .firstOrNull { e -> (e["sets"] as List<*>).any { x -> (x as Map<*, *>)["source"] == "lockscreen" } }
+                            ?.let { line.put("lock_exercise", it["exercise_id"] as? String) }
                     }
                 }
                 "lock_fire" -> lockFire(context, line)
@@ -224,6 +235,35 @@ object SessionSelfTest {
         "offset_ms" to if (done) 0L else null,
         "block" to null,
     )
+
+    private fun exercise(id: String, sets: List<Map<String, Any?>>): Map<String, Any?> = linkedMapOf(
+        "exercise_id" to id,
+        "name" to id,
+        "load_kind" to "dumbbell",
+        "unilateral" to false,
+        "rest_s" to 3L,
+        "rep_lo" to 8L,
+        "rep_hi" to 12L,
+        "sets" to sets,
+    )
+
+    /**
+     * What the journal holds after exercise 1 is finished and exercise 3 is picked from "What's
+     * next?": [a (done), c, b], with c, the picked one, first with a set to do. A lock-screen Done
+     * must log c's set, not b's (the natural next one).
+     */
+    private fun pickSnapshot(uuid: String, now: Long, restEnd: Long): Map<String, Any?> = LinkedHashMap(snapshot(uuid, now, restEnd)).apply {
+        put("rest", linkedMapOf("set_id" to "$uuid:1", "ends_at_wall_ms" to restEnd, "duration_ms" to REST_MS))
+        put("next_set_n", 6L)
+        put(
+            "exercises",
+            listOf(
+                exercise("selftest-a", listOf(set("$uuid:0", 1, true, now - 10_000), set("$uuid:1", 2, true, now))),
+                exercise("selftest-c", listOf(set("$uuid:2", 1, false, now), set("$uuid:3", 2, false, now))),
+                exercise("selftest-b", listOf(set("$uuid:4", 1, false, now), set("$uuid:5", 2, false, now))),
+            ),
+        )
+    }
 
     private fun snapshot(uuid: String, now: Long, restEnd: Long): Map<String, Any?> = linkedMapOf(
         "schema" to 1L,

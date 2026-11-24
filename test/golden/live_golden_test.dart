@@ -30,6 +30,8 @@ void main() {
           onSkipRest: () {},
           onReorder: (_, _) {},
           onDoLater: () {},
+          onPickNext: (_) {},
+          onChangeOrder: () {},
           onPause: () {},
           onFinish: () {},
         ),
@@ -78,5 +80,68 @@ void main() {
   testWidgets(
     'set at 1.3x text',
     (t) => shot(t, 'set_large_font', liveView(), textScale: 1.3),
+  );
+
+  // 0.3.1 R2: "What's next?" after an exercise (rest screen: the default card
+  // and the other exercises), the same choice on the set screen, and the
+  // Change order sheet.
+  testWidgets(
+    'rest, what\'s next',
+    (t) => shot(
+      t,
+      'rest_whats_next',
+      liveView(restLeftS: 75, atExerciseEnd: true),
+    ),
+  );
+  testWidgets(
+    'rest, what\'s next, 1.3x text',
+    (t) => shot(
+      t,
+      'rest_whats_next_large_font',
+      liveView(restLeftS: 75, atExerciseEnd: true),
+      textScale: 1.3,
+    ),
+  );
+  testWidgets(
+    'set, what\'s next (no rest)',
+    (t) => shot(t, 'set_whats_next', liveView(atExerciseEnd: true)),
+  );
+
+  Future<void> sheet(WidgetTester tester, String name, double scale) async {
+    phone(tester, textScale: scale);
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: runSoloTheme().copyWith(scaffoldBackgroundColor: Lit.ground),
+        home: Builder(
+          builder: (ctx) => LiveScreen(
+            view: liveView(),
+            onDone: () {},
+            onChangeOrder: () => showReorderSheet(
+              ctx,
+              listenable: ValueNotifier(0),
+              view: () => liveView(),
+              onMove: (_, _) {},
+            ),
+            onDoLater: () {},
+            onReorder: (_, _) {},
+            onFinish: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('live.change_order')));
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/live_$name.png'),
+    );
+  }
+
+  testWidgets('reorder sheet', (t) => sheet(t, 'reorder_sheet', 1.0));
+  testWidgets(
+    'reorder sheet, 1.3x text',
+    (t) => sheet(t, 'reorder_sheet_large_font', 1.3),
   );
 }

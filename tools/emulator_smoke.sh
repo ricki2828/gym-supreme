@@ -214,6 +214,31 @@ fin="$(wait_for '"event":"selftest_session".*"step":"finish".*"finished":true,"d
 echo "session finish: $fin"
 fatal_check "$PKG" session
 
+# R2 (0.3.1): a lock-screen Done after "What's next?" picked exercise 3. The journal is [a done, c,
+# b] (c picked); the notification's Done must log c's set, with Flutter gone.
+if [ "$lockdone" = 1 ]; then
+  adb logcat -c || true
+  session_step start_pick
+  wait_for '"event":"selftest_session".*"step":"start_pick".*"ok":true' 30 > /dev/null || {
+    echo "::error::R2: start_pick refused" >&2; svc_lines | grep -E 'selftest_session|journal' | tail -n 10 >&2; exit 1; }
+  session_step lock_fire
+  wait_for '"event":"selftest_session".*"step":"lock_fire".*"ok":true' 30 > /dev/null || {
+    echo "::error::R2: lock_fire did not run" >&2; svc_lines | tail -n 10 >&2; exit 1; }
+  for i in $(seq 1 45); do [ "$(lock_lines | grep -c '"outcome":"applied"')" -ge 1 ] && break; sleep 1; done
+  [ "$(lock_lines | grep -c '"outcome":"applied"')" -ge 1 ] || { echo "::error::R2: the lock-screen Done was not applied" >&2; lock_lines >&2; exit 1; }
+  sleep 8   # the double and stale taps settle
+  session_step pending
+  pk="$(wait_for '"event":"selftest_session".*"step":"pending".*"found":true' 30)" || {
+    echo "::error::R2: journal not readable after the pick Done" >&2; exit 1; }
+  echo "R2 lock-screen Done after a pick: $pk"
+  grep -q '"lock_exercise":"selftest-c"' <<< "$pk" \
+    || { echo "::error::R2: the lock-screen Done did not log the picked exercise (selftest-c): $pk" >&2; exit 1; }
+  session_step finish
+  wait_for '"event":"selftest_session".*"step":"finish".*"finished":true,"deleted":true' 30 > /dev/null || {
+    echo "::error::R2: finish + delete failed" >&2; exit 1; }
+  fatal_check "$PKG" "lock-screen Done after a pick"
+fi
+
 # Starting weights (0.3 S1), before the flows below log anything: a 20 kg starting weight on a chest lift
 # with no history must be the planned load and the live set's target; the workout is discarded
 # and the weight cleared, so nothing is left behind for the flows below.
@@ -403,6 +428,34 @@ rr="$(e2e_lines | grep '"step":"reorder_resumed"')"
 [ "$(e2e_field view_exercise <<< "$rr")" = "$(e2e_field current_name <<< "$rr")" ] \
   || { echo "::error::API $sdk: Resume does not show the current exercise: $rr" >&2; exit 1; }
 fatal_check "$PKG" "e2e reorder"
+# What's next? (R2, 0.3.1): log every set of exercise 1, pick exercise 3 (the rest screen's row),
+# kill the app. The journal must come back with that order, exercise 3 current, exercise 1's sets
+# still logged, and the choice still on.
+adb logcat -c || true
+e2e_cmd whatsnext
+e2e_wait whatsnext 90
+wn="$(e2e_lines | grep '"step":"whatsnext"')"
+adb shell am force-stop "$PKG"
+sleep 2
+adb logcat -c || true
+e2e_cmd whatsnext_check
+e2e_wait ok 60
+e2e_lines | sed 's/^/e2e whatsnext_check: /'
+wr="$(e2e_lines | grep '"step":"reorder_resumed"')"
+[ -n "$wn" ] && [ -n "$wr" ] || { echo "::error::API $sdk: whatsnext steps missing: $wn / $wr" >&2; exit 1; }
+[ "$(list_of before <<< "$wn")" != "$(list_of order <<< "$wn")" ] \
+  || { echo "::error::API $sdk: the pick did not change the order: $wn" >&2; exit 1; }
+[ "$(list_of order <<< "$wn")" = "$(list_of order <<< "$wr")" ] \
+  || { echo "::error::API $sdk: pick order changed across the kill: $wn / $wr" >&2; exit 1; }
+[ "$(list_of done_per <<< "$wn")" = "$(list_of done_per <<< "$wr")" ] \
+  || { echo "::error::API $sdk: logged sets moved across the kill (pick): $wn / $wr" >&2; exit 1; }
+[ "$(e2e_field current <<< "$wn")" = "$(e2e_field current <<< "$wr")" ] \
+  || { echo "::error::API $sdk: current exercise changed across the kill (pick): $wn / $wr" >&2; exit 1; }
+[ "$(e2e_field view_exercise <<< "$wr")" = "$(e2e_field current_name <<< "$wr")" ] \
+  || { echo "::error::API $sdk: Resume does not show the picked exercise: $wr" >&2; exit 1; }
+grep -q '"at_end":true' <<< "$wr" \
+  || { echo "::error::API $sdk: What's next? gone after the kill: $wr" >&2; exit 1; }
+fatal_check "$PKG" "e2e whatsnext"
 # Rest alert with notifications DENIED (t3x, 0.1.1): plan 6.2 says the service itself buzzes
 # and plays the tone, so a refused permission must not silence the rest. API 33+ only (below
 # 33 the permission does not exist). Revoking kills the app; the e2e run starts it again.
