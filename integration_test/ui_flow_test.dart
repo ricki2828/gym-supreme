@@ -93,6 +93,13 @@ void main() {
     await tester.ensureVisible(doneBtn.first);
     await _settle(tester);
     if (find.text('Set a weight first').evaluate().isNotEmpty) {
+      // DONE was scrolled in above the stepper: back to the top for it.
+      await tester.fling(
+        find.byType(Scrollable).first,
+        const Offset(0, 1500),
+        3000,
+      );
+      await _settle(tester);
       await _tap(tester, find.bySemanticsLabel('More kilograms'));
       await _waitFor(tester, 'weight', find.textContaining('first time'));
     }
