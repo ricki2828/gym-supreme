@@ -31,6 +31,11 @@ import 'services.dart';
 ///   leave `history` (not `isStored`, which stays true for deleted ones).
 /// - `export_check`: the export's workout count and tombstones.
 /// - `ask`: the one-time notification ask (0.1.1).
+/// - `reorder`: start, log a set, "Do later" on the current exercise (R1,
+///   0.3.0); the smoke then kills the app.
+/// - `reorder_check`: the journal from `reorder` comes back with the same
+///   order, the same current exercise and the logged set still inside its
+///   exercise, then it is discarded.
 /// - `pick`: opens the import file picker (GymHostApi.pickImportFile); the
 ///   script backs out of it and checks the native and Dart result (0.3 I1).
 /// - `export_dump`: the JSON export, gzip + base64, in numbered `chunk`
@@ -100,6 +105,10 @@ class E2eDriver {
           _log('ok');
         case 'ask':
           await _ask();
+        case 'reorder':
+          await _reorder();
+        case 'reorder_check':
+          await _reorderCheck();
         case 'pick':
           await _pick();
         case 'export_dump':
@@ -371,6 +380,78 @@ class E2eDriver {
       ],
       'deleted': m['deleted_workout_uuids'],
     });
+  }
+
+  static List<String> _ids(eng.SessionSnapshot s) => [
+    for (final e in s.exercises) e.exerciseId,
+  ];
+
+  /// Logged sets per exercise, in snapshot order.
+  static List<int> _donePer(eng.SessionSnapshot s) => [
+    for (final e in s.exercises)
+      e.sets.where((x) => x.state == eng.SetState.done).length,
+  ];
+
+  static String _currentId(eng.SessionSnapshot s) =>
+      s.exercises[s.current!.exercise].exerciseId;
+
+  /// R1: the live reorder survives process death. One set is logged on the
+  /// first exercise, which then goes "later" (after the next one).
+  Future<void> _reorder() async {
+    final plan = s.engine.suggest(
+      gymId: _gymId(),
+      muscleIds: const ['chest'],
+      minutes: 30,
+      seed: 1,
+    );
+    if (plan.items.length < 2) throw StateError('need 2 exercises to reorder');
+    final c = _controller();
+    await c.start(plan);
+    _check(c, 'start');
+    await c.done();
+    _check(c, 'set1');
+    final before = _ids(c.snapshot!);
+    await c.doLater();
+    _check(c, 'do_later');
+    final after = c.snapshot!;
+    final expected = [before[1], before[0], ...before.skip(2)];
+    if (_ids(after).join(',') != expected.join(',')) {
+      throw StateError('order ${_ids(after)} is not $expected');
+    }
+    _log('reorder', {
+      'before': before,
+      'order': _ids(after),
+      'current': _currentId(after),
+      'done_per': _donePer(after),
+      'rev': after.rev,
+    });
+    c.dispose();
+  }
+
+  /// After the kill: the journal has the reordered order, the same current
+  /// exercise and the logged set where it was logged. Resumes, then discards
+  /// (cleans the journal; the discard path itself is its own smoke step).
+  Future<void> _reorderCheck() async {
+    final r = s.engine.recover(await s.port.readPendingJournal());
+    _log('recover', {'action': r.action.name});
+    final snap = r.snapshot;
+    if (r.action != eng.RecoveryAction.offerResume || snap == null) {
+      throw StateError('expected offerResume, got ${r.action.name}');
+    }
+    final c = _controller();
+    await c.resume(snap);
+    _check(c, 'resume');
+    final now = c.snapshot!;
+    _log('reorder_resumed', {
+      'order': _ids(now),
+      'current': _currentId(now),
+      'done_per': _donePer(now),
+      'view_exercise': c.view()?.exerciseName,
+      'current_name': now.exercises[now.current!.exercise].name,
+    });
+    if (!await c.discard()) throw StateError('discard failed');
+    c.dispose();
+    _log('ok');
   }
 
   Future<void> _resume() async {

@@ -123,7 +123,7 @@ void main() {
     await startPush();
     final before = c.view()!.upNext.map((p) => p.exerciseId).toList();
     expect(before.length, greaterThanOrEqualTo(2), reason: 'condo push');
-    await c.reorderUpNext(0, 1);
+    await c.reorderQueue(1, 2);
     final after = c.view()!.upNext.map((p) => p.exerciseId).toList();
     expect(after, [before[1], before[0], ...before.skip(2)]);
     expect(c.view()!.lift, 1, reason: 'current exercise unchanged');

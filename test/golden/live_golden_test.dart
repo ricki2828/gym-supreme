@@ -28,6 +28,7 @@ void main() {
           onRestDelta: (_) {},
           onSkipRest: () {},
           onReorder: (_, _) {},
+          onDoLater: () {},
           onPause: () {},
           onFinish: () {},
         ),

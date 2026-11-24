@@ -362,6 +362,33 @@ wl="$(sed -n 's/.*"workout_uuids":\(\[[^]]*\]\).*/\1/p' <<< "$ex" | head -1)"
 has_uuid "$kept_uuid" "$wl" && ! has_uuid "$deleted_uuid" "$wl" \
   || { echo "::error::API $sdk: export workouts wrong (kept missing or deleted present): $ex" >&2; exit 1; }
 fatal_check "$PKG" "after delete relaunch"
+# Live reorder (R1, 0.3.0): log a set, send the current exercise "later", kill the app. The journal
+# must come back with the same order, the same current exercise and the logged set still inside its
+# exercise (it moved with it), and Resume must show that exercise.
+list_of() { sed -n "s/.*\"$1\":\(\[[^]]*\]\).*/\1/p" | head -1; }  # one JSON array field
+adb logcat -c || true
+e2e_cmd reorder
+e2e_wait reorder 90
+ro="$(e2e_lines | grep '"step":"reorder"')"
+adb shell am force-stop "$PKG"
+sleep 2
+adb logcat -c || true
+e2e_cmd reorder_check
+e2e_wait ok 60
+e2e_lines | sed 's/^/e2e reorder_check: /'
+rr="$(e2e_lines | grep '"step":"reorder_resumed"')"
+[ -n "$ro" ] && [ -n "$rr" ] || { echo "::error::API $sdk: reorder steps missing: $ro / $rr" >&2; exit 1; }
+[ "$(list_of before <<< "$ro")" != "$(list_of order <<< "$ro")" ] \
+  || { echo "::error::API $sdk: Do later did not change the order: $ro" >&2; exit 1; }
+[ "$(list_of order <<< "$ro")" = "$(list_of order <<< "$rr")" ] \
+  || { echo "::error::API $sdk: order changed across the kill: $ro / $rr" >&2; exit 1; }
+[ "$(list_of done_per <<< "$ro")" = "$(list_of done_per <<< "$rr")" ] \
+  || { echo "::error::API $sdk: logged sets moved across the kill: $ro / $rr" >&2; exit 1; }
+[ "$(e2e_field current <<< "$ro")" = "$(e2e_field current <<< "$rr")" ] \
+  || { echo "::error::API $sdk: current exercise changed across the kill: $ro / $rr" >&2; exit 1; }
+[ "$(e2e_field view_exercise <<< "$rr")" = "$(e2e_field current_name <<< "$rr")" ] \
+  || { echo "::error::API $sdk: Resume does not show the current exercise: $rr" >&2; exit 1; }
+fatal_check "$PKG" "e2e reorder"
 # Rest alert with notifications DENIED (t3x, 0.1.1): plan 6.2 says the service itself buzzes
 # and plays the tone, so a refused permission must not silence the rest. API 33+ only (below
 # 33 the permission does not exist). Revoking kills the app; the e2e run starts it again.

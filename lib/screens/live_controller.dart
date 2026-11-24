@@ -395,12 +395,26 @@ class LiveController extends ChangeNotifier {
   Future<void> skipRest() =>
       _transition((s) => eng.Session.skipRest(s, nowMs: nowMs()));
 
-  /// [from]/[to] index the up-next list, which starts after the current
-  /// exercise.
-  Future<void> reorderUpNext(int from, int to) => _transition((s) {
-    final base = (s.current?.exercise ?? -1) + 1;
-    return eng.Session.reorder(s, base + from, base + to);
+  /// Drag in the reorder list: [from]/[to] index the exercises that still
+  /// have sets to do (the current one is index 0; [to] is the final index).
+  /// Logged sets stay inside their exercise, and the rest timer, ghosts and
+  /// rotation do not care about order, so one `Session.reorder` is the whole
+  /// change. Whichever exercise is first with a pending set is then current.
+  Future<void> reorderQueue(int from, int to) => _transition((s) {
+    final pend = pendingExercises(s);
+    if (from < 0 || to < 0 || from >= pend.length || to >= pend.length) {
+      return s;
+    }
+    // A timer block in progress cannot move (its clock is on that set).
+    if ((from == 0 || to == 0) && _currentHasBlock(s)) return s;
+    return eng.Session.reorder(s, pend[from], pend[to]);
   });
+
+  /// "Do later": the current exercise goes to just after the next one that
+  /// still has sets to do. A no-op with nothing else waiting.
+  Future<void> doLater() => reorderQueue(0, 1);
+
+  bool _currentHasBlock(eng.SessionSnapshot s) => s.currentSet?.block != null;
 
   /// True when the journal holds the paused snapshot (safe to leave). The
   /// service is told to stop only after that snapshot was accepted.
