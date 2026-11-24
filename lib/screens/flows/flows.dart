@@ -22,6 +22,7 @@ import '../live_screen.dart';
 import '../notification_access.dart';
 import '../picker_screen.dart';
 import '../post_workout_screen.dart';
+import '../starting_weights_screen.dart';
 import '../view_models.dart';
 import '../weight_list_screen.dart';
 import '../workout_detail_screen.dart';
@@ -522,13 +523,33 @@ class _Today extends StatelessWidget {
           const SizedBox(height: 24),
           Text('HISTORY', style: LitType.display(32)),
           const SizedBox(height: 8),
-          if (rows.isEmpty)
+          if (rows.isEmpty) ...[
             Text(
               'Nothing logged yet. Your first session shows up here when '
               'you finish it.',
               style: LitType.body(15, Lit.inkSecondary),
-            )
-          else
+            ),
+            const SizedBox(height: 12),
+            // 0.3 S1: no history to start from, so offer starting weights.
+            OutlinedButton.icon(
+              key: const Key('today.starting_weights'),
+              onPressed: () async {
+                await openStartingWeights(context, deps, gym.id);
+                onHistoryChanged?.call();
+              },
+              icon: const Icon(Icons.edit),
+              label: Text(
+                deps.engine.startingWeights().isEmpty
+                    ? 'Set starting weights'
+                    : 'Starting weights: '
+                          '${deps.engine.startingWeights().length} set',
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Lit.ink,
+                minimumSize: const Size(48, 48),
+              ),
+            ),
+          ] else
             for (final r in rows)
               HistoryRowTile(
                 row: r,
@@ -953,7 +974,16 @@ class _LiveFlowState extends State<LiveFlow> {
     if (picked == null || !mounted || _leaving) return;
     final last = c.engine.lastTime(gymId: s.gymId, exerciseId: picked.id);
     final ok = await c.swapCurrent(
-      swapItem(picked, ex, last: last),
+      swapItem(
+        picked,
+        ex,
+        last: last,
+        // S1: no history anywhere, but a starting weight he typed.
+        startLoadG: c.engine.startingLoad(
+          gymId: s.gymId,
+          exerciseId: picked.id,
+        ),
+      ),
       replacingId: ex.exerciseId,
     );
     if (!ok && mounted && c.lastError == null) {
@@ -1257,6 +1287,11 @@ class _GymFlowState extends State<GymFlow> {
         _use(_gym.copyWith(kit: {...fresh.kit, ..._gym.kit}));
       }),
       onEditWeights: _editWeights,
+      // 0.3 S1: only for a gym already saved (its kit decides the lifts).
+      onStartingWeights:
+          widget.firstRun || widget.deps.engine.gym(_gym.id) == null
+          ? null
+          : () => openStartingWeights(context, widget.deps, _gym.id),
       onPickGym: (id) => setState(() {
         _use(widget.deps.engine.gym(id) ?? _gym);
       }),
@@ -1276,6 +1311,22 @@ class _GymFlowState extends State<GymFlow> {
     );
   }
 }
+
+/// Opens the starting weights for [gymId] (0.3 S1); every change persists
+/// the backup snapshot.
+Future<void> openStartingWeights(
+  BuildContext context,
+  GymDeps deps,
+  String gymId,
+) => Navigator.of(context).push<void>(
+  MaterialPageRoute(
+    builder: (_) => StartingWeightsFlow(
+      engine: deps.engine,
+      gymId: gymId,
+      persist: deps.persist,
+    ),
+  ),
+);
 
 /// A short reason for a banner: the port's refusal code, else the type.
 String _reason(Object e) =>

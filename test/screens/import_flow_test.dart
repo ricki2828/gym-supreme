@@ -24,6 +24,8 @@ eng.ImportCounts counts({
   bool settings = false,
   int deletedInFile = 0,
   int clamped = 0,
+  int startAdded = 0,
+  int startKept = 0,
 }) => eng.ImportCounts(
   exportFormat: 2,
   workoutsInFile: added + existing + deleted,
@@ -36,6 +38,8 @@ eng.ImportCounts counts({
   settingsRestored: settings,
   deletedInFile: deletedInFile,
   endsClamped: clamped,
+  startingWeightsAdded: startAdded,
+  startingWeightsKept: startKept,
 );
 
 /// Records what the flow called.
@@ -207,6 +211,24 @@ void main() {
       find.textContaining('1 workout had a clock change: duration set to 0.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('starting weights (S1) are spelled out in confirm and result', (
+    tester,
+  ) async {
+    await start(
+      tester,
+      preview: (_) => counts(startAdded: 2, startKept: 1),
+      apply: (_) => counts(startAdded: 1),
+    );
+    expect(find.textContaining('2 starting weights to add.'), findsOneWidget);
+    expect(
+      find.textContaining('1 starting weight is already set here: yours kept.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('import.confirm')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('1 starting weight added.'), findsOneWidget);
   });
 
   testWidgets('no clamped workouts: no clock-change line', (tester) async {

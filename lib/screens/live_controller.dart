@@ -362,7 +362,12 @@ class LiveController extends ChangeNotifier {
     if (st == null) return const {};
     final missing = s.exercises.any((e) => !_ghosts.containsKey(e.exerciseId));
     if (_ghostFor != s.workoutUuid || missing) {
-      _ghosts = c2.ghostsForSession(s, st.workouts());
+      _ghosts = c2.ghostsForSession(
+        s,
+        st.workouts(),
+        // S1: a lift with no history at all shows his starting weight.
+        startingWeights: engine.startingWeights(),
+      );
       _ghostFor = s.workoutUuid;
     }
     return _ghosts;

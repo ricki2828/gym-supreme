@@ -11,6 +11,7 @@ import 'cut2/rotation.dart';
 import 'import.dart';
 import 'model.dart';
 import 'snapshot.dart';
+import 'starting_weights.dart';
 
 /// Days-since for one muscle (plan 5.2; body map and picker).
 class MuscleStatus {
@@ -379,6 +380,28 @@ abstract interface class GymApi {
   // Live logging helpers (item 4).
   LoadSteps loadSteps({required String gymId, required String exerciseId});
   LastTime? lastTime({required String gymId, required String exerciseId});
+
+  // Starting weights (0.3 S1): typed once per lift, used only while the lift
+  // has no logged history. Never history: no workout, PB or streak.
+
+  /// Every stored starting weight by exercise id (grams; per hand for
+  /// dumbbells), used or not.
+  Map<String, int> startingWeights();
+
+  /// Stores [loadG] for [exerciseId]; null clears it. Throws ArgumentError
+  /// for an exercise the catalog does not know, a bodyweight or timed lift,
+  /// or a weight outside 1 g..500 kg.
+  void setStartingWeight(String exerciseId, int? loadG);
+
+  /// The load a first session starts [exerciseId] at, from its starting
+  /// weight snapped down to a load [gymId] has; null when the lift has
+  /// logged history (any gym) or no starting weight.
+  int? startingLoad({required String gymId, required String exerciseId});
+
+  /// The starting-weights screen: the loaded lifts a session of each type
+  /// in his rotation (else push, pull, legs) plans at [gymId], then any
+  /// other lift that already has a starting weight.
+  List<StartingWeightLift> startingWeightLifts({required String gymId});
 
   // Finish and resume (item 5, B1).
   /// Upsert by workout uuid in one transaction, with HR samples (R2). Safe to

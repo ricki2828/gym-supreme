@@ -146,6 +146,40 @@ void main() {
     expect(h['count'], 1);
   });
 
+  test('start_weight: 20 kg planned and live, nothing left behind', () async {
+    final store = SqliteStore.inMemory();
+    addTearDown(store.close);
+    final port = AlertingStubPort();
+    final s = services(store, port);
+    final lines = <String>[];
+    await E2eDriver(s, out: lines.add).run('start_weight:sw');
+    final steps = lines.map(step).map((m) => m['step']).toList();
+    expect(steps, [
+      'start_weight',
+      'start_weight_done',
+      'ok',
+    ], reason: lines.join('\n'));
+    final sw = lines.map(step).firstWhere((m) => m['step'] == 'start_weight');
+    expect(sw['start_load_g'], 20000);
+    expect(sw['plan_load_g'], 20000);
+    expect(sw['target_load_g'], 20000);
+    final done = lines
+        .map(step)
+        .firstWhere((m) => m['step'] == 'start_weight_done');
+    expect(done['discarded'], isTrue);
+    expect(done['cleared'], isTrue);
+    expect(s.engine.history(limit: 5), isEmpty);
+    expect(s.engine.startingWeights(), isEmpty);
+    expect(await port.readPendingJournal(), isNull);
+    // After a real workout, the drill still finds a lift with no history.
+    lines.clear();
+    await E2eDriver(s, out: lines.add).run('run:r');
+    lines.clear();
+    await E2eDriver(s, out: lines.add).run('start_weight:sw2');
+    expect(lines.map(step).last['step'], 'ok', reason: lines.join('\n'));
+    expect(s.engine.history(limit: 5), hasLength(1));
+  });
+
   // The stub has no service and no queued start callback, so it cannot reach
   // the race: this only checks the command's steps. The emulator smoke
   // (start_ignored stale=true, no service_started, no foreground service) is

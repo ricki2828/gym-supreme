@@ -355,11 +355,14 @@ List<eng.Exercise> swapCandidates(
 }
 
 /// The planned item for a swap: same set count, reps and rest as the lift
-/// it replaces; load prefilled from last time at this gym, else none.
+/// it replaces; load prefilled from last time at this gym, else from his
+/// starting weight ([startLoadG], 0.3 S1: only when the lift has no history
+/// anywhere), else none.
 eng.PlannedItem swapItem(
   eng.Exercise e,
   eng.SnapshotExercise replacing, {
   eng.LastTime? last,
+  int? startLoadG,
 }) {
   final pending = replacing.sets.where((x) => x.state == eng.SetState.pending);
   // From a timed lift, its targets are seconds: use a rep range instead.
@@ -369,7 +372,9 @@ eng.PlannedItem swapItem(
       : pending.isEmpty
       ? (replacing.repLo ?? 10)
       : (pending.first.targetReps ?? replacing.repLo ?? 10);
-  final load = last == null || last.sets.isEmpty ? null : last.sets.last.loadG;
+  final load = last == null || last.sets.isEmpty
+      ? startLoadG
+      : last.sets.last.loadG;
   final unit = switch (e.load) {
     'dumbbell' => eng.LoadUnit.ea,
     'bodyweight' => eng.LoadUnit.bodyweight,

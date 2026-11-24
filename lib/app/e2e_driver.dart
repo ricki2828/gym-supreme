@@ -39,6 +39,11 @@ import 'services.dart';
 ///   re-import must skip it as deleted here).
 /// - `import.<base64 gzip export>`: preview + import of that bundle, then
 ///   persist and log the counts and the history digest (import drill).
+/// - `start_weight`: 0.3 S1. Sets a 20 kg starting weight (the call the
+///   starting-weights screen makes) on a chest lift with no history, plans,
+///   starts a workout and logs the planned and live target load of that
+///   lift; then discards the workout and clears the weight, so nothing is
+///   stored. The script asserts 20000 g on both.
 /// - `history`: list stored workouts and whether a journal is pending
 ///   (restore drill, 0.2; discard check, 0.2.1).
 class E2eDriver {
@@ -103,6 +108,8 @@ class E2eDriver {
           _deleteOne();
         case _ when name.startsWith('import.'):
           _import(name.substring('import.'.length));
+        case 'start_weight':
+          await _startWeight();
         case 'history':
           await _history();
         default:
@@ -456,6 +463,67 @@ class E2eDriver {
     if (!stored || journal != null) throw StateError('finish incomplete');
     s.persist();
     c.dispose();
+    _log('ok');
+  }
+
+  /// S1 drill: starting weight -> plan -> live target, nothing stored.
+  Future<void> _startWeight() async {
+    const loadG = 20000;
+    final gymId = _gymId();
+    final fresh = {
+      for (final l in s.engine.startingWeightLifts(gymId: gymId))
+        if (!l.hasHistory) l.exerciseId,
+    };
+    eng.SessionPlan plan() => s.engine.suggest(
+      gymId: gymId,
+      muscleIds: const ['chest'],
+      minutes: 30,
+      seed: 1,
+    );
+    final pick = plan().items
+        .where(
+          (i) =>
+              (i.unit == eng.LoadUnit.kg || i.unit == eng.LoadUnit.ea) &&
+              fresh.contains(i.exerciseId) &&
+              s.engine
+                  .loadSteps(gymId: gymId, exerciseId: i.exerciseId)
+                  .loadsG
+                  .contains(loadG),
+        )
+        .firstOrNull;
+    if (pick == null) throw StateError('no loaded chest lift without history');
+    final id = pick.exerciseId;
+    final before = s.engine.history(limit: 500).length;
+    s.engine.setStartingWeight(id, loadG);
+    s.persist();
+    final item = plan().items.firstWhere((i) => i.exerciseId == id);
+    final c = _controller();
+    await c.start(plan());
+    _check(c, 'start');
+    final live = c.snapshot!.exercises.firstWhere((e) => e.exerciseId == id);
+    final target = live.sets.first.targetLoadG;
+    _log('start_weight', {
+      'exercise': id,
+      'start_load_g': s.engine.startingLoad(gymId: gymId, exerciseId: id),
+      'plan_load_g': item.sets.first.loadG,
+      'target_load_g': target,
+    });
+    final ok = await c.discard();
+    _check(c, 'discard');
+    c.dispose();
+    s.engine.setStartingWeight(id, null);
+    s.persist();
+    final after = s.engine.history(limit: 500).length;
+    _log('start_weight_done', {
+      'discarded': ok,
+      'cleared': !s.engine.startingWeights().containsKey(id),
+      'history_before': before,
+      'history_after': after,
+    });
+    if (!ok || after != before) throw StateError('start_weight left a trace');
+    if (item.sets.first.loadG != loadG || target != loadG) {
+      throw StateError('starting weight not used: plan/target != $loadG');
+    }
     _log('ok');
   }
 

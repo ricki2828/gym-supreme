@@ -61,17 +61,36 @@ class ExerciseGhost {
     required this.workoutUuid,
     required this.workoutStartedAtMs,
     required this.sets,
+    this.baseline = false,
   });
+
+  /// A starting weight he typed (0.3 S1), not a past session: one set with
+  /// the load and no reps, the same at every ordinal. It never judges
+  /// ahead / behind and never counts in the session total.
+  factory ExerciseGhost.startingWeight(String exerciseId, int loadG) =>
+      ExerciseGhost(
+        exerciseId: exerciseId,
+        workoutUuid: '',
+        workoutStartedAtMs: 0,
+        sets: [
+          GhostInputSet(exerciseId: exerciseId, setOrdinal: 1, loadG: loadG),
+        ],
+        baseline: true,
+      );
 
   final String exerciseId;
   final String workoutUuid;
   final int workoutStartedAtMs;
+
+  /// From a starting weight ([ExerciseGhost.startingWeight]).
+  final bool baseline;
 
   /// Non-timed sets of that exercise, by ordinal ascending. Skipped ones are
   /// kept so ordinals line up; they compare as "no set last time".
   final List<GhostInputSet> sets;
 
   GhostInputSet? byOrdinal(int ordinal) {
+    if (baseline) return sets.firstOrNull;
     for (final s in sets) {
       if (s.setOrdinal == ordinal) return s;
     }
@@ -147,9 +166,14 @@ class SetGhostLine {
     this.loadDeltaG,
     this.repsDelta,
     this.paceDeltaMs,
+    this.baseline = false,
   });
 
   final GhostVerdict verdict;
+
+  /// Compared with a starting weight, not last time (0.3 S1): always
+  /// [GhostVerdict.pending], load only.
+  final bool baseline;
   final int? ghostLoadG;
   final int? ghostReps;
 
@@ -171,6 +195,15 @@ SetGhostLine compareSet({
   int? offsetMs,
 }) {
   final g = ghost.byOrdinal(setOrdinal);
+  if (ghost.baseline && g != null) {
+    // A typed weight, not a lifted set: nothing to beat, so no verdict.
+    return SetGhostLine(
+      verdict: GhostVerdict.pending,
+      ghostLoadG: g.loadG,
+      loadDeltaG: (loadG == null || g.loadG == null) ? null : loadG - g.loadG!,
+      baseline: true,
+    );
+  }
   if (g == null || g.skipped) {
     return const SetGhostLine(verdict: GhostVerdict.newSet);
   }
@@ -261,11 +294,15 @@ SessionGhostTotal? sessionTotal({
   var soFar = 0;
   for (final d in done) {
     final g = ghosts[d.exerciseId];
-    if (g == null) continue;
+    if (g == null || g.baseline) continue;
     vol += d.volumeGReps;
     soFar += g.byOrdinal(d.setOrdinal)?.volumeGReps ?? 0;
   }
-  final compared = [for (final g in ghosts.values) ?g];
+  // A starting weight is not a session: it is never compared.
+  final compared = [
+    for (final g in ghosts.values)
+      if (g != null && !g.baseline) g,
+  ];
   if (compared.isEmpty) return null;
   return SessionGhostTotal(
     volumeGReps: vol,
