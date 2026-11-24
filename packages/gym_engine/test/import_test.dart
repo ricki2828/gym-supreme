@@ -401,6 +401,40 @@ void cases(HistoryStore Function() make) {
       );
     });
 
+    test('values a history edit would refuse (D1 rules)', () {
+      refused(edit((j) => set0(j)['reps'] = 0), contains('0 reps'));
+      refused(edit((j) => set0(j)['reps'] = -1), contains('-1 reps'));
+      refused(edit((j) => set0(j)['load_g'] = -500), contains('negative load'));
+      refused(
+        edit(
+          (j) =>
+              set0(j)['ended_at_ms'] = (set0(j)['started_at_ms']! as int) - 1,
+        ),
+        contains('set ends before it starts'),
+      );
+      refused(
+        edit((j) {
+          final w = (j['workouts'] as List).last as Map;
+          w['ended_at_ms'] = (w['started_at_ms'] as int) - 1;
+        }),
+        contains('ends before it starts'),
+      );
+      refused(
+        edit((j) => ((j['workouts'] as List).last as Map)['paused_ms'] = -1),
+        contains('negative pause'),
+      );
+    });
+
+    test('a skipped set with null reps and a 0 load is fine', () {
+      final j = decode(file);
+      set0(j)
+        ..['skipped'] = true
+        ..['completion'] = null
+        ..['reps'] = null
+        ..['load_g'] = 0;
+      expect(dst.importBundle(jsonEncode(j)).workoutsAdded, 6);
+    });
+
     test('settings with a zero or negative value', () {
       refused(
         edit((j) => (j['settings'] as Map)['default_minutes'] = 0),

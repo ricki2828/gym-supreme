@@ -263,25 +263,38 @@ ImportWorkout _workout(Map<String, Object?> j) {
     if (block != null && block is! Map) {
       throw _Bad('workout $uuid: a set block is not an object');
     }
-    sets.add(
-      SetRecord(
-        setId: sr.str(m, 'set_id'),
-        exerciseId: sr.str(m, 'exercise_id'),
-        exerciseName: sr.str(m, 'exercise_name', allowEmpty: true),
-        exercisePosition: sr.int_(m, 'exercise_position'),
-        setOrdinal: sr.int_(m, 'set_ordinal'),
-        kind: sr.enumOr(m, 'kind', SetKind.values, SetKind.reps),
-        loadG: sr.intOrNull(m, 'load_g'),
-        reps: sr.intOrNull(m, 'reps'),
-        completion: completion,
-        skipped: skipped,
-        source: sr.enumOr(m, 'source', SetSource.values, SetSource.app),
-        startedAtMs: sr.intOrNull(m, 'started_at_ms'),
-        endedAtMs: sr.intOrNull(m, 'ended_at_ms'),
-        offsetMs: sr.intOrNull(m, 'offset_ms'),
-        blockJson: block == null ? null : jsonEncode(block),
-      ),
+    final set = SetRecord(
+      setId: sr.str(m, 'set_id'),
+      exerciseId: sr.str(m, 'exercise_id'),
+      exerciseName: sr.str(m, 'exercise_name', allowEmpty: true),
+      exercisePosition: sr.int_(m, 'exercise_position'),
+      setOrdinal: sr.int_(m, 'set_ordinal'),
+      kind: sr.enumOr(m, 'kind', SetKind.values, SetKind.reps),
+      loadG: sr.intOrNull(m, 'load_g'),
+      reps: sr.intOrNull(m, 'reps'),
+      completion: completion,
+      skipped: skipped,
+      source: sr.enumOr(m, 'source', SetSource.values, SetSource.app),
+      startedAtMs: sr.intOrNull(m, 'started_at_ms'),
+      endedAtMs: sr.intOrNull(m, 'ended_at_ms'),
+      offsetMs: sr.intOrNull(m, 'offset_ms'),
+      blockJson: block == null ? null : jsonEncode(block),
     );
+    // The value rules of a history edit (D1 editWorkout): a done reps set
+    // has at least 1 rep, no load is negative, and time runs forward.
+    if (set.loadG != null && set.loadG! < 0) {
+      throw _Bad('workout $uuid: a negative load');
+    }
+    final minReps = !set.skipped && set.kind == SetKind.reps ? 1 : 0;
+    if (set.reps != null && set.reps! < minReps) {
+      throw _Bad('workout $uuid: a set with ${set.reps} reps');
+    }
+    if (set.startedAtMs != null &&
+        set.endedAtMs != null &&
+        set.endedAtMs! < set.startedAtMs!) {
+      throw _Bad('workout $uuid: a set ends before it starts');
+    }
+    sets.add(set);
   }
   final hr = <HrSample>[];
   final seenT = <int>{};
@@ -296,16 +309,22 @@ ImportWorkout _workout(Map<String, Object?> j) {
     if (m is! String) throw _Bad('workout $uuid: a muscle is not a string');
     muscles.add(m);
   }
+  final started = w.int_(j, 'started_at_ms');
+  final ended = w.int_(j, 'ended_at_ms');
+  final paused = w.intOr(j, 'paused_ms', 0);
+  if (ended < started || paused < 0) {
+    throw _Bad('workout $uuid: ends before it starts, or a negative pause');
+  }
   return ImportWorkout(
     WorkoutRecord(
       uuid: uuid,
       gymId: w.str(j, 'gym_id'),
       typeId: w.strOrNull(j, 'type_id'),
       muscles: muscles,
-      startedAtMs: w.int_(j, 'started_at_ms'),
+      startedAtMs: started,
       tzOffsetMin: w.int_(j, 'tz_offset_min'),
-      endedAtMs: w.int_(j, 'ended_at_ms'),
-      pausedMs: w.intOr(j, 'paused_ms', 0),
+      endedAtMs: ended,
+      pausedMs: paused,
       appVersion: w.strOr(j, 'app_version', ''),
       swaps: w.intOr(j, 'swaps', 0),
       editedAtMs: w.intOrNull(j, 'edited_at_ms'),

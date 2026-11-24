@@ -33,7 +33,7 @@ fresh_install() {
   adb install "$APK" > /dev/null
   # API 34's restore drill (emulator_smoke.sh) leaves Auto Backup on with the local transport, so
   # an install restores that data. Clear it: this drill needs a really empty app.
-  adb shell pm clear "$PKG" > /dev/null
+  adb shell pm clear "$PKG" > /dev/null || { echo "::error::API $sdk import: pm clear failed" >&2; exit 1; }
   if [ "$sdk" -ge 33 ]; then adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS; fi
   launch "$PKG" || { echo "::error::API $sdk import: app did not start" >&2; exit 1; }
   fatal_check "$PKG" "import launch"
