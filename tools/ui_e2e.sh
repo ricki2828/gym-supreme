@@ -11,7 +11,8 @@ adb wait-for-device
 until [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 2; done
 (
   for _ in $(seq 1 900); do
-    if adb shell pm list packages "$PKG" 2>/dev/null | grep -q "package:$PKG"; then
+    pkgs="$(adb shell pm list packages "$PKG" 2>/dev/null || true)"  # captured: grep -q + pipefail SIGPIPE
+    if grep -q "package:$PKG" <<< "$pkgs"; then
       adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS 2>/dev/null && exit 0
     fi
     sleep 1

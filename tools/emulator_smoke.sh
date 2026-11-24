@@ -273,7 +273,8 @@ fi
 # No foreground service left for the discarded workout (a start still queued behind the pause
 # must go idle, WorkoutService.cancelPendingStart). Absent output = not running = pass.
 sleep 3
-if adb shell dumpsys activity services "$PKG" | tr -d '\r' | grep -q 'isForeground=true'; then
+svcs="$(adb shell dumpsys activity services "$PKG" | tr -d '\r')"  # captured: grep -q + pipefail SIGPIPE
+if grep -q 'isForeground=true' <<< "$svcs"; then
   echo "::error::API $sdk: a foreground service is still running after the discard" >&2
   adb shell dumpsys activity services "$PKG" | tr -d '\r' | head -n 30 >&2; exit 1
 fi
@@ -306,7 +307,8 @@ if svc_lines | grep -F '"event":"service_started"' | grep -qF '"mode":"session"'
   svc_lines | grep -E 'start_ignored|service_|session_' | tail -n 12 >&2; exit 1
 fi
 sleep 2
-if adb shell dumpsys activity services "$PKG" | tr -d '\r' | grep -q 'isForeground=true'; then
+svcs="$(adb shell dumpsys activity services "$PKG" | tr -d '\r')"  # captured: grep -q + pipefail SIGPIPE
+if grep -q 'isForeground=true' <<< "$svcs"; then
   echo "::error::API $sdk: a foreground service is running after the stale start" >&2
   adb shell dumpsys activity services "$PKG" | tr -d '\r' | head -n 30 >&2; exit 1
 fi
