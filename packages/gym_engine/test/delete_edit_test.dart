@@ -145,6 +145,7 @@ void main() {
     group(name, () => stats(make));
   }
 
+  group('memory store only', memoryOnly);
   group('sqlite only', sqliteOnly);
 
   test('guard: workout / set_row SQL only in the allowed store members', () {
@@ -164,13 +165,18 @@ void main() {
     // Split sqlite_store.dart into members (2-space declarations; column-0
     // lines start a top-level one) and join each member's adjacent string
     // literals, so `'... FROM '` + `'workout ...'` on two lines still counts.
+    // Lines inside ''' strings never start a member: the migrations list
+    // stays 'migrations', so a data migration reading workout is flagged.
     final members = <String, StringBuffer>{};
     var member = '<top>';
     final decl = RegExp(r'^  (?:static )?[\w<>?,\s]*?\b(\w+)\s*[(=]');
     final top = RegExp(r'^[\w].*?\b(\w+)\s*[(=]');
+    var inTriple = false;
     for (final line in File('lib/src/sqlite_store.dart').readAsLinesSync()) {
       final t = line.trimLeft();
-      if (!t.startsWith('//') && !t.startsWith('@')) {
+      final wasInTriple = inTriple;
+      if ("'''".allMatches(line).length.isOdd) inTriple = !inTriple;
+      if (!wasInTriple && !t.startsWith('//') && !t.startsWith('@')) {
         final m = line.startsWith('  ') && !line.startsWith('   ')
             ? decl.firstMatch(line)
             : top.firstMatch(line);
@@ -1011,25 +1017,29 @@ void stats(HistoryStore Function() make) {
   });
 }
 
-void sqliteOnly() {
-  late Directory dir;
-  setUp(() => dir = Directory.systemTemp.createTempSync('gs-d1'));
-  tearDown(() => dir.deleteSync(recursive: true));
-
+void memoryOnly() {
   test('a rotation write error never fails the delete or the undo', () {
     final store = _FailingRotationStore();
     final r = Rig(store);
     rotationAfterFinish(store, 'push', workoutUuid: 'w6');
+    final before = loadRotation(store);
+    expect(before.nextId, 'pull');
+    // Delete: the pointer-back write throws; the delete stands.
     store.fail = true;
     final d = r.engine.deleteWorkout('w6', rotation: true)!;
+    expect(store.failedWrites, 1);
     expect(d.rotationBefore, isNull);
     expect(store.workout('w6'), isNull);
     expect(store.deletedWorkoutUuids(), ['w6']);
-    expect(
-      r.engine.undoDelete('w6', rotationBefore: Rotation.defaults()),
-      isTrue,
-    );
+    // Undo: put the rotation where the delete would have left it, so the
+    // undo's restore is attempted and throws; the restore stands.
+    store.fail = false;
+    saveRotation(store, before.pointAt('push'));
+    store.fail = true;
+    expect(r.engine.undoDelete('w6', rotationBefore: before), isTrue);
+    expect(store.failedWrites, 2);
     expect(store.workout('w6'), isNotNull);
+    expect(loadRotation(store).nextId, 'push');
   });
 
   test('summaryOrNull: null for unknown and deleted, else the summary', () {
@@ -1039,6 +1049,12 @@ void sqliteOnly() {
     r.engine.deleteWorkout('w6');
     expect(r.engine.summaryOrNull('w6'), isNull);
   });
+}
+
+void sqliteOnly() {
+  late Directory dir;
+  setUp(() => dir = Directory.systemTemp.createTempSync('gs-d1'));
+  tearDown(() => dir.deleteSync(recursive: true));
 
   test('ED1 snapshot_json is the as-finished copy after an edit', () {
     final store = SqliteStore.inMemory();
@@ -1095,10 +1111,14 @@ void sqliteOnly() {
 /// Throws on rotation writes once [fail] is set (fix 1 of the Opus review).
 class _FailingRotationStore extends MemoryStore {
   bool fail = false;
+  int failedWrites = 0;
 
   @override
   void saveSetting(String key, String json) {
-    if (fail && key == rotationSettingKey) throw StateError('disk full');
+    if (fail && key == rotationSettingKey) {
+      failedWrites++;
+      throw StateError('disk full');
+    }
     super.saveSetting(key, json);
   }
 }
