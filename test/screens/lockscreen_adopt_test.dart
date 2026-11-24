@@ -129,6 +129,25 @@ void main() {
   });
 
   test(
+    'a tap that collides with a lock-screen tap shows no error banner',
+    () async {
+      final c = await started();
+      port.emitSnapshots = false; // the lock-screen event has not arrived yet
+      final moved = await lockDone();
+      await c.reps(1); // based on the old rev: stale_rev, then resync
+      expect(c.snapshot!.rev, moved.rev, reason: 'caught up with the journal');
+      expect(port.rev, moved.rev, reason: 'the colliding tap was dropped');
+      expect(c.lastError, isNull, reason: 'no StaleRev banner');
+      // A failed resync still says so.
+      final h = await head();
+      port.foreignWrite(eng.Session.skipRest(h, nowMs: now += 1000).encode());
+      port.failNext['readPendingJournal'] = Exception('io');
+      await c.reps(1);
+      expect(c.lastError, isNotNull);
+    },
+  );
+
+  test(
     'stale, equal, foreign-workout and garbled events are ignored',
     () async {
       final c = await started();

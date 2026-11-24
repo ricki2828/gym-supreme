@@ -143,7 +143,8 @@ void main() {
       final moved = eng.Session.done(head, head.currentSet!.setId, nowMs: now);
       await port.submitSnapshot(moved.encode(), head.rev);
       await c.done();
-      expect(c.lastError, isA<StaleRevException>());
+      // A lock-screen tap that won the race is not an error (0.3 L1).
+      expect(c.lastError, isNull);
       expect(c.snapshot!.rev, moved.rev);
       final done = c.snapshot!.exercises.first.sets
           .where((s) => s.state == eng.SetState.done)

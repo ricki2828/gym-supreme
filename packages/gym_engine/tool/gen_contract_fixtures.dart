@@ -255,6 +255,18 @@ Map<String, (SessionSnapshot, List<Map<String, Object?>>)> lockCases() {
         _step('done', 2, 120000),
       ],
     ),
+    // An earlier set of the lift was skipped in the app: Done judges and
+    // starts against the right set (_lastLogged skips it).
+    'lockscreen_v1_done_after_skipped': (
+      Session.skip(fresh, '$uuid:0', nowMs: t0 + 30000),
+      [_step('done', 1, 95000)],
+    ),
+    // A later set's target was changed in the app (12, not the old 10): +1 on
+    // the first set must not carry to it.
+    'lockscreen_v1_plus_rep_no_carry_to_changed': (
+      Session.retarget(flat, '$uuid:2', reps: 12),
+      [_step('plus_rep', 0, 30000), _step('done', 0, 60000)],
+    ),
     'lockscreen_v1_skip_rest': (
       resting,
       [_step('skip_rest', 0, 280000), _step('done', 2, 300000)],

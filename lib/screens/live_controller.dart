@@ -611,6 +611,12 @@ class LiveController extends ChangeNotifier {
         notifyListeners();
         return;
       }
+      // A higher rev of this workout is another writer's tap (0.3 L1: the
+      // lock screen) that landed first: the view catches up and this tap is
+      // dropped, which is not an error to show.
+      if (head.workoutUuid == base.workoutUuid && head.rev > base.rev) {
+        lastError = null;
+      }
       // Show the head first: if completing it fails, the view is "all
       // done" (Finish retries) rather than the stale active base.
       _set(head);
