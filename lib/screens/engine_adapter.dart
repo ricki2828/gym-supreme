@@ -92,6 +92,7 @@ LiveView? liveViewOf(
   eng.LoadSteps? steps,
   eng.LastTime? Function(String exerciseId)? lastTime,
   int? Function(String exerciseId)? startingWeight,
+  String? Function(String exerciseId, int loadG)? plateLine,
 }) {
   final type = workoutTypeOf(s.typeId);
   final pausedNow = s.state == eng.SessionState.paused && s.pausedAtMs != null
@@ -201,6 +202,7 @@ LiveView? liveViewOf(
     timerBlock: set.block != null,
     setId: set.setId,
     blockTitle: c2.TimerSession.blockOf(s, set.setId)?.title,
+    plateLine: load == null ? null : plateLine?.call(ex.exerciseId, load),
   );
 }
 
@@ -355,12 +357,15 @@ List<eng.Exercise> swapCandidates(
 /// The planned item for a swap: same set count, reps and rest as the lift
 /// it replaces; load prefilled from last time at this gym, else from his
 /// starting weight ([startLoadG], 0.3 S1: only when the lift has no history
-/// anywhere), else none.
+/// anywhere), else none. With [steps] (the gym's loads for the new lift) the
+/// last load snaps down to one the gym has, as progression does: a weight
+/// typed once, or from a since-changed bar or rack, is never prefilled.
 eng.PlannedItem swapItem(
   eng.Exercise e,
   eng.SnapshotExercise replacing, {
   eng.LastTime? last,
   int? startLoadG,
+  eng.LoadSteps? steps,
 }) {
   final pending = replacing.sets.where((x) => x.state == eng.SetState.pending);
   // From a timed lift, its targets are seconds: use a rep range instead.
@@ -370,9 +375,13 @@ eng.PlannedItem swapItem(
       : pending.isEmpty
       ? (replacing.repLo ?? 10)
       : (pending.first.targetReps ?? replacing.repLo ?? 10);
-  final load = last == null || last.sets.isEmpty
+  final lastLoad = last == null || last.sets.isEmpty
       ? startLoadG
       : last.sets.last.loadG;
+  final have = steps?.loadsG ?? const <int>[];
+  final load = lastLoad == null || have.isEmpty
+      ? lastLoad
+      : have.lastWhere((l) => l <= lastLoad, orElse: () => have.first);
   final unit = switch (e.load) {
     'dumbbell' => eng.LoadUnit.ea,
     'bodyweight' => eng.LoadUnit.bodyweight,

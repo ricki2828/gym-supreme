@@ -40,9 +40,13 @@ class LiveController extends ChangeNotifier {
     this.tick = const Duration(seconds: 1),
     this.store,
     this.awake,
+    this.plateMath = false,
   }) {
     _foreign = port.snapshots.listen(_onSnapshot, onError: (Object _) {});
   }
+
+  /// 0.3 P1 (Features.plateMath): a per-side plate line under barbell loads.
+  final bool plateMath;
 
   /// History for the cut-2 ghost and rotation; null hides both.
   final eng.HistoryStore? store;
@@ -613,6 +617,9 @@ class LiveController extends ChangeNotifier {
         exerciseId,
         () => engine.lastTime(gymId: s.gymId, exerciseId: exerciseId),
       ),
+      plateLine: plateMath
+          ? (exerciseId, loadG) => _plateLine(s.gymId, exerciseId, loadG)
+          : null,
       startingWeight: (exerciseId) => _start.putIfAbsent(
         exerciseId,
         () =>
@@ -624,6 +631,24 @@ class LiveController extends ChangeNotifier {
   }
 
   // ---- plumbing ------------------------------------------------------------
+
+  final Map<String, eng.BarSetup?> _bars = {};
+
+  /// Per gym, lift and load: the view rebuilds every second and the plate
+  /// search is not free.
+  final Map<String, String?> _plateText = {};
+
+  String? _plateLine(String gymId, String exerciseId, int loadG) =>
+      _plateText.putIfAbsent('$gymId/$exerciseId/$loadG', () {
+        final bar = _bars.putIfAbsent(
+          '$gymId/$exerciseId',
+          () => engine.barSetup(gymId: gymId, exerciseId: exerciseId),
+        );
+        if (bar == null) return null;
+        return c2.plateText(
+          c2.loadBar(loadG, barG: bar.barG, pairs: bar.pairs),
+        );
+      });
 
   eng.LoadSteps? _stepsFor(eng.SessionSnapshot s) {
     final c = s.current;

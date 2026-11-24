@@ -618,6 +618,41 @@ void main() {
     );
   });
 
+  test('swapItem snaps the prefilled last load to the gym steps', () async {
+    await startPush();
+    final s0 = c.snapshot!;
+    final cur = s0.exercises.first;
+    final kit = engine.gym(gymId)!.equipmentIds;
+    final opt = swapCandidates(
+      catalog,
+      s0,
+      cur.exerciseId,
+      kit,
+    ).firstWhere((o) => o.load == 'dumbbell' || o.load == 'stack');
+    final last = eng.LastTime(
+      workoutUuid: 'u',
+      atMs: 0,
+      sets: const [eng.PlannedSet(loadG: 23000, reps: 10)],
+    );
+    const steps = eng.LoadSteps(eng.LoadUnit.ea, [10000, 20000, 25000]);
+    expect(
+      swapItem(opt, cur, last: last, steps: steps).sets.first.loadG,
+      20000,
+      reason: '23 kg is not here: down to 20',
+    );
+    expect(
+      swapItem(opt, cur, last: last).sets.first.loadG,
+      23000,
+      reason: 'no steps: as before',
+    );
+    const heavy = eng.LoadSteps(eng.LoadUnit.ea, [30000, 40000]);
+    expect(
+      swapItem(opt, cur, last: last, steps: heavy).sets.first.loadG,
+      30000,
+      reason: 'lighter than all: the lightest it has',
+    );
+  });
+
   test('swapCurrent says swapped, moved or failed', () async {
     await startPush();
     final s0 = c.snapshot!;

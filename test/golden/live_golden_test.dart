@@ -47,6 +47,22 @@ void main() {
     'cold start',
     (t) => shot(t, 'cold_start', liveView(loadG: 12000, targetLoadG: null)),
   );
+  // 0.3 P1: a barbell lift with plate math on (the line is null with the
+  // flag off, which is every golden above).
+  testWidgets(
+    'set with plate line',
+    (t) => shot(
+      t,
+      'plates',
+      liveView(
+        unit: LoadUnit.kg,
+        name: 'Barbell bench press',
+        loadG: 62500,
+        targetLoadG: 62500,
+        plateLine: 'Per side 20 + 1.25',
+      ),
+    ),
+  );
   testWidgets('rest', (t) => shot(t, 'rest', liveView(restLeftS: 75)));
   // X1: rest used to be the Pull blue, so on a Pull day it looked like the
   // set screen it follows.

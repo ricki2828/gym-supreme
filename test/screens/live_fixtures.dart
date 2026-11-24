@@ -20,8 +20,10 @@ LiveView liveView({
   int? startingWeightG,
   WorkoutType type = WorkoutType.push,
   bool timerBlock = false,
+  String? plateLine,
 }) => LiveView(
   timerBlock: timerBlock,
+  plateLine: plateLine,
   startingWeightG: startingWeightG,
   undoLabel: undoLabel,
   canSwap: canSwap,

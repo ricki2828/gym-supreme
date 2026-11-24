@@ -71,6 +71,7 @@ class GymDeps {
 
   LiveController liveController() => LiveController(
     awake: screenAwake,
+    plateMath: Features.plateMath,
     store: store,
     engine: engine,
     port: port,
@@ -989,6 +990,8 @@ class _LiveFlowState extends State<LiveFlow> {
           gymId: s.gymId,
           exerciseId: picked.id,
         ),
+        // The prefill must be a load this gym has (as progression snaps).
+        steps: c.engine.loadSteps(gymId: s.gymId, exerciseId: picked.id),
       ),
       replacingId: ex.exerciseId,
     );
@@ -1356,6 +1359,65 @@ class _GymFlowState extends State<GymFlow> {
     widget.onSaved(next.id);
   }
 
+  /// Bar weight and plate pairs rows (0.3 P1), only with the flag on and the
+  /// kit ticked: a bar shows its weight, the plates their pairs.
+  List<PlateRow> _plateRows() {
+    if (!Features.plateMath) return const [];
+    final cat = widget.deps.catalog;
+    return [
+      for (final e in cat.equipment)
+        if (_gym.has(e.id) && (e.load == 'barbell' || e.id == 'plates'))
+          () {
+            final own = _gym.kit[e.id]?.weightsG ?? const <int>[];
+            if (e.id == 'plates') {
+              return PlateRow(
+                id: e.id,
+                name: e.name,
+                summary: platePairsSummary(own),
+                fromDefaults: own.isEmpty,
+              );
+            }
+            final bar = own.isNotEmpty && own.first > 0
+                ? own.first
+                : c2.standardBarG;
+            return PlateRow(
+              id: e.id,
+              name: '${e.name} bar',
+              summary: '${kg(bar)} kg',
+              fromDefaults: own.isEmpty,
+            );
+          }(),
+    ];
+  }
+
+  Future<void> _editPlates(String id) async {
+    final own = _gym.kit[id]?.weightsG ?? const <int>[];
+    List<int>? list;
+    if (id == 'plates') {
+      list = await Navigator.of(context).push<List<int>>(
+        MaterialPageRoute(builder: (_) => PlatePairsScreen(pairsG: own)),
+      );
+    } else {
+      final v = await askNumber(
+        context,
+        title: 'Bar weight',
+        unit: 'kg',
+        decimals: true,
+        initial: (own.isNotEmpty ? own.first : c2.standardBarG) / 1000,
+        max: 60,
+      );
+      if (v != null && v > 0) list = [(v * 1000).round()];
+    }
+    final chosen = list;
+    if (chosen == null || !mounted) return;
+    // Saved at once for a stored gym, as for the weight lists.
+    final stored = widget.deps.engine.gym(_gym.id);
+    if (stored != null && stored.has(id)) {
+      widget.deps.engine.saveGym(stored.withWeights(id, chosen));
+    }
+    setState(() => _gym = _gym.withWeights(id, chosen));
+  }
+
   @override
   Widget build(BuildContext context) {
     final cat = widget.deps.catalog;
@@ -1374,6 +1436,8 @@ class _GymFlowState extends State<GymFlow> {
       ],
       presets: [for (final p in cat.presets) PresetView(p.id, p.name)],
       weights: _weightRows(),
+      plateRows: _plateRows(),
+      onEditPlates: _editPlates,
       firstRun: widget.firstRun,
       onToggle: (id) => setState(() => _gym = _gym.toggle(id)),
       // A preset only pre-ticks (plan 4.3): it adds its kit, and everything
