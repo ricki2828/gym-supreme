@@ -117,6 +117,8 @@ class MainActivity : FlutterActivity() {
             resolveImport(Result.success(null), "cancelled", null)
             return
         }
+        // The pick was dropped (engine gone, or the process died with the picker open).
+        if (importCallback == null) return
         val resolver = contentResolver
         // Read off the main thread; the callback goes back on it.
         Thread {
@@ -130,7 +132,9 @@ class MainActivity : FlutterActivity() {
                     }
                 } catch (e: java.nio.charset.CharacterCodingException) {
                     Result.failure<String?>(FlutterError("io_error", "file is not UTF-8 text", null)) to "io_error"
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
+                    // Throwable, not Exception: an OutOfMemoryError on a big file must come
+                    // back as io_error, not crash the app from this thread.
                     Result.failure<String?>(FlutterError("io_error", "cannot read the file: ${e.javaClass.simpleName}", null)) to "io_error"
                 }
             runOnUiThread { resolveImport(outcome.first, outcome.second, outcome.first.getOrNull()?.length) }
@@ -230,7 +234,7 @@ class MainActivity : FlutterActivity() {
         /** pickImportFile refuses anything bigger with `too_large`. */
         const val IMPORT_MAX_BYTES = 16 * 1024 * 1024
 
-        /** Reads at most IMPORT_MAX_BYTES + 1 bytes, so an oversize file is seen without reading all of it. */
+        /** Stops once more than IMPORT_MAX_BYTES are read (at most one 64 KiB buffer over), so an oversize file is seen without reading all of it. */
         internal fun readCapped(input: java.io.InputStream): ByteArray {
             val out = ByteArrayOutputStream()
             val buf = ByteArray(64 * 1024)
