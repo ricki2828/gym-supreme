@@ -454,7 +454,7 @@ class WorkoutService : Service() {
         val late = now - scheduled
         // T1: committed before the buzz, so a resume after process death never buzzes it again.
         try {
-            fired?.add(FiredKeys.rest(spec.key))
+            fired?.add(FiredKeys.rest(spec.id))
         } catch (e: Exception) {
             SpikeLog.write(this, SpikeLog.line("fired_store_error").put("message", "${e.javaClass.simpleName}: ${e.message}"))
         }
@@ -487,7 +487,7 @@ class WorkoutService : Service() {
             ),
         )
         main.post {
-            tracker?.onFired(spec.key)
+            tracker?.onFired(spec.id)
             // Only clear what this fire owned: a +15 s change may have armed a new rest meanwhile.
             // A resume-grace fire (run == null) owns nothing armed: leave a rest armed since alone.
             if ((run == null && restRunnable == null) || (run != null && restRunnable === run)) {

@@ -44,7 +44,8 @@ object FiredKeys {
 
     fun cue(setId: String, run: Long, index: Int) = "c\t${clean(setId)}\t$run\t$index"
 
-    fun rest(setId: String) = "r\t${clean(setId)}"
+    /** [id] is `RestSpec.id` (set and end), so a redone set's new rest is a new key. */
+    fun rest(id: String) = "r\t${clean(id)}"
 
     /** True for a cue key of [setId] with a run below [run]. */
     fun olderRun(key: String, setId: String, run: Long): Boolean {

@@ -239,9 +239,25 @@ class BlockSchedulerTest {
     @Test
     fun `a rest fired before process death does not buzz again on resume`() {
         val store = MemoryFiredStore()
-        store.add(FiredKeys.rest("s1"))
+        store.add(FiredKeys.rest(RestSpec("s1", 1_000, 90_000).id))
         val t = RestTracker(firedBefore = { store.contains(FiredKeys.rest(it)) })
         assertEquals(RestTracker.Action.Keep, t.onSnapshot(RestSpec("s1", 1_000, 90_000), 1_500, 10))
         assertTrue(t.onSnapshot(RestSpec("s2", 1_000, 90_000), 1_500, 10) is RestTracker.Action.FireNow)
+    }
+
+    @Test
+    fun `durable store - done, undo, done again buzzes twice`() {
+        val store = MemoryFiredStore()
+        val first = RestSpec("s1", 100_000, 90_000)
+        val t1 = RestTracker(firedBefore = { store.contains(FiredKeys.rest(it)) })
+        assertTrue(t1.onSnapshot(first, 10_000, 10) is RestTracker.Action.Arm)
+        store.add(FiredKeys.rest(first.id)) // committed before the buzz, as the service does
+        t1.onFired(first.id)
+        // Pause (service stops), then the redone set's rest arrives in a fresh process.
+        val again = RestSpec("s1", 300_000, 90_000)
+        val t2 = RestTracker(firedBefore = { store.contains(FiredKeys.rest(it)) })
+        assertTrue(t2.onSnapshot(again, 220_000, 10) is RestTracker.Action.Arm)
+        // The first rest still never re-fires after process death.
+        assertEquals(RestTracker.Action.Keep, RestTracker(firedBefore = { store.contains(FiredKeys.rest(it)) }).onSnapshot(first, 100_500, 30))
     }
 }

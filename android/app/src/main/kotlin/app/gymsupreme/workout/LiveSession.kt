@@ -212,7 +212,7 @@ class LiveSession private constructor(private val context: Context) {
     }
 
     /** Native counters plus the last timer block's cue log (T1), for Diagnostics and the export. */
-    fun counters(): Map<String, Long> = NativeCounters.all(context) + CueLog.all(context)
+    fun counters(): Map<String, Long> = NativeCounters.all(context) + (if (Features.timers) CueLog.all(context) else emptyMap())
 
     /** An accepted snapshot: start or update the service from the visible activity, or stop it on pause. */
     private fun apply(snapshot: Map<String, Any?>, line: String) {

@@ -4,7 +4,7 @@
 Usage: emom_check.py <rounds> <label>   (cue JSON lines on stdin, one per line; any text before
 the first `{` on a line, such as a logcat prefix, is ignored).
 Pass = <rounds> emom_minute cues plus one block_end, indices 0..rounds each exactly once, none
-missed, max late_ms <= 1000. Prints the offsets for the CI log; exit 1 on failure.
+missed, max late_ms <= 1000, every cue played (audio ok) with the cue wake lock held. Prints the offsets for the CI log; exit 1 on failure.
 """
 import json
 import sys
@@ -30,10 +30,16 @@ def main() -> int:
     print(f"T1 {label}: late_ms by index " + ",".join(f"{c['index']}:{c['late_ms']}" for c in sorted(cues, key=lambda c: c["index"])))
     print(f"T1 {label}: audio " + ",".join(sorted({str(c.get('audio')) for c in cues}))
           + "; wake_lock_held " + ",".join(sorted({str(c.get('wake_lock_held')) for c in cues})))
-    ok = (len(emom) == rounds and len(end) == 1 and not dups and not missed
+    no_audio = [c["index"] for c in cues if c.get("audio") != "ok"]
+    no_lock = [c["index"] for c in cues if c.get("wake_lock_held") is not True]
+    if no_audio:
+        print(f"T1 {label}: cues without audio ok: {no_audio}")
+    if no_lock:
+        print(f"T1 {label}: cues without the wake lock held: {no_lock}")
+    ok = (len(emom) == rounds and not no_audio and not no_lock and len(end) == 1 and not dups and not missed
           and sorted(idx) == list(range(rounds + 1)) and mx is not None and mx <= MAX_LATE_MS)
     if not ok:
-        print(f"::error::T1 {label}: cue run failed (want {rounds}+1 cues, each once, none missed, max late <= {MAX_LATE_MS} ms)")
+        print(f"::error::T1 {label}: cue run failed (want {rounds}+1 cues, each once, none missed, max late <= {MAX_LATE_MS} ms, audio ok, wake lock held)")
         return 1
     return 0
 

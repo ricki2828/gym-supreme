@@ -50,8 +50,10 @@ object NativeCounters {
         if (v > p.getLong(key, 0)) p.edit().putLong(key, v).commit()
     }
 
+    /** Flag `timers` off: the timer_* keys are left out, so the export matches main before T1. */
     fun all(c: Context): Map<String, Long> {
         val p = prefs(c)
-        return KEYS.associateWith { p.getLong(it, 0) }
+        val keys = if (Features.timers) KEYS else KEYS.filterNot { it.startsWith("timer_") }
+        return keys.associateWith { p.getLong(it, 0) }
     }
 }

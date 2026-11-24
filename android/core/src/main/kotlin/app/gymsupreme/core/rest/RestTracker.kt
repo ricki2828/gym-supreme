@@ -5,7 +5,13 @@ package app.gymsupreme.core.rest
  * `elapsedRealtime`). [key] identifies the rest (the set it follows), so re-sending the same
  * snapshot, or a snapshot that only changed something else, never re-arms or re-fires it.
  */
-data class RestSpec(val key: String, val endsAtWallMs: Long, val durationMs: Long)
+data class RestSpec(val key: String, val endsAtWallMs: Long, val durationMs: Long) {
+    /**
+     * One rest occurrence: the set plus its end. Done X, Undo, Done X again is a new rest with a
+     * new end, so it buzzes again; a re-sent snapshot keeps the same end and stays deduped.
+     */
+    val id: String get() = "$key|$endsAtWallMs"
+}
 
 /**
  * Decides what the service does with the rest in each snapshot (plan 6.2, R4): Kotlin re-anchors
@@ -18,7 +24,7 @@ class RestTracker(
     /**
      * Rests that already buzzed in an earlier process (cut T1: the service's durable fired store,
      * committed before the buzz). Without it a rest could buzz twice after process death plus a
-     * resume inside [staleGraceMs].
+     * resume inside [staleGraceMs]. Called with [RestSpec.id].
      */
     private val firedBefore: (String) -> Boolean = { false },
 ) {
@@ -46,7 +52,7 @@ class RestTracker(
     val current: RestSpec? get() = armed
 
     fun onSnapshot(rest: RestSpec?, nowWallMs: Long, nowElapsedMs: Long): Action {
-        if (rest == null || rest.key in done || firedBefore(rest.key)) {
+        if (rest == null || rest.id in done || firedBefore(rest.id)) {
             if (armed == null) return Action.Keep
             armed = null
             return Action.Cancel
@@ -59,14 +65,14 @@ class RestTracker(
             return Action.Arm(rest, nowElapsedMs + remaining)
         }
         armed = null
-        done.add(rest.key)
+        done.add(rest.id)
         return if (-remaining <= staleGraceMs) Action.FireNow(rest, -remaining) else Action.Missed(rest, -remaining)
     }
 
-    /** The armed alert fired; the same rest never fires again. */
-    fun onFired(key: String) {
-        done.add(key)
-        if (armed?.key == key) armed = null
+    /** The armed alert fired ([RestSpec.id]); the same rest never fires again. */
+    fun onFired(id: String) {
+        done.add(id)
+        if (armed?.id == id) armed = null
     }
 
     /** Pause, finish or service stop. */
