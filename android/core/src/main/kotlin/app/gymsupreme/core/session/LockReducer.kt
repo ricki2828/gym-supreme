@@ -80,7 +80,8 @@ object LockReducer {
         logged["state"] = "done"
         logged["load_g"] = load
         logged["reps"] = reps
-        logged["completion"] = if (coldStart) "cold_start" else "tap_unchanged"
+        // A typed set (`entry: "typed"`, kept as it is copied) stays typed; a first-time set stays cold_start.
+        logged["completion"] = if (coldStart) "cold_start" else if (set["entry"] == "typed") "typed" else "tap_unchanged"
         logged["source"] = "lockscreen"
         logged["started_at_ms"] = started
         logged["ended_at_ms"] = now

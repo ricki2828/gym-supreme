@@ -15,6 +15,17 @@ const int snapshotSchema = 1;
 
 enum SetState { pending, done, skipped }
 
+/// How a set's value was entered, when it is worth remembering across a
+/// restart (0.3 X1). Only `typed` exists: he typed the reps or load on the
+/// number pad, so Done logs `completion: typed`. An optional key: absent
+/// from every journal written before 0.3 and from sets he never typed.
+enum SetEntry {
+  typed;
+
+  /// An unknown future value reads as "not recorded", never an error.
+  static SetEntry? fromWire(Object? w) => w == 'typed' ? typed : null;
+}
+
 enum SessionState { active, paused }
 
 class SnapshotSet {
@@ -35,6 +46,7 @@ class SnapshotSet {
     this.endedAtMs,
     this.offsetMs,
     this.block,
+    this.entry,
   });
 
   final String setId;
@@ -64,6 +76,12 @@ class SnapshotSet {
   /// Timer block definition and marks (R4); opaque JSON object, cut 2.
   final Map<String, Object?>? block;
 
+  /// `typed` once he typed a value for this set (0.3 X1; optional key `entry`,
+  /// written last and only when set). Survives pause, process death and
+  /// Resume so a typed Done still logs `typed`; kept after Done (completion
+  /// says it too); cleared by undo, which restores the plan.
+  final SetEntry? entry;
+
   SnapshotSet copyWith({
     int? setOrdinal,
     Object? targetLoadG = _keep,
@@ -77,6 +95,7 @@ class SnapshotSet {
     Object? endedAtMs = _keep,
     Object? offsetMs = _keep,
     Object? block = _keep,
+    Object? entry = _keep,
   }) => SnapshotSet(
     setId: setId,
     setOrdinal: setOrdinal ?? this.setOrdinal,
@@ -94,6 +113,7 @@ class SnapshotSet {
     endedAtMs: _pick(endedAtMs, this.endedAtMs),
     offsetMs: _pick(offsetMs, this.offsetMs),
     block: _pick(block, this.block),
+    entry: _pick(entry, this.entry),
   );
 
   Map<String, Object?> toJson() => {
@@ -113,8 +133,11 @@ class SnapshotSet {
     'ended_at_ms': endedAtMs,
     'offset_ms': offsetMs,
     'block': block,
+    // The one optional key: omitted when null (see contracts/session_snapshot.md).
+    if (entry != null) 'entry': entry!.name,
   };
 
+  /// The required keys, in canonical order. `entry` is optional and not here.
   static const keys = [
     'set_id', 'set_ordinal', 'kind', 'plan_load_g', 'plan_reps', //
     'target_load_g', 'target_reps', 'state', 'load_g', 'reps', 'completion',
@@ -145,6 +168,7 @@ class SnapshotSet {
     endedAtMs: j['ended_at_ms'] as int?,
     offsetMs: j['offset_ms'] as int?,
     block: (j['block'] as Map?)?.cast<String, Object?>(),
+    entry: SetEntry.fromWire(j['entry']),
   );
 }
 

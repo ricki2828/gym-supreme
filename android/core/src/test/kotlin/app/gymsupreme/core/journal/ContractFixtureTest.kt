@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
  */
 class ContractFixtureTest {
     private val dir = File("src/test/fixtures/contract")
-    private val names = listOf("fresh", "resting", "mid_set", "paused", "finished")
+    private val names = listOf("fresh", "resting", "mid_set", "paused", "finished", "typed")
 
     private fun fixture(name: String): String {
         val text = File(dir, "snapshot_v1_$name.json").readText(Charsets.UTF_8)
@@ -54,6 +54,15 @@ class ContractFixtureTest {
         val fin = Json.parseObject(fixture("finished"))
         assertTrue(Journal.head(fin).finished)
         assertNull(SnapshotView.of(fin).current)
+    }
+
+    @Test
+    fun `optional set key entry is ignored by strict decode and kept byte for byte`() {
+        val typed = fixture("typed")
+        assertTrue(typed.contains(",\"entry\":\"typed\"}"), "the typed fixture carries entry")
+        SnapshotSchema.validate(Json.parseObject(typed))
+        assertEquals(typed, JsonWriter.write(Json.parse(typed)))
+        assertFalse(fixture("mid_set").contains("\"entry\""), "0.2-shaped fixtures have no entry")
     }
 
     @Test
@@ -106,7 +115,7 @@ class SnapshotSchemaTest {
 
     @Test
     fun `every fixture passes strict decode, the torn journal's whole lines too`() {
-        for (n in listOf("fresh", "resting", "mid_set", "paused", "finished")) {
+        for (n in listOf("fresh", "resting", "mid_set", "paused", "finished", "typed")) {
             SnapshotSchema.validate(Json.parseObject(File("src/test/fixtures/contract/snapshot_v1_$n.json").readText(Charsets.UTF_8).dropLast(1)))
         }
         val lines = File("src/test/fixtures/contract/journal_v1_torn_tail.jsonl").readText(Charsets.UTF_8).split('\n')

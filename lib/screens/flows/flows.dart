@@ -1322,6 +1322,36 @@ class _GymFlowState extends State<GymFlow> {
         if (g.id != _gym.id) g,
     ];
     if (stored == null || others.isEmpty) return;
+    // A paused (or unfinished) workout still points at this gym and would
+    // resume onto a gym that is gone: finish or discard it first.
+    String? blocked;
+    try {
+      final text = await widget.deps.port.readPendingJournal();
+      final head = text == null ? null : eng.readJournal(text).last;
+      if (head != null && head.gymId == stored.id) {
+        blocked = 'Finish or discard the paused workout first';
+      }
+    } on Object {
+      blocked = 'Could not check for a paused workout. Try again';
+    }
+    if (!mounted) return;
+    if (blocked != null) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Can\u2019t delete ${stored.name} yet'),
+          content: Text('$blocked.'),
+          actions: [
+            TextButton(
+              key: const Key('gym.delete.blocked'),
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(

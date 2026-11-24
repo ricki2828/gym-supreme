@@ -82,12 +82,23 @@ Map<String, SessionSnapshot> cases() {
   f = Session.done(f, '$uuid:3', nowMs: t0 + 700000, loadG: 25000, reps: 12);
   f = Session.skip(f, '$uuid:4', nowMs: t0 + 760000);
   final finished = Session.finish(f, nowMs: t0 + 800000);
+  // 0.3 X1: the same moment as mid_set, but the 20 kg was TYPED on the number
+  // pad, so the pending set carries the optional `entry: "typed"` key (the
+  // only fixture that has it; the five above are 0.2-shaped and must keep
+  // decoding without it).
+  final typed = Session.retarget(
+    Session.skipRest(resting, nowMs: t0 + 300000),
+    '$uuid:2',
+    loadG: 20000,
+    typed: true,
+  );
   return {
     'snapshot_v1_fresh': fresh,
     'snapshot_v1_resting': resting,
     'snapshot_v1_mid_set': midSet,
     'snapshot_v1_paused': paused,
     'snapshot_v1_finished': finished,
+    'snapshot_v1_typed': typed,
   };
 }
 
@@ -238,7 +249,31 @@ Map<String, (SessionSnapshot, List<Map<String, Object?>>)> lockCases() {
     1,
     0,
   );
+  // X1: a set he TYPED a load for (entry: typed) in the app, then the lock
+  // screen. Bench set 0: 24 kg typed over the planned 22.5. And the pushdown's
+  // first set (a first time, no plan load) typed: still a cold start.
+  final typedBench = Session.retarget(
+    fresh,
+    '$uuid:0',
+    loadG: 24000,
+    typed: true,
+  );
+  final typedCold = Session.retarget(
+    Session.skipRest(bench, nowMs: t0 + 400000),
+    '$uuid:3',
+    loadG: 30000,
+    typed: true,
+  );
   return {
+    'lockscreen_v1_done_typed_set': (typedBench, [_step('done', 0, 95000)]),
+    'lockscreen_v1_plus_rep_keeps_typed': (
+      typedBench,
+      [_step('plus_rep', 0, 30000), _step('done', 0, 95000)],
+    ),
+    'lockscreen_v1_done_typed_cold_start': (
+      typedCold,
+      [_step('done', 3, 460000)],
+    ),
     // The new current exercise is the pushdown: Done logs ITS set (3), then 4;
     // the bench comes back at its next pending set (1) and Done logs that.
     'lockscreen_v1_after_do_later': (
