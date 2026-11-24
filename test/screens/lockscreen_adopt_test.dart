@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_engine/gym_engine.dart' as eng;
+import 'package:gym_supreme/app/workout_port.dart';
 import 'package:gym_supreme/screens/flows/flows.dart';
 import 'package:gym_supreme/screens/live_controller.dart';
 import 'package:gym_supreme/screens/live_screen.dart';
@@ -24,7 +25,7 @@ void main() {
   late int now;
   late eng.MemoryStore store;
   late eng.GymEngine engine;
-  late FlakyPort port;
+  late _CollidingPort port;
   late String gymId;
 
   setUp(() {
@@ -42,7 +43,7 @@ void main() {
     ]);
     engine.saveGym(g);
     gymId = g.id;
-    port = FlakyPort();
+    port = _CollidingPort()..clock = () => now += 1000;
   });
 
   LiveController controller() {
@@ -258,4 +259,146 @@ void main() {
     expect(find.byType(PostWorkoutScreen), findsOneWidget);
     expect(engine.history(), hasLength(1));
   });
+
+  // ---- lifecycle intents colliding with a lock-screen tap (review P2) ----
+
+  test('Finish that collides with a lock tap is retried once and stores both '
+      'sets', () async {
+    final c = await started();
+    port.collisions = 1;
+    final uuid = await c.finish();
+    expect(uuid, isNotNull);
+    expect(c.lastError, isNull);
+    final stored = store.workout(uuid!)!;
+    expect(stored.doneSets, hasLength(2), reason: 'one in the app, one locked');
+    expect(await port.readPendingJournal(), isNull);
+  });
+
+  test('Finish colliding twice says so and works on the next tap', () async {
+    final c = await started();
+    port.collisions = 2;
+    expect(await c.finish(), isNull);
+    expect(
+      c.lastError,
+      isA<WorkoutPortException>().having(
+        (e) => e.code,
+        'code',
+        'changed_elsewhere',
+      ),
+    );
+    expect(await c.finish(), isNotNull);
+  });
+
+  test('Pause that collides with a lock tap still pauses', () async {
+    final c = await started();
+    port.collisions = 1;
+    expect(await c.pause(), isTrue);
+    expect((await head()).state, eng.SessionState.paused);
+    expect(c.lastError, isNull);
+  });
+
+  Future<Future<void> Function(String)> liveWithOneSet(
+    WidgetTester tester,
+  ) async {
+    phone(tester);
+    final deps = GymDeps(
+      engine: engine,
+      port: port,
+      catalog: catalog,
+      appVersion: 'test',
+      nowMs: () => now,
+      tzOffsetMin: () => 480,
+      store: store,
+    );
+    await tester.pumpWidget(MaterialApp(home: GymRoot(deps: deps)));
+    await tester.pumpAndSettle();
+    Future<void> tapText(String text) async {
+      final f = find.text(text);
+      if (f.evaluate().isEmpty &&
+          find.byType(Scrollable).evaluate().isNotEmpty) {
+        await tester.scrollUntilVisible(
+          f,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+      }
+      await tester.ensureVisible(f.first);
+      await tester.pumpAndSettle();
+      await tester.tap(f.first);
+      await tester.pumpAndSettle();
+    }
+
+    await tapText('LIGHT SOMETHING UP');
+    await tester.tap(find.bySemanticsLabel(RegExp(r'^Chest, ')));
+    await tester.pumpAndSettle();
+    await tapText('START PUSH');
+    await tester.tap(find.bySemanticsLabel('More kilograms'));
+    await tester.pumpAndSettle();
+    await tapText('DONE');
+    await tapText('SKIP REST');
+    expect(find.byType(LiveScreen), findsOneWidget);
+    return tapText;
+  }
+
+  Future<void> tapKey(WidgetTester tester, String key) async {
+    final f = find.byKey(Key(key));
+    await tester.ensureVisible(f);
+    await tester.pumpAndSettle();
+    await tester.tap(f);
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('live: Finish colliding with a lock tap shows the summary', (
+    tester,
+  ) async {
+    await liveWithOneSet(tester);
+    port.collisions = 1;
+    await tapKey(tester, 'live.finish');
+    await tapKey(tester, 'finish.confirm');
+    expect(find.byType(LiveScreen), findsNothing);
+    expect(find.byType(PostWorkoutScreen), findsOneWidget);
+    expect(engine.history(), hasLength(1));
+  });
+
+  testWidgets('live: Discard colliding with a lock tap still discards', (
+    tester,
+  ) async {
+    await liveWithOneSet(tester);
+    port.collisions = 1;
+    await tapKey(tester, 'live.finish');
+    await tapKey(tester, 'finish.discard');
+    await tapKey(tester, 'discard.confirm');
+    expect(find.byType(LiveScreen), findsNothing);
+    expect(find.byType(PostWorkoutScreen), findsNothing);
+    expect(find.textContaining('Could not discard'), findsNothing);
+    expect(await tester.runAsync(port.readPendingJournal), isNull);
+    expect(engine.history(), isEmpty);
+  });
+}
+
+/// Before each of the next [collisions] submits, a lock-screen Done (or Skip
+/// rest when nothing is pending) is journalled first, as the Kotlin reducer
+/// would: the submit then meets stale_rev.
+class _CollidingPort extends FlakyPort {
+  int collisions = 0;
+  int Function() clock = () => 0;
+
+  @override
+  Future<int> submitSnapshot(String snapshotJson, int baseRev) async {
+    if (collisions > 0) {
+      collisions--;
+      final h = eng.SessionSnapshot.decode((await readPendingJournal())!);
+      final cur = h.currentSet;
+      final moved = cur == null
+          ? eng.Session.skipRest(h, nowMs: clock())
+          : eng.Session.done(
+              h,
+              cur.setId,
+              nowMs: clock(),
+              source: eng.SetSource.lockscreen,
+            );
+      if (!identical(moved, h)) foreignWrite(moved.encode());
+    }
+    return super.submitSnapshot(snapshotJson, baseRev);
+  }
 }
