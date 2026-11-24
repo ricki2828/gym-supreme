@@ -71,5 +71,6 @@ echo "migration schema_version after: ${sv:-missing}"
 grep -q '"restore_failed":0' <<< "$after_line" || { echo "::error::migration: restore_failed set: $after_line" >&2; exit 1; }
 fatal_check "$PKG" "after migration"
 newer_db_check "after migration"
-adb shell am force-stop "$PKG"
+# Leave a clean device: the smoke that follows expects a fresh install (notification ask, grants).
+adb uninstall "$PKG" > /dev/null
 echo "migration install-over ok: ${before} kept, schema v1 -> v2"
