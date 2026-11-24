@@ -3,16 +3,18 @@
 Dogfood releases. The version label is `version:` in pubspec.yaml; API and contract changes are in
 packages/gym_engine/API_CHANGES.md and contracts/CHANGES.md.
 
-## Unreleased (0.3.1)
+## 0.3.1
 
-- Reordering is easy to find now. Under DONE there are two buttons side by side, "Do later" and
-  "Change order", with a line saying what is up next. "Change order" opens a list of everything left
+- Reordering is easy to find now. Below DONE and the rest panel (scroll a little if you don't see
+  them) are "Do later" (shown when the exercise can move) and "Change order", with a line saying
+  what is up next. They sit below DONE on purpose, so DONE never moves off the screen. "Change order" opens a list of everything left
   to do, with the exercise you are on tagged NOW.
 - "What's next?" after the last set of an exercise: the rest screen shows the exercise that is up next
   as a big card ("starts when the rest ends", Start now), with the other exercises below to tap if the
   machine is taken. Doing nothing works exactly as before. Tapping one makes it the current exercise;
-  the rest timer keeps running and the new order survives the app being killed. With no rest, the same
-  choice sits under Done on the next exercise's screen.
+  the rest timer keeps running and the new order survives the app being killed. With no rest, or once
+  the rest has run out, the same choice sits under DONE on the next exercise's screen until you log
+  a set.
 - Dragging is more reliable: hold anywhere on a row to drag it, the handle is a bigger target, and
   every row has a menu with Move up and Move down.
 
