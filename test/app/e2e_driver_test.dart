@@ -146,6 +146,10 @@ void main() {
     expect(h['count'], 1);
   });
 
+  // The stub has no service and no queued start callback, so it cannot reach
+  // the race: this only checks the command's steps. The emulator smoke
+  // (start_ignored stale=true, no service_started, no foreground service) is
+  // the proof that the stale-start path works.
   test(
     'stale_start: start + paused submit back to back, then cleaned up',
     () async {

@@ -212,8 +212,10 @@ class E2eDriver {
     final pauseF = s.port.submitSnapshot(paused.encode(), started.rev);
     await Future.wait([startF, pauseF]);
     _log('stale_start', {'uuid': started.workoutUuid, 'rev': paused.rev});
-    // The journal holds the paused snapshot and the service never started,
-    // so the delete is accepted (still_running would mean it did start).
+    // Clean-up only. A delete accepted here is weak evidence: it also passes
+    // when the service started and was stopped again in time. The proof that
+    // the queued start went idle is in the smoke: start_ignored stale=true,
+    // no service_started event, no foreground service left.
     await s.port.deleteJournal(started.workoutUuid);
     final journal = await s.port.readPendingJournal();
     _log('stale_cleanup', {'journal_gone': journal == null});

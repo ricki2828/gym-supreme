@@ -224,8 +224,18 @@ adb logcat -c || true
 e2e_cmd stale_start
 e2e_wait ok 60
 e2e_lines | sed 's/^/e2e stale_start: /'
-wait_for '"event":"start_ignored".*"stale":true' 20 > /dev/null \
+# Key-order independent: the event and the stale flag are matched on the same line separately.
+stale_line() { svc_lines | grep -F '"event":"start_ignored"' | grep -F '"stale":true' | tail -1; }
+for _ in $(seq 1 20); do [ -n "$(stale_line)" ] && break; sleep 1; done
+[ -n "$(stale_line)" ] \
   || { echo "::error::API $sdk: no start_ignored stale=true after the back-to-back start+pause" >&2; svc_lines | grep -E 'start_ignored|service_|session_|journal' | tail -n 12 >&2; exit 1; }
+# The logcat was cleared just before the command, so any service_started here belongs to it: the
+# queued start must have gone idle (service_idle_start), never begun a session. (session_start is
+# the journal write in LiveSession.start and always fires; service events carry no uuid.)
+if svc_lines | grep -F '"event":"service_started"' | grep -qF '"mode":"session"'; then
+  echo "::error::API $sdk: a session service began for the stale start" >&2
+  svc_lines | grep -E 'start_ignored|service_|session_' | tail -n 12 >&2; exit 1
+fi
 sleep 2
 if adb shell dumpsys activity services "$PKG" | tr -d '\r' | grep -q 'isForeground=true'; then
   echo "::error::API $sdk: a foreground service is running after the stale start" >&2

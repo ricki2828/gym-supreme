@@ -3,7 +3,9 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gym_engine/cut2.dart' as c2;
 import 'package:gym_engine/gym_engine.dart' as eng;
+import 'package:gym_supreme/app/feature_flags.dart';
 import 'package:gym_supreme/screens/flows/flows.dart';
 import 'package:gym_supreme/screens/history_screen.dart';
 import 'package:gym_supreme/screens/live_controller.dart';
@@ -59,6 +61,7 @@ void main() {
   /// A stored workout with [sets] logged sets, through the real controller.
   Future<String> storeWorkout({int sets = 2}) async {
     final c = LiveController(
+      store: store,
       engine: engine,
       port: port,
       nowMs: () => now,
@@ -163,6 +166,41 @@ void main() {
       expect(find.text('UNDO'), findsNothing);
       expect(engine.history(), isEmpty);
     });
+
+    // Needs GS_FEATURES=rotation (or all); CI runs this file both ways.
+    testWidgets(
+      'rotation: delete moves the pointer back, UNDO passes rotationBefore back',
+      skip: !Features.rotation,
+      (tester) async {
+        c2.saveRotation(
+          store,
+          c2.Rotation(const ['push', 'pull', 'legs'], next: 0),
+        );
+        await storeWorkout();
+        expect(
+          c2.loadRotation(store).next,
+          1,
+          reason: 'finishing a push advanced the pointer past push',
+        );
+        await pumpRoot(tester);
+        await openDetail(tester);
+        await deleteFromDetail(tester);
+        expect(
+          c2.loadRotation(store).next,
+          0,
+          reason:
+              'delete passed rotation: Features.rotation: push is due again',
+        );
+        await tester.tap(find.text('UNDO'));
+        await tester.pumpAndSettle();
+        expect(
+          c2.loadRotation(store).next,
+          1,
+          reason: 'UNDO handed back the rotationBefore the delete returned',
+        );
+        expect(engine.history(), hasLength(1));
+      },
+    );
 
     testWidgets('long-press a history row deletes it the same way', (
       tester,
