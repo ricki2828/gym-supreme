@@ -126,6 +126,8 @@ dependencies {
     // Pure Kotlin core from the included build android/core.
     implementation("app.gymsupreme:core")
     // H1: Health Connect write (write only). Its client API is suspend functions.
+    // re-copy HealthDataSdkService declaration from the AAR on every bump
+    // (into src/health/AndroidManifest.xml; the main manifest removes the library's copy).
     implementation("androidx.health.connect:connect-client:1.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     // JVM unit tests (health record mapping); CI runs :app:testPlayDebugUnitTest.

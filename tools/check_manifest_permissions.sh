@@ -50,11 +50,21 @@ missing="$(comm -13 <(echo "$perms") <(sort <<< "$allowed"))"
 # removes it; src/health/AndroidManifest.xml puts it back). Its attributes are printed.
 xml="$("$BT/aapt2" dump xmltree --file AndroidManifest.xml "$APK")"
 tmpx="$(mktemp)"; printf '%s\n' "$xml" > "$tmpx"
-python3 "$(dirname "$0")/manifest_health_report.py" "$tmpx"
+report="$(python3 "$(dirname "$0")/manifest_health_report.py" "$tmpx")"
 rm -f "$tmpx"
+echo "$report"
 svc="$(grep -c 'androidx.health.platform.client.impl.sdkservice.HealthDataSdkService' <<< "$xml" || true)"
 if health_on; then
   [ "$svc" -ge 1 ] || { echo "::error::health flag on but HealthDataSdkService is missing"; exit 1; }
+  # Exactly as connect-client declares it: enabled, exported, one ACTION_BIND_SDK_SERVICE action.
+  svc_line="$(grep -F 'manifest/application/service: ' <<< "$report" | grep -F 'HealthDataSdkService' || true)"
+  [ "$(grep -c . <<< "$svc_line")" -eq 1 ] || { echo "::error::expected one HealthDataSdkService element: $svc_line"; exit 1; }
+  grep -q 'exported=true' <<< "$svc_line" && grep -q 'enabled=true' <<< "$svc_line" \
+    || { echo "::error::HealthDataSdkService must be exported=true enabled=true: $svc_line"; exit 1; }
+  acts="$(grep -F 'manifest/application/service/intent-filter/action: ' <<< "$report" || true)"
+  [ "$(grep -c . <<< "$acts")" -eq 1 ] && grep -q 'name=androidx.health.platform.client.ACTION_BIND_SDK_SERVICE$' <<< "$acts" \
+    || { echo "::error::HealthDataSdkService must have exactly one action, ACTION_BIND_SDK_SERVICE: $acts"; exit 1; }
+  echo "HealthDataSdkService: enabled, exported, one ACTION_BIND_SDK_SERVICE action"
 else
   [ "$svc" -eq 0 ] || { echo "::error::health flag off but HealthDataSdkService is in the manifest"; exit 1; }
 fi
