@@ -8,3 +8,4 @@
 - 2026-11-23: `block.run` added (additive, cut 2; t61 + t5v); Kotlin dedup key becomes (set_id, run, index). Session.undo keeps `run`. Lane t5z (PR #17).
 - 2026-11-23: refusal code `io_error` (real I/O failure, e.g. deleteJournal), native counter `journal_delete_failed` (#19). Additive. Lane A doc, native lane code.
 - 2026-11-23: `GymHostApi.requestNotificationPermission()` (@async bool; POST_NOTIFICATIONS on API 33+, notificationsEnabled below; refusal code `already_pending`). Additive. Native lane.
+- 2026-11-24: `GymHostApi.pickImportFile()` (@async String?; I1 import). ACTION_OPEN_DOCUMENT, no permission; returns the file text (strict UTF-8) or null on cancel / activity gone; refusal codes `already_pending`, `too_large` (over 16 MiB), `io_error`. Logcat `import_pick_shown`, `import_pick` (result picked|cancelled|too_large|io_error|no_picker|activity_gone). Additive. Lane E/U (I1).

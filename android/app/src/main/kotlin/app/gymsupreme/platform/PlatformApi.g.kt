@@ -303,6 +303,16 @@ interface GymHostApi {
    * dialog is open, the call returns false.
    */
   fun requestNotificationPermission(callback: (Result<Boolean>) -> Unit)
+  /**
+   * Import (I1): opens the system file picker (ACTION_OPEN_DOCUMENT; no
+   * storage permission) and returns the picked file's text, decoded as
+   * strict UTF-8, or null when the user backs out. Nothing is written on
+   * either side: Dart parses and imports the text. Refusals: `already_pending`
+   * (a pick is already open), `too_large` (file over 16 MiB), `io_error` (the
+   * file cannot be read or is not UTF-8). If the activity goes away while the
+   * picker is open, the call returns null.
+   */
+  fun pickImportFile(callback: (Result<String?>) -> Unit)
 
   companion object {
     /** The codec used by GymHostApi. */
@@ -364,6 +374,24 @@ interface GymHostApi {
         if (api != null) {
           channel.setMessageHandler { _, reply ->
             api.requestNotificationPermission{ result: Result<Boolean> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(PlatformApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(PlatformApiPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.gym_supreme.GymHostApi.pickImportFile$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            api.pickImportFile{ result: Result<String?> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(PlatformApiPigeonUtils.wrapError(error))

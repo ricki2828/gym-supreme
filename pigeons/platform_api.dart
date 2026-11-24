@@ -65,6 +65,16 @@ abstract class GymHostApi {
   /// dialog is open, the call returns false.
   @async
   bool requestNotificationPermission();
+
+  /// Import (I1): opens the system file picker (ACTION_OPEN_DOCUMENT; no
+  /// storage permission) and returns the picked file's text, decoded as
+  /// strict UTF-8, or null when the user backs out. Nothing is written on
+  /// either side: Dart parses and imports the text. Refusals: `already_pending`
+  /// (a pick is already open), `too_large` (file over 16 MiB), `io_error` (the
+  /// file cannot be read or is not UTF-8). If the activity goes away while the
+  /// picker is open, the call returns null.
+  @async
+  String? pickImportFile();
 }
 
 /// Cut-1 live workout contract (t3x decision 23-Nov, integration doc ruling 1).
