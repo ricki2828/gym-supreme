@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
+import 'package:gym_engine/cut2.dart' as c2;
 import 'package:gym_engine/gym_engine.dart' as eng;
 
 import '../screens/live_controller.dart';
@@ -19,8 +20,14 @@ import 'services.dart';
 /// - `start_only`: start and log one set, then stop (the script kills us).
 /// - `resume`: the pending journal from start_only is resumed, finished and
 ///   stored (crash-safe resume, item 5).
+/// - `discard`: start, log 2 sets, discard (pause then delete the journal):
+///   journal gone, nothing stored, a new start accepted (0.2.1 D2).
+/// - `stale_start`: startSession and a paused submit sent back to back with
+///   no await between, so the pause reaches the service before its start
+///   callback ran. The service must go idle for that start (0.2.1 D2).
 /// - `ask`: the one-time notification ask (0.1.1).
-/// - `history`: list stored workouts (restore drill, 0.2).
+/// - `history`: list stored workouts and whether a journal is pending
+///   (restore drill, 0.2; discard check, 0.2.1).
 class E2eDriver {
   E2eDriver(this.s, {void Function(String line)? out}) : _out = out ?? print;
 
@@ -64,10 +71,14 @@ class E2eDriver {
           await _run(fullFlow: false);
         case 'resume':
           await _resume();
+        case 'discard':
+          await _discard();
+        case 'stale_start':
+          await _staleStart();
         case 'ask':
           await _ask();
         case 'history':
-          _history();
+          await _history();
         default:
           _log('unknown', {'command': name});
       }
@@ -112,6 +123,95 @@ class E2eDriver {
     await _finish(c);
   }
 
+  /// Discard drill (0.2.1 D2): the same path the live screen takes
+  /// (LiveController.discard). Afterwards no journal, no new stored workout,
+  /// and the service accepts a fresh start (no already_running).
+  Future<void> _discard() async {
+    final gymId = _gymId();
+    final plan = s.engine.suggest(
+      gymId: gymId,
+      muscleIds: const ['chest'],
+      minutes: 30,
+      seed: 1,
+    );
+    if (plan.items.isEmpty) throw StateError('empty plan');
+    final before = s.engine.history(limit: 500).length;
+    final c = _controller();
+    await c.start(plan);
+    _check(c, 'start');
+    final uuid = c.snapshot!.workoutUuid;
+    _log('start', {'uuid': uuid, 'rev': c.snapshot!.rev});
+    await c.done();
+    _check(c, 'set1');
+    await c.done();
+    _check(c, 'set2');
+    final logged = c.view()!.doneSets;
+    _log('set2', {'rev': c.snapshot!.rev, 'done_sets': logged});
+    if (logged != 2) throw StateError('expected 2 logged sets, got $logged');
+    final ok = await c.discard();
+    _check(c, 'discard');
+    final journal = await s.port.readPendingJournal();
+    final after = s.engine.history(limit: 500).length;
+    _log('discard', {
+      'uuid': uuid,
+      'ok': ok,
+      'journal_gone': journal == null,
+      'stored': s.engine.isStored(uuid),
+      'history_before': before,
+      'history_after': after,
+    });
+    if (!ok || journal != null || after != before) {
+      throw StateError('discard incomplete');
+    }
+    c.dispose();
+    // A fresh start must be accepted: a journal or running service left
+    // behind would answer already_running / finish_pending.
+    final c2 = _controller();
+    await c2.start(plan);
+    _check(c2, 'restart');
+    _log('restart', {'accepted': true, 'uuid': c2.snapshot!.workoutUuid});
+    if (!await c2.discard()) throw StateError('second discard failed');
+    c2.dispose();
+    _log('ok');
+  }
+
+  /// The service's stale-start path (WorkoutService.onStartCommand): the
+  /// start and the paused submit are both on the wire before Kotlin has run
+  /// the foreground-service callback the start queued. Dogfood/debug only.
+  Future<void> _staleStart() async {
+    final gymId = _gymId();
+    final plan = s.engine.suggest(
+      gymId: gymId,
+      muscleIds: const ['chest'],
+      minutes: 30,
+      seed: 1,
+    );
+    if (plan.items.isEmpty) throw StateError('empty plan');
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final started = eng.Session.start(
+      plan,
+      nowMs: now,
+      tzOffsetMin: DateTime.now().timeZoneOffset.inMinutes,
+      appVersion: s.appVersion,
+    );
+    final paused = c2.TimerSession.pause(started, nowMs: now + 1);
+    if (identical(paused, started) || paused.rev != started.rev + 1) {
+      throw StateError('pause did not advance the rev');
+    }
+    // No awaits between the two calls.
+    final startF = s.port.startSession(started.encode());
+    final pauseF = s.port.submitSnapshot(paused.encode(), started.rev);
+    await Future.wait([startF, pauseF]);
+    _log('stale_start', {'uuid': started.workoutUuid, 'rev': paused.rev});
+    // The journal holds the paused snapshot and the service never started,
+    // so the delete is accepted (still_running would mean it did start).
+    await s.port.deleteJournal(started.workoutUuid);
+    final journal = await s.port.readPendingJournal();
+    _log('stale_cleanup', {'journal_gone': journal == null});
+    if (journal != null) throw StateError('journal left behind');
+    _log('ok');
+  }
+
   Future<void> _resume() async {
     final r = s.engine.recover(await s.port.readPendingJournal());
     _log('recover', {'action': r.action.name});
@@ -150,10 +250,12 @@ class E2eDriver {
   }
 
   /// Lists stored workouts (restore drill: the backup came back intact).
-  void _history() {
+  Future<void> _history() async {
+    final pendingJournal = await s.port.readPendingJournal() != null;
     final rows = s.engine.history(limit: 20);
     _log('history', {
       'count': rows.length,
+      'pending_journal': pendingJournal,
       'uuids': [for (final r in rows) r.uuid],
       'restore_failed': s.restoreFailed,
       'restore_pending': s.restorePending,

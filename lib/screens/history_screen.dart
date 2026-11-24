@@ -180,7 +180,7 @@ class ResumeCard extends StatelessWidget {
   final bool finishedUnsaved;
   final VoidCallback? onResume;
 
-  /// Ends it as is, saving the sets already logged.
+  /// Throws the workout away (the caller confirms first).
   final VoidCallback? onDiscard;
 
   @override
@@ -223,7 +223,7 @@ class ResumeCard extends StatelessWidget {
                         minimumSize: const Size(48, 40),
                       ),
                       child: Text(
-                        'End it here',
+                        'Discard workout',
                         style: LitType.body(14, ink, FontWeight.w700),
                       ),
                     ),

@@ -171,6 +171,67 @@ e2e_lines | sed 's/^/e2e resume: /'
 e2e_lines | grep '"step":"recover"' | grep -q '"action":"offerResume"' || { echo "e2e: the killed workout was not offered for resume" >&2; exit 1; }
 [ "$(e2e_lines | grep '"step":"finish"' | e2e_field uuid)" = "$started_uuid" ] || { echo "e2e: resumed a different workout than the one killed" >&2; exit 1; }
 fatal_check "$PKG" "e2e resume"
+# Discard (0.2.1 D2): start, log 2 sets, discard (pause, then delete the journal). The journal is
+# gone, nothing is stored, the service accepts a fresh start (no already_running), and a
+# force-stop + relaunch finds no Resume and no new workout.
+count_of() { sed -n 's/.*"count":\([0-9]*\).*/\1/p' | head -1; }
+adb logcat -c || true
+e2e_cmd history
+e2e_wait ok 30
+count_before="$(e2e_lines | grep '"step":"history"' | count_of)"
+[ -n "$count_before" ] || { echo "::error::API $sdk: discard: no history count" >&2; exit 1; }
+adb logcat -c || true
+e2e_cmd discard
+e2e_wait ok 90
+e2e_lines | sed 's/^/e2e discard: /'
+d="$(e2e_lines | grep '"step":"discard"')"
+grep -q '"ok":true' <<< "$d" && grep -q '"journal_gone":true' <<< "$d" && grep -q '"stored":false' <<< "$d" \
+  || { echo "::error::API $sdk: discard incomplete: $d" >&2; exit 1; }
+num_of() { sed -n "s/.*\"$1\":\([0-9]*\).*/\1/p" | head -1; }  # one numeric JSON field, any key order
+hist_before="$(num_of history_before <<< "$d")"
+hist_after="$(num_of history_after <<< "$d")"
+[ -n "$hist_before" ] && [ "$hist_before" = "$hist_after" ] && [ "$hist_after" = "$count_before" ] \
+  || { echo "::error::API $sdk: discard changed the history count (was $count_before): $d" >&2; exit 1; }
+e2e_lines | grep '"step":"restart"' | grep -q '"accepted":true' \
+  || { echo "::error::API $sdk: a start after discard was not accepted" >&2; exit 1; }
+discarded_uuid="$(e2e_field uuid <<< "$d")"
+[ -n "$discarded_uuid" ] || { echo "::error::API $sdk: discard: no uuid" >&2; exit 1; }
+svc_lines | grep '"event":"journal_delete"' | grep -F "$discarded_uuid" | grep -q '"ok":true' \
+  || { echo "::error::API $sdk: no journal_delete ok=true for $discarded_uuid" >&2; svc_lines | grep -E 'journal|session_' | tail -n 12 >&2; exit 1; }
+if svc_lines | grep -q '"event":"journal_delete_failed"'; then
+  echo "::error::API $sdk: journal_delete_failed during the discard drill" >&2; svc_lines | grep journal_delete >&2; exit 1
+fi
+# No foreground service left for the discarded workout (a start still queued behind the pause
+# must go idle, WorkoutService.cancelPendingStart). Absent output = not running = pass.
+sleep 3
+if adb shell dumpsys activity services "$PKG" | tr -d '\r' | grep -q 'isForeground=true'; then
+  echo "::error::API $sdk: a foreground service is still running after the discard" >&2
+  adb shell dumpsys activity services "$PKG" | tr -d '\r' | head -n 30 >&2; exit 1
+fi
+fatal_check "$PKG" "e2e discard"
+adb shell am force-stop "$PKG"
+sleep 2
+adb logcat -c || true
+e2e_cmd history
+e2e_wait ok 30
+h="$(e2e_lines | grep '"step":"history"')"
+[ "$(count_of <<< "$h")" = "$count_before" ] && grep -q '"pending_journal":false' <<< "$h" \
+  || { echo "::error::API $sdk: after relaunch the discarded workout came back: $h" >&2; exit 1; }
+fatal_check "$PKG" "after discard relaunch"
+# Stale start (WorkoutService.onStartCommand): startSession + paused submit with no await between.
+# The queued start callback must go idle (start_ignored stale=true), leaving no foreground service.
+adb logcat -c || true
+e2e_cmd stale_start
+e2e_wait ok 60
+e2e_lines | sed 's/^/e2e stale_start: /'
+wait_for '"event":"start_ignored".*"stale":true' 20 > /dev/null \
+  || { echo "::error::API $sdk: no start_ignored stale=true after the back-to-back start+pause" >&2; svc_lines | grep -E 'start_ignored|service_|session_|journal' | tail -n 12 >&2; exit 1; }
+sleep 2
+if adb shell dumpsys activity services "$PKG" | tr -d '\r' | grep -q 'isForeground=true'; then
+  echo "::error::API $sdk: a foreground service is running after the stale start" >&2
+  adb shell dumpsys activity services "$PKG" | tr -d '\r' | head -n 30 >&2; exit 1
+fi
+fatal_check "$PKG" "e2e stale_start"
 # Rest alert with notifications DENIED (t3x, 0.1.1): plan 6.2 says the service itself buzzes
 # and plays the tone, so a refused permission must not silence the rest. API 33+ only (below
 # 33 the permission does not exist). Revoking kills the app; the e2e run starts it again.

@@ -15,6 +15,8 @@ LiveView liveView({
   String name = 'Dumbbell bench press',
   String? undoLabel,
   bool canSwap = false,
+  int doneSets = 0,
+  int leftSets = 0,
 }) => LiveView(
   undoLabel: undoLabel,
   canSwap: canSwap,
@@ -36,4 +38,6 @@ LiveView liveView({
   elapsedS: 12 * 60 + 40,
   restLeftS: restLeftS,
   allDone: allDone,
+  doneSets: doneSets,
+  leftSets: leftSets,
 );

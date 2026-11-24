@@ -116,7 +116,7 @@ void main() {
       expect(find.text('LEGS, LIFT 3 OF 6'), findsOneWidget);
       expect(find.text('Paused Sunday. Pick it up at set 2.'), findsOneWidget);
       await tester.tap(find.text('Resume'));
-      await tester.tap(find.text('End it here'));
+      await tester.tap(find.text('Discard workout'));
       expect(resumed && ended, isTrue);
     });
   });
