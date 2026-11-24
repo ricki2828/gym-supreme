@@ -67,7 +67,8 @@ if [ "$health" = 1 ] && [ "$sdk" -ge 34 ]; then
   e2e_wait health_asked 30
   asked="$(step health_asked)"
   echo "H1 API $sdk: after the screen: $asked"
-  svc_lines | grep -F '"event":"health_permission"' | grep -q '"asked":true' || { echo "::error::API $sdk health: no health_permission asked=true line" >&2; exit 1; }
+  perm="$(svc_lines | grep -F '"event":"health_permission"' || true)"
+  grep -q '"asked":true' <<< "$perm" || { echo "::error::API $sdk health: no health_permission asked=true line" >&2; exit 1; }
   grep -q '"granted":true' <<< "$asked" && grep -q '"enabled":true' <<< "$asked" || { echo "::error::API $sdk health: granted outside but the switch is not on: $asked" >&2; exit 1; }
   fatal_check "$PKG" "health permission screen"
 fi

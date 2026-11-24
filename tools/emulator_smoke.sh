@@ -389,7 +389,10 @@ if [ "$sdk" -ge 33 ]; then
   [ -n "$denied" ] || { echo "::error::API $sdk: no rest_alert with notifications denied" >&2; exit 1; }
   grep -q '"audio":"ok"' <<< "$denied" || { echo "::error::API $sdk: tone failed with notifications denied" >&2; exit 1; }
   grep -q '"vibrate":"ok' <<< "$denied" || { echo "::error::API $sdk: no vibration with notifications denied" >&2; exit 1; }
-  adb shell dumpsys package "$PKG" | tr -d '\r' | grep -q 'POST_NOTIFICATIONS: granted=false' || { echo "::error::API $sdk: permission was not actually denied during the check" >&2; exit 1; }
+  # Captured first: grep -q stops early, and under pipefail the SIGPIPE to tr fails the pipe once
+  # the output has more after the match (H1's Health Connect permission on API 34+).
+  pkgd="$(adb shell dumpsys package "$PKG" | tr -d '\r')"
+  grep -q 'POST_NOTIFICATIONS: granted=false' <<< "$pkgd" || { echo "::error::API $sdk: permission was not actually denied during the check" >&2; exit 1; }
   fatal_check "$PKG" "rest alert, notifications denied"
 fi
 # Restore drill (0.2 item 5b, review P1-7), API 34 only: Android Auto Backup through the local
