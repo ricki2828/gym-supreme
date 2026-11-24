@@ -79,6 +79,19 @@ void main() {
 
     // Item 4: live logging through the real WorkoutService.
     await _waitFor(tester, 'live', find.byType(LiveScreen));
+    // The lazy list may not have built DONE's sub line yet (the Change order
+    // row sits above it now): bring DONE in before reading it.
+    await _settle(tester);
+    final doneBtn = find.text('DONE');
+    if (doneBtn.evaluate().isEmpty) {
+      await tester.scrollUntilVisible(
+        doneBtn,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+    }
+    await tester.ensureVisible(doneBtn.first);
+    await _settle(tester);
     if (find.text('Set a weight first').evaluate().isNotEmpty) {
       await _tap(tester, find.bySemanticsLabel('More kilograms'));
       await _waitFor(tester, 'weight', find.textContaining('first time'));
