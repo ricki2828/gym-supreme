@@ -27,6 +27,12 @@ env:
   # variable GS_FEATURES (e.g. ghost,rotation) only on t3x's call; empty = all off (APK 0.1).
   # build-dogfood and emulator replace it with tools/ci_features.sh (pull requests add lockdone).
   GS_FEATURES: ${{ vars.GS_FEATURES || '' }}
+  # Pinned base for the schema v1 -> v2 migration install-over (API 36 emulator job). A real 0.2.0
+  # (schema v1) APK; dogfood-latest is already v2 so it cannot prove the migration.
+  # Keep until 0.3.0 ships; then move to v0.2.1-dogfood.
+  MIGRATION_BASE_TAG: v0.2.0-dogfood
+  MIGRATION_BASE_APK: gym-supreme-dogfood-3076e4c-x64.apk
+  MIGRATION_BASE_SHA256: 5a27556262f19ba218f9a6c78dde0b19a9d6004e26a9a5a284223749d8f16776
 
 jobs:
   changes:
@@ -352,6 +358,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: tools/ci_release.sh get "ci-apk-${{ github.run_id }}" apk
+      - name: Fetch pinned migration base (0.2.0, schema v1; API 36 only)
+        if: matrix.api-level == 36
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$MIGRATION_BASE_TAG" --dir apk --pattern "$MIGRATION_BASE_APK"
+          echo "$MIGRATION_BASE_SHA256  apk/$MIGRATION_BASE_APK" | sha256sum -c -
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -361,7 +374,7 @@ jobs:
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
-      - name: Boot, install, launch (+ install-over on API 36)
+      - name: Boot, install, launch (+ install-over and v1->v2 migration on API 36)
         uses: reactivecircus/android-emulator-runner@v2
         env:
           INSTALL_OVER: ${{ matrix.api-level == 36 && needs.build-dogfood.outputs.has_prev == 'true' }}
@@ -374,6 +387,7 @@ jobs:
           disable-animations: true
           script: |
             if [ "$INSTALL_OVER" = "true" ]; then tools/emulator_install_over.sh apk/prev-x86_64-dogfood.apk apk/app-x86_64-dogfood-release.apk "$DOGFOOD_PKG"; else echo "install-over not run on this job (API ${{ matrix.api-level }}, has_prev=${{ needs.build-dogfood.outputs.has_prev }})"; fi
+            if [ "${{ matrix.api-level }}" = "36" ]; then tools/emulator_migration_over.sh "apk/$MIGRATION_BASE_APK" apk/app-x86_64-dogfood-release.apk "$DOGFOOD_PKG"; fi
             tools/emulator_smoke.sh apk/app-x86_64-dogfood-release.apk "$DOGFOOD_PKG"
 
   ui-e2e:
