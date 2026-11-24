@@ -322,6 +322,30 @@ class GymHostApi {
     ;
     return pigeonVar_replyValue as String?;
   }
+
+  /// Keep the screen on while a workout is being logged (0.3 X1): adds or
+  /// clears FLAG_KEEP_SCREEN_ON on the activity window. Dart turns it on when
+  /// a session starts or resumes and off when it pauses, finishes or is
+  /// discarded (and when the controller goes away). Needs no permission and
+  /// never fails; it logs `keep_screen_on` with `on` for CI. Calls with the
+  /// current value are fine (idempotent).
+  Future<void> setKeepScreenOn(bool on) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.GymHostApi.setKeepScreenOn$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[on]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
 }
 
 /// Cut-1 live workout contract (t3x decision 23-Nov, integration doc ruling 1).

@@ -64,6 +64,16 @@ void main() {
     ),
   );
   testWidgets('rest', (t) => shot(t, 'rest', liveView(restLeftS: 75)));
+  // X1: rest used to be the Pull blue, so on a Pull day it looked like the
+  // set screen it follows.
+  testWidgets(
+    'rest on a Pull day',
+    (t) => shot(
+      t,
+      'rest_pull',
+      liveView(restLeftS: 75, type: WorkoutType.pull, name: 'Lat pulldown'),
+    ),
+  );
   testWidgets('all done', (t) => shot(t, 'all_done', liveView(allDone: true)));
   testWidgets(
     'set at 1.3x text',

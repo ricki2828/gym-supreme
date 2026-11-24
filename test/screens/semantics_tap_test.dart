@@ -88,6 +88,32 @@ void main() {
       onStartingWeights: noop,
       onSave: noop,
     ),
+    // 0.3 X1: Rename / Delete on the gym setup, steppers on the rest screen.
+    'gym setup (rename, delete)': GymSetupScreen(
+      gyms: const [condo],
+      currentGymId: 'condo',
+      kit: condo.kit,
+      equipment: equipmentFixture,
+      presets: const [],
+      onPickGym: noop1,
+      onAddGym: noop,
+      onToggle: noop1,
+      onRename: noop,
+      onDelete: noop,
+      onSave: noop,
+    ),
+    'rest (edit the next set)': LiveScreen(
+      view: liveView(restLeftS: 60),
+      onReps: noop1,
+      onLoad: noop1,
+      onTypeReps: (_, _) {},
+      onTypeLoad: (_, _) {},
+      onRestDelta: noop1,
+      onSkipRest: noop,
+      onReorder: (_, _) {},
+      onDoLater: noop,
+      onFinish: noop,
+    ),
     // 0.3 P1: bar and plates rows, the pairs editor, the plate line.
     'gym setup (bar and plates)': GymSetupScreen(
       gyms: const [condo],
