@@ -1210,7 +1210,7 @@ class GymEngine implements GymApi {
   /// the file's `deleted_workout_uuids` are not imported.
   ImportCounts _import(ImportBundle b, {required bool write}) {
     final deleted = store.deletedWorkoutUuids().toSet();
-    var added = 0, existing = 0, wasDeleted = 0, hr = 0;
+    var added = 0, existing = 0, wasDeleted = 0, hr = 0, clamped = 0;
     for (final w in b.workouts) {
       final uuid = w.record.uuid;
       if (deleted.contains(uuid)) {
@@ -1220,6 +1220,7 @@ class GymEngine implements GymApi {
       } else {
         added++;
         hr += w.hr.length;
+        if (w.endClamped) clamped++;
         if (write) store.upsertWorkout(w.record, hr: w.hr);
       }
     }
@@ -1250,6 +1251,7 @@ class GymEngine implements GymApi {
       hrSamplesAdded: hr,
       settingsRestored: restore,
       deletedInFile: b.deletedInFile,
+      endsClamped: clamped,
     );
   }
 

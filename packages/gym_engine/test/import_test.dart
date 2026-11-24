@@ -413,16 +413,35 @@ void cases(HistoryStore Function() make) {
         contains('set ends before it starts'),
       );
       refused(
-        edit((j) {
-          final w = (j['workouts'] as List).last as Map;
-          w['ended_at_ms'] = (w['started_at_ms'] as int) - 1;
-        }),
-        contains('ends before it starts'),
-      );
-      refused(
         edit((j) => ((j['workouts'] as List).last as Map)['paused_ms'] = -1),
         contains('negative pause'),
       );
+    });
+
+    test('a workout ending before it starts imports, end clamped', () {
+      // Workout start and end are wall-clock reads: a clock step back
+      // during the session leaves end < start in a real export.
+      final j = decode(file);
+      final w = (j['workouts'] as List).last as Map;
+      final uuid = w['uuid'] as String;
+      final started = w['started_at_ms'] as int;
+      w['ended_at_ms'] = started - 60000;
+      final text = jsonEncode(j);
+      final p = dst.previewImport(text);
+      expect(p.workoutsAdded, 6);
+      expect(p.endsClamped, 1);
+      final c = dst.importBundle(text);
+      expect(c.workoutsAdded, 6);
+      expect(c.endsClamped, 1);
+      final stored = dst.store.workout(uuid)!;
+      expect(stored.startedAtMs, started);
+      expect(stored.endedAtMs, started);
+      // A second import skips it: nothing is clamped again.
+      expect(dst.importBundle(text).endsClamped, 0);
+    });
+
+    test('an untouched export clamps nothing', () {
+      expect(dst.importBundle(file).endsClamped, 0);
     });
 
     test('a skipped set with null reps and a 0 load is fine', () {

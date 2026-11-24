@@ -40,6 +40,7 @@ class ImportCounts {
     required this.hrSamplesAdded,
     required this.settingsRestored,
     required this.deletedInFile,
+    this.endsClamped = 0,
   });
 
   final int exportFormat;
@@ -72,15 +73,22 @@ class ImportCounts {
   /// `deleted_workout_uuids` in the file: information only, not imported.
   final int deletedInFile;
 
+  /// Added workouts whose end was before their start (a wall-clock step back
+  /// during the session) and were imported with the end set to the start.
+  final int endsClamped;
+
   /// Nothing to add: importing would change nothing.
   bool get isNoOp => workoutsAdded == 0 && gymsAdded == 0 && !settingsRestored;
 }
 
 /// One workout of the file, ready for `HistoryStore.upsertWorkout`.
 class ImportWorkout {
-  const ImportWorkout(this.record, this.hr);
+  const ImportWorkout(this.record, this.hr, {this.endClamped = false});
   final WorkoutRecord record;
   final List<HrSample> hr;
+
+  /// The file's end was before its start; [record] ends at its start.
+  final bool endClamped;
 }
 
 /// A parsed, validated bundle.
@@ -310,11 +318,15 @@ ImportWorkout _workout(Map<String, Object?> j) {
     muscles.add(m);
   }
   final started = w.int_(j, 'started_at_ms');
-  final ended = w.int_(j, 'ended_at_ms');
+  // Workout start and end are both wall-clock reads, so a clock step back
+  // during a session can leave end < start in a real export: clamp the end
+  // to the start rather than refusing the whole file. Set times keep their
+  // ordering check above (the session caps those).
+  final fileEnded = w.int_(j, 'ended_at_ms');
+  final endClamped = fileEnded < started;
+  final ended = endClamped ? started : fileEnded;
   final paused = w.intOr(j, 'paused_ms', 0);
-  if (ended < started || paused < 0) {
-    throw _Bad('workout $uuid: ends before it starts, or a negative pause');
-  }
+  if (paused < 0) throw _Bad('workout $uuid: a negative pause');
   return ImportWorkout(
     WorkoutRecord(
       uuid: uuid,
@@ -331,6 +343,7 @@ ImportWorkout _workout(Map<String, Object?> j) {
       sets: sets,
     ),
     hr,
+    endClamped: endClamped,
   );
 }
 
