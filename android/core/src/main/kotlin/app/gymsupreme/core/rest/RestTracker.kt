@@ -13,7 +13,15 @@ data class RestSpec(val key: String, val endsAtWallMs: Long, val durationMs: Lon
  * change mid-rest does not move the alert. Pure; the service calls it on every accepted snapshot
  * and on resume.
  */
-class RestTracker(private val staleGraceMs: Long = STALE_GRACE_MS) {
+class RestTracker(
+    private val staleGraceMs: Long = STALE_GRACE_MS,
+    /**
+     * Rests that already buzzed in an earlier process (cut T1: the service's durable fired store,
+     * committed before the buzz). Without it a rest could buzz twice after process death plus a
+     * resume inside [staleGraceMs].
+     */
+    private val firedBefore: (String) -> Boolean = { false },
+) {
     sealed class Action {
         /** Nothing changes. */
         object Keep : Action()
@@ -38,7 +46,7 @@ class RestTracker(private val staleGraceMs: Long = STALE_GRACE_MS) {
     val current: RestSpec? get() = armed
 
     fun onSnapshot(rest: RestSpec?, nowWallMs: Long, nowElapsedMs: Long): Action {
-        if (rest == null || rest.key in done) {
+        if (rest == null || rest.key in done || firedBefore(rest.key)) {
             if (armed == null) return Action.Keep
             armed = null
             return Action.Cancel

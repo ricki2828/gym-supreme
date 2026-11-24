@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:gym_engine/cut2.dart';
 import 'package:gym_engine/gym_engine.dart';
 
 const uuid = '3f2b8c1e-4a5d-4e6f-9a7b-1c2d3e4f5a6b';
@@ -298,6 +299,98 @@ Map<String, String> lockVectors() {
   return out;
 }
 
+// ---- timer-block vectors (0.3 cut T1) -------------------------------------
+//
+// `timer_v1_<case>.json` is one line: {case, steps:[{step, now_ms, snapshot}]}.
+// Each snapshot is what TimerSession submits at wall time `now_ms`. android/core
+// BlockSchedulerTest replays them through the native cue scheduler on a fake
+// clock: every cue (set_id, run, index) fires exactly once, on time, across a
+// re-applied block (mark), a pause near a cue (resume grace resend), a finish,
+// and an undo + restart (run bump). Never hand-edit: change the Dart and
+// regenerate.
+
+/// The 20-minute EMOM preset (10 s lead-in, 20 x 60 s, block_end), driven
+/// through start, mark, pause, resume, finish, undo, start again.
+Map<String, String> timerVectors() {
+  final fresh = Session.start(
+    plan(),
+    nowMs: t0,
+    tzOffsetMin: tz,
+    appVersion: '0.1.0+1',
+    workoutUuid: uuid,
+  );
+  final emom = timerPresets.firstWhere((p) => p.id == 'emom20').block;
+  final added = Session.addExercise(
+    fresh,
+    PlannedItem(
+      exerciseId: 'burpee',
+      name: 'Burpee',
+      unit: LoadUnit.timed,
+      sets: const [PlannedSet(loadG: null, reps: 0)],
+      repLo: 0,
+      repHi: 0,
+      restS: 0,
+      reason: emom.title,
+      primary: const [],
+    ),
+    at: 0,
+  );
+  final setId = added.exercises[0].sets.first.setId;
+  final steps = <(String, int, SessionSnapshot)>[];
+  void step(String name, int now, SessionSnapshot s) {
+    final prev = steps.isEmpty ? null : steps.last.$3;
+    if (prev != null && (identical(prev, s) || s.rev <= prev.rev)) {
+      throw StateError('timer step $name did not advance the rev');
+    }
+    steps.add((name, now, s));
+  }
+
+  final tStart = t0 + 60000;
+  step(
+    'attach',
+    t0 + 30000,
+    TimerSession.attach(added, setId, emom).copyWith(rev: fresh.rev + 1),
+  );
+  step(
+    'start',
+    tStart,
+    TimerSession.start(steps.last.$3, setId, nowWallMs: tStart),
+  );
+  // A "round done" tap re-sends the same block (same run and anchor).
+  step(
+    'mark',
+    tStart + 75000,
+    TimerSession.mark(steps.last.$3, setId, nowMs: tStart + 75000),
+  );
+  // Paused 400 ms after cue 2 (10 s + 2 min): resume resends it at 0.
+  final pauseAt = tStart + 130400;
+  step('pause', pauseAt, TimerSession.pause(steps.last.$3, nowMs: pauseAt));
+  final resumeAt = t0 + 300000;
+  step('resume', resumeAt, TimerSession.resume(steps.last.$3, nowMs: resumeAt));
+  final endAt = resumeAt + (emom.totalMs - 130400) + 2000;
+  step(
+    'finish',
+    endAt,
+    TimerSession.finish(steps.last.$3, setId, nowMs: endAt),
+  );
+  step('undo', endAt + 10000, TimerSession.undo(steps.last.$3, setId));
+  final restartAt = endAt + 20000;
+  step(
+    'restart',
+    restartAt,
+    TimerSession.start(steps.last.$3, setId, nowWallMs: restartAt),
+  );
+  return {
+    'timer_v1_emom20': jsonEncode({
+      'case': 'timer_v1_emom20',
+      'steps': [
+        for (final s in steps)
+          {'step': s.$1, 'now_ms': s.$2, 'snapshot': s.$3.toJson()},
+      ],
+    }),
+  };
+}
+
 void main() {
   final dir = Directory('test/fixtures/contract')..createSync(recursive: true);
   final c = cases();
@@ -307,6 +400,10 @@ void main() {
   }
   final v = lockVectors();
   for (final e in v.entries) {
+    File('${dir.path}/${e.key}.json').writeAsStringSync('${e.value}\n');
+  }
+  final tv = timerVectors();
+  for (final e in tv.entries) {
     File('${dir.path}/${e.key}.json').writeAsStringSync('${e.value}\n');
   }
   // A journal: three good lines, then a torn tail (power cut mid-write).
@@ -319,5 +416,7 @@ void main() {
   File('${dir.path}/journal_v1_torn_tail.jsonl').writeAsStringSync(
     '${lines.join('\n')}\n${torn.substring(0, torn.length ~/ 2)}',
   );
-  stdout.writeln('wrote ${c.length + 1 + v.length} fixtures to ${dir.path}');
+  stdout.writeln(
+    'wrote ${c.length + 1 + v.length + tv.length} fixtures to ${dir.path}',
+  );
 }
