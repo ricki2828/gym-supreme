@@ -3,7 +3,7 @@
 Dogfood releases. The version label is `version:` in pubspec.yaml; API and contract changes are in
 packages/gym_engine/API_CHANGES.md and contracts/CHANGES.md.
 
-## Unreleased (0.3.1)
+## 0.3.1
 
 - Reordering is easy to find now. Under DONE there are two buttons side by side, "Do later" and
   "Change order", with a line saying what is up next. "Change order" opens a list of everything left
