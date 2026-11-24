@@ -533,7 +533,11 @@ class WorkoutService : Service() {
         return WorkoutNotification.Content(s.title, text, nextWall)
     }
 
-    /** R3: exercise, set n of m, what Done will log, the rest countdown. No actions until cut 2. */
+    /**
+     * R3: exercise, set n of m, what Done will log, the rest countdown. With `lockdone` (cut L1):
+     * Done and +1 rep for an eligible current set, Skip rest while the snapshot has a rest, all
+     * bound to the view's rev; an ineligible set says "Log it in the app". Flag off: as in 0.2.
+     */
     private fun sessionContent(): WorkoutNotification.Content {
         val v = sessionView
         val c = v?.current
@@ -544,11 +548,21 @@ class WorkoutService : Service() {
             restEndWall != null -> "Rest · next ${c.exerciseName}"
             else -> c.exerciseName
         }
-        val text = if (c == null) "${v?.setsDone ?: 0} sets" else "Set ${c.setNumber} of ${c.setCount}  ·  ${v?.doneLine() ?: ""}"
-        return WorkoutNotification.Content(title, text, restEndWall, stopAction = false)
+        var text = if (c == null) "${v?.setsDone ?: 0} sets" else "Set ${c.setNumber} of ${c.setCount}  ·  ${v?.doneLine() ?: ""}"
+        val lock = if (Features.lockDone && v != null && v.rev >= 0) {
+            WorkoutNotification.Lock(v.rev, v.currentSetId, doneAndPlus = c != null && v.lockEligible, skipRest = v.rest != null && c != null && restArmedAt != null)
+        } else {
+            null
+        }
+        // The cold-start line already says where to set the weight.
+        if (lock != null && c != null && v?.lockEligible != true && v?.doneLine()?.endsWith("in the app") != true) text += "  ·  Log it in the app"
+        return WorkoutNotification.Content(title, text, restEndWall, stopAction = false, lock = lock)
     }
 
     private fun notificationId() = if (mode == MODE_SESSION) WorkoutNotification.SESSION_ID else WorkoutNotification.NOTIFICATION_ID
+
+    /** Re-posts the notification (a stale lock-screen tap: its last update may have been dropped). */
+    fun repostNotification() = refreshNotification()
 
     private fun refreshNotification() {
         if (status.running) notification.update(content(), notificationId())

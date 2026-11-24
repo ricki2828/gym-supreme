@@ -7,6 +7,7 @@ import app.gymsupreme.core.json.objOrNull
 import app.gymsupreme.core.json.str
 import app.gymsupreme.core.json.strOrNull
 import app.gymsupreme.core.rest.RestSpec
+import app.gymsupreme.core.session.LockReducer
 
 /**
  * What the service needs from a snapshot (schema v1, `packages/gym_engine/lib/src/snapshot.dart`,
@@ -21,6 +22,12 @@ data class SnapshotView(
     val current: Current?,
     val setsDone: Int,
     val setsTotal: Int,
+    /** The snapshot's rev: lock-screen actions carry it and are dropped when it is stale (L1). */
+    val rev: Long = -1,
+    /** [current]'s set id, for lock-screen Done / +1 rep. */
+    val currentSetId: String? = null,
+    /** Whether Done / +1 rep may be offered for [current] ([LockReducer.eligible]). */
+    val lockEligible: Boolean = false,
 ) {
     data class Current(
         val exerciseName: String,
@@ -52,6 +59,8 @@ data class SnapshotView(
             val paused = s.strOrNull("state") == "paused"
             val rest = s.objOrNull("rest")?.let { RestSpec(it.str("set_id"), it.long("ends_at_wall_ms"), it.long("duration_ms")) }
             var current: Current? = null
+            var currentSetId: String? = null
+            var lockEligible = false
             var done = 0
             var total = 0
             for (e in s.objList("exercises")) {
@@ -62,6 +71,8 @@ data class SnapshotView(
                     if (state != "pending") {
                         done++
                     } else if (current == null) {
+                        currentSetId = set.strOrNull("set_id")
+                        lockEligible = LockReducer.eligible(e, set)
                         current = Current(
                             exerciseName = e.str("name"),
                             setNumber = (set.longOrNull("set_ordinal") ?: (i + 1).toLong()).toInt(),
@@ -75,7 +86,7 @@ data class SnapshotView(
                     }
                 }
             }
-            return SnapshotView(paused, rest, current, done, total)
+            return SnapshotView(paused, rest, current, done, total, s.longOrNull("rev") ?: -1, currentSetId, lockEligible)
         }
 
         /** Grams to "22.5 kg" / "20 kg". */

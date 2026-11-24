@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:gym_engine/gym_engine.dart';
@@ -34,6 +35,27 @@ void main() {
     for (final e in gen.cases().entries) {
       final f = File('${dir.path}/${e.key}.json');
       expect(f.readAsStringSync(), '${e.value.encode()}\n', reason: e.key);
+    }
+  });
+
+  test('lock-screen vectors match the Dart transitions today (0.3 L1)', () {
+    // android/core LockReducerTest replays the same files through the Kotlin
+    // reducer; this side proves they are what Session.* produces now.
+    final v = gen.lockVectors();
+    expect(v.length, greaterThanOrEqualTo(10));
+    final onDisk = dir.listSync().whereType<File>().where(
+      (f) => f.uri.pathSegments.last.startsWith('lockscreen_v1_'),
+    );
+    expect(onDisk.length, v.length, reason: 'stale or missing vector files');
+    for (final e in v.entries) {
+      final f = File('${dir.path}/${e.key}.json');
+      expect(f.readAsStringSync(), '${e.value}\n', reason: e.key);
+      // Every expected snapshot is a valid, canonical schema-1 line.
+      final after = (jsonDecode(e.value) as Map)['after'] as List;
+      for (final a in after) {
+        final line = jsonEncode(a);
+        expect(SessionSnapshot.decode(line).encode(), line, reason: e.key);
+      }
     }
   });
 

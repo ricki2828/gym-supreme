@@ -20,12 +20,31 @@ echo "$line"
 feat="$(timeout 30 adb logcat -d -s flutter:I | grep -o 'GymSupreme/features.*' | tail -1 || true)"
 [ -n "$feat" ] || { echo "::error::no GymSupreme/features line" >&2; exit 1; }
 echo "$feat"
-# Native flags (N0): BuildConfig.GS_FEATURES from the same --dart-define, logged by MainActivity.
+# Native flags (N0): GS_FEATURES decoded from BuildConfig.DART_DEFINES (the same --dart-define list).
 nfeat="$(timeout 30 adb logcat -d -s GymSupreme/features:I | grep -o 'native .*' | tail -1 || true)"
 [ -n "$nfeat" ] || { echo "::error::no native GymSupreme/features line" >&2; exit 1; }
 echo "GymSupreme/features $nfeat"
-for f in timers ghost rotation plates lockdone health; do
-  want=0; case ",${GS_FEATURES:-}," in *",$f,"*|*",all,"*) want=1;; esac
+echo "features built into this APK (GS_FEATURES): '${GS_FEATURES:-}'"
+# Same rule as lib/app/feature_flags.dart and core/flags/FeatureSet.kt: "all" only as the whole
+# string, otherwise a comma list of trimmed names.
+flag_on() {
+  local x xs
+  [ "${GS_FEATURES:-}" = "all" ] && return 0
+  IFS=',' read -ra xs <<< "${GS_FEATURES:-}"
+  for x in "${xs[@]}"; do
+    x="${x#"${x%%[![:space:]]*}"}"; x="${x%"${x##*[![:space:]]}"}"
+    [ "$x" = "$1" ] && return 0
+  done
+  return 1
+}
+# Exactly these six flags, in this order, on both lines: an extra or renamed flag fails here.
+flag_names="timers ghost rotation plates lockdone health"
+for line in "${feat#GymSupreme/features }" "${nfeat#native }"; do
+  got="$(grep -oE '[a-z]+=[01]' <<< "$line" | cut -d= -f1 | tr '\n' ' ' | sed 's/ $//')"
+  [ "$got" = "$flag_names" ] || { echo "::error::feature line names '$got', expected '$flag_names': $line" >&2; exit 1; }
+done
+for f in $flag_names; do
+  want=0; flag_on "$f" && want=1
   grep -q " $f=$want" <<< " ${feat#GymSupreme/features }" || { echo "::error::feature $f should be $want (GS_FEATURES='${GS_FEATURES:-}'): $feat" >&2; exit 1; }
   grep -q " $f=$want" <<< " ${nfeat#native }" || { echo "::error::native feature $f should be $want (GS_FEATURES='${GS_FEATURES:-}'): $nfeat" >&2; exit 1; }
 done
@@ -136,6 +155,43 @@ done
 echo "session notification: $noti"
 sfg="$(adb shell dumpsys activity services "$PKG" | tr -d '\r' | grep -E 'isForeground=true' | head -1 || true)"
 [ -n "$sfg" ] || { echo "session: service is not foreground" >&2; exit 1; }
+# L1 lock-screen Done (0.3): the selftest takes the notification's own Done PendingIntent, closes
+# the activity (Flutter detaches), and 5 s later, with the screen off, fires it twice (double
+# tap) and once more after the notification moved on (stale). lockdone on: exactly one set is
+# logged, with Flutter gone. lockdone off: no buttons, and the receiver ignores the intent.
+lockdone=0; flag_on lockdone && lockdone=1
+# Pull requests always build with lockdone (tools/ci_features.sh): never smoke flag-off by accident.
+if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && { [ "$lockdone" != 1 ] || ! grep -q " lockdone=1" <<< " ${nfeat#native }"; }; then
+  echo "::error::pull request build without lockdone on the native line: $nfeat" >&2; exit 1
+fi
+session_step lock_fire
+lf="$(wait_for '"event":"selftest_session".*"step":"lock_fire"' 30)" || { echo "L1: lock_fire step did not run" >&2; svc_lines | tail -n 10 >&2; exit 1; }
+echo "L1 lock_fire: $lf"
+grep -q '"ok":true' <<< "$lf" || { echo "::error::L1: lock_fire failed: $lf" >&2; exit 1; }
+if [ "$lockdone" = 1 ]; then
+  grep -q '"actions":"Done|+1 rep' <<< "$lf" || { echo "::error::L1: no Done/+1 rep buttons with lockdone on: $lf" >&2; exit 1; }
+  grep -q '"from_notification":true' <<< "$lf" || { echo "::error::L1: Done intent did not come from the notification" >&2; exit 1; }
+else
+  grep -q '"actions":""' <<< "$lf" || { echo "::error::L1: lockdone off but the notification has actions: $lf" >&2; exit 1; }
+fi
+adb shell input keyevent KEYCODE_SLEEP
+lock_lines() { svc_lines | grep -o '{"event":"lock_action"[^}]*}' || true; }
+for i in $(seq 1 45); do [ "$(lock_lines | wc -l)" -ge 3 ] && break; sleep 1; done
+lock_lines | sed 's/^/L1 action: /'
+[ "$(lock_lines | wc -l)" -eq 3 ] || { echo "::error::L1: expected 3 lock_action lines (first, double, stale)" >&2; svc_lines | tail -n 15 >&2; exit 1; }
+if [ "$lockdone" = 1 ]; then
+  [ "$(lock_lines | grep -c '"outcome":"applied"')" -eq 1 ] || { echo "::error::L1: not exactly one applied Done" >&2; exit 1; }
+  lock_lines | grep '"outcome":"applied"' | grep -q '"dart_listening":false' || { echo "::error::L1: Flutter was still attached when Done applied" >&2; exit 1; }
+  lock_lines | grep -v '"outcome":"applied"' | grep -qvE '"outcome":"(debounced|stale_rev)"' && { echo "::error::L1: a repeat tap was neither debounced nor stale" >&2; exit 1; }
+  lock_lines | tail -1 | grep -q '"outcome":"stale_rev"' || { echo "::error::L1: the tap on the stale notification was not refused as stale_rev" >&2; exit 1; }
+else
+  [ "$(lock_lines | grep -c '"outcome":"flag_off"')" -eq 3 ] || { echo "::error::L1: lockdone off but an action was not ignored" >&2; exit 1; }
+fi
+lfg="$(adb shell dumpsys activity services "$PKG" | tr -d '\r' | grep -E 'isForeground=true' | head -1 || true)"
+[ -n "$lfg" ] || { echo "::error::L1: the service did not stay foreground through the lock-screen Done" >&2; exit 1; }
+adb shell input keyevent KEYCODE_WAKEUP
+adb shell wm dismiss-keyguard || true
+fatal_check "$PKG" "lock-screen done"
 adb shell am force-stop "$PKG"
 sleep 2
 launch "$PKG" || { echo "session: relaunch after force-stop failed" >&2; exit 1; }
@@ -143,6 +199,14 @@ session_step pending
 pending="$(wait_for '"event":"selftest_session".*"step":"pending".*"found":true' 30)" || {
   echo "session: journal not found after force-stop" >&2; svc_lines | grep -E 'selftest_session|journal' | tail -n 10 >&2; exit 1; }
 echo "session resume: $pending"
+# L1: after the kill and reopen the lock-screen set is in the journal, once, with the shown
+# weight; Done on the last set did not finish the workout.
+if [ "$lockdone" = 1 ]; then
+  grep -q '"rev":1,"finished":false,"lockscreen_sets":1,"lock_load_g":20000,"lock_reps":10,"lock_completion":"tap_unchanged"' <<< "$pending" \
+    || { echo "::error::L1: reopened journal does not hold exactly the one lock-screen set (20 kg x 10, rev 1, not finished): $pending" >&2; exit 1; }
+else
+  grep -q '"rev":0,"finished":false,"lockscreen_sets":0' <<< "$pending" || { echo "::error::L1: lockdone off but the journal moved: $pending" >&2; exit 1; }
+fi
 session_step finish
 fin="$(wait_for '"event":"selftest_session".*"step":"finish".*"finished":true,"deleted":true' 30)" || {
   echo "session: finish + delete failed" >&2; svc_lines | grep -E 'selftest_session|session_|journal' | tail -n 10 >&2; exit 1; }

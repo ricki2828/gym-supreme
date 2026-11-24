@@ -25,7 +25,9 @@ class LiveController extends ChangeNotifier {
     this.appVersion = '',
     this.tick = const Duration(seconds: 1),
     this.store,
-  });
+  }) {
+    _foreign = port.snapshots.listen(_onSnapshot, onError: (Object _) {});
+  }
 
   /// History for the cut-2 ghost and rotation; null hides both.
   final eng.HistoryStore? store;
@@ -414,8 +416,11 @@ class LiveController extends ChangeNotifier {
       // and the next open (or Resume) retries the save.
       return true;
     }
-    final next = c2.TimerSession.pause(s, nowMs: nowMs());
-    if (!identical(next, s) && !await _submit(next)) return false;
+    if (!await _submitLifecycle(
+      (x) => c2.TimerSession.pause(x, nowMs: nowMs()),
+    )) {
+      return false;
+    }
     try {
       await port.pauseSession();
     } on Object catch (e) {
@@ -430,9 +435,11 @@ class LiveController extends ChangeNotifier {
   String? discardedUuid;
 
   /// The last [discard] did not finish: the pause was refused (the workout
-  /// still runs) or the delete failed after a good pause (the workout is
-  /// paused and still offered as Resume). [lastError] says why. Cleared by
-  /// the next snapshot change.
+  /// still runs; a pause that collided with a lock-screen tap was already
+  /// retried once on the new head, see [_submitLifecycle]) or the delete
+  /// failed after a good pause (the workout is paused and still offered as
+  /// Resume). [lastError] always says why. Cleared by the next snapshot
+  /// change.
   bool discardFailed = false;
 
   /// Throws the workout away: pause (the journal holds the paused snapshot
@@ -490,7 +497,9 @@ class LiveController extends ChangeNotifier {
       final s = _s;
       if (s == null || finishedUuid != null) return;
       if (!s.finished &&
-          !await _submit(eng.Session.finish(s, nowMs: nowMs()))) {
+          !await _submitLifecycle(
+            (x) => eng.Session.finish(x, nowMs: nowMs()),
+          )) {
         return;
       }
       try {
@@ -572,8 +581,50 @@ class LiveController extends ChangeNotifier {
     await _submit(next);
   });
 
-  /// True when the service accepted [next].
-  Future<bool> _submit(eng.SessionSnapshot next) async {
+  /// Finish and pause (discard pauses first): a lock-screen tap that landed
+  /// just before must not swallow them. [f] is applied to the current
+  /// snapshot; on a collision (stale rev, the view now on the newer head) it
+  /// is applied ONCE more to that head. Both are idempotent, so the retry
+  /// cannot double anything. A second collision is reported as
+  /// `changed_elsewhere` so the tap never fails silently. A head finished
+  /// elsewhere is stored by the resync ([finishedUuid] set): false here.
+  Future<bool> _submitLifecycle(
+    eng.SessionSnapshot Function(eng.SessionSnapshot) f,
+  ) async {
+    final s0 = _s!;
+    final n0 = f(s0);
+    if (identical(n0, s0)) return true;
+    if (await _submit(n0, quietCollision: false)) return true;
+    final s1 = _s;
+    if (lastError is! StaleRevException ||
+        s1 == null ||
+        finishedUuid != null ||
+        s1.finished ||
+        s1.workoutUuid != s0.workoutUuid ||
+        s1.rev <= s0.rev) {
+      return false;
+    }
+    final n1 = f(s1);
+    if (identical(n1, s1)) return true;
+    if (await _submit(n1, quietCollision: false)) return true;
+    if (lastError is StaleRevException) {
+      lastError = WorkoutPortException(
+        'changed_elsewhere',
+        'the workout changed on the lock screen while saving; try again',
+      );
+      notifyListeners();
+    }
+    return false;
+  }
+
+  /// True when the service accepted [next]. [quietCollision]: a stale rev
+  /// that resyncs onto a newer head of this workout (a lock-screen tap won)
+  /// clears [lastError] - right for set-level taps (Done, +/-, skip), which
+  /// are simply dropped; lifecycle intents keep it ([_submitLifecycle]).
+  Future<bool> _submit(
+    eng.SessionSnapshot next, {
+    bool quietCollision = true,
+  }) async {
     final base = _s!;
     if (identical(next, base)) return true;
     try {
@@ -587,7 +638,7 @@ class LiveController extends ChangeNotifier {
         // Another writer moved the journal (cut 2: lock-screen Done or
         // Finish). Take the service's head; the tap is dropped rather than
         // applied twice.
-        await _resync(base);
+        await _resync(base, quietCollision: quietCollision);
       } else {
         notifyListeners();
       }
@@ -601,13 +652,24 @@ class LiveController extends ChangeNotifier {
 
   /// Parse the journal head without side effects. A head finished elsewhere
   /// (lock screen) completes here with the same save-then-delete order.
-  Future<void> _resync(eng.SessionSnapshot base) async {
+  Future<void> _resync(
+    eng.SessionSnapshot base, {
+    bool quietCollision = true,
+  }) async {
     try {
       final text = await port.readPendingJournal();
       final head = text == null ? null : eng.readJournal(text).last;
       if (head == null) {
         notifyListeners();
         return;
+      }
+      // A higher rev of this workout is another writer's tap (0.3 L1: the
+      // lock screen) that landed first: the view catches up and this tap is
+      // dropped, which is not an error to show.
+      if (quietCollision &&
+          head.workoutUuid == base.workoutUuid &&
+          head.rev > base.rev) {
+        lastError = null;
       }
       // Show the head first: if completing it fails, the view is "all
       // done" (Finish retries) rather than the stale active base.
@@ -617,6 +679,52 @@ class LiveController extends ChangeNotifier {
       lastError = e;
       notifyListeners();
     }
+  }
+
+  // ---- snapshots written by the service (0.3 L1: lock-screen actions) ------
+
+  StreamSubscription<String>? _foreign;
+  bool _disposed = false;
+
+  /// Every snapshot the service accepted or wrote. Our own submits come back
+  /// at a rev we already hold and are ignored; a lock-screen Done / +1 rep /
+  /// Skip rest arrives at a higher rev for the same workout and is adopted,
+  /// so the screen shows it and the next tap is based on it (not dropped as
+  /// stale). Queued like any intent: never runs beside an in-flight submit.
+  /// Ignored once this workout is stored or discarded.
+  void _onSnapshot(String json) {
+    if (_disposed) return;
+    unawaited(
+      _enqueue(() async {
+        final s = _s;
+        if (_disposed ||
+            s == null ||
+            finishedUuid != null ||
+            discardedUuid != null) {
+          return;
+        }
+        final eng.SessionSnapshot head;
+        try {
+          head = eng.SessionSnapshot.decode(json);
+        } on Object {
+          return;
+        }
+        if (head.workoutUuid != s.workoutUuid || head.rev <= s.rev) return;
+        lastError = null;
+        _set(head);
+        // Finished elsewhere: store it here, same order as Finish (B1).
+        if (head.finished) {
+          try {
+            await _complete(head);
+          } on Object catch (e) {
+            // Shown as all done; Finish retries (as in _resync).
+            if (_disposed) return;
+            lastError = e;
+            notifyListeners();
+          }
+        }
+      }),
+    );
   }
 
   Future<void> _enqueue(Future<void> Function() job) {
@@ -646,6 +754,8 @@ class LiveController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    unawaited(_foreign?.cancel());
     _timer?.cancel();
     super.dispose();
   }
