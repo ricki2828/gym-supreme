@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -12,7 +14,7 @@ val gsFeatures: String =
     (project.findProperty("dart-defines") as String?)
         ?.split(',')
         ?.filter { it.isNotBlank() }
-        ?.map { String(java.util.Base64.getDecoder().decode(it), Charsets.UTF_8) }
+        ?.map { String(Base64.getDecoder().decode(it), Charsets.UTF_8) }
         ?.lastOrNull { it.startsWith("GS_FEATURES=") }
         ?.removePrefix("GS_FEATURES=")
         ?: ""
