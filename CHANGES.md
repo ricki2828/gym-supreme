@@ -21,13 +21,14 @@ packages/gym_engine/API_CHANGES.md and contracts/CHANGES.md.
 - Screen stays on during an active workout; it goes back to normal on pause, finish or discard.
 - Gyms: rename and delete a gym. History from a deleted gym stays (shown as "Deleted gym"). A gym
   with a paused workout can't be deleted until you finish or discard it.
-- Plate maths (barbell lifts): Gyms > Bar & plates sets your bar and the plate pairs you have; the
+- Plate maths (barbell lifts): Gyms > Bar & plates (shows once a barbell or plates are ticked) sets your bar and the plate pairs you have; the
   live screen shows what goes on each side, and the app never suggests a load your plates can't make.
-- Timers: EMOM and interval blocks cue from the phone's own scheduler, so they keep time with the
-  screen off and the app in the background. Proven on emulators (20 of 20 cues in a 20-minute
-  screen-off run, under 60 ms late); not yet on your Pixel.
+- Timers (built, OFF in this build): EMOM and interval blocks will cue from the phone's own
+  scheduler so they keep time with the screen off. Proven on emulators (20 of 20 cues in a
+  20-minute screen-off run, under 60 ms late); it turns on in a later build once it passes on your
+  Pixel. Rest alerts work as before.
 - Health Connect: Diagnostics > Health Connect sends finished workouts to Health Connect (strength
-  training; conditioning sessions go as HIIT), so Body Age can use them. Off until you turn it on;
+  training; Engine sessions go as HIIT), so Body Age can use them. Off until you turn it on;
   "Send past workouts" sends your history and imported workouts. Edits and deletes follow.
 - Typed weights: a weight you typed still counts as typed after the app restarts, and Done on the
   lock screen for a set you typed counts as typed (not as a one-tap on the app's suggestion).
