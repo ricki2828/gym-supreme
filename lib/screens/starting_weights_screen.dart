@@ -22,7 +22,7 @@ class StartingWeightRow {
     exerciseId: l.exerciseId,
     name: l.name,
     unit: unitOf(l.unit),
-    section: eng.workoutType(l.typeId)?.name ?? 'Other',
+    section: eng.workoutType(l.typeId)?.name ?? 'More lifts',
     loadG: l.loadG,
     hasHistory: l.hasHistory,
   );
@@ -33,7 +33,7 @@ class StartingWeightRow {
   /// kg or kg each (dumbbells, per hand).
   final LoadUnit unit;
 
-  /// Heading it is listed under: Push, Pull, Legs, Core or Other.
+  /// Heading it is listed under: Push, Pull, Legs, Core or More lifts.
   final String section;
   final int? loadG;
 
@@ -141,6 +141,7 @@ class _LiftTile extends StatelessWidget {
             button: onTap != null,
             label: '${row.name}, $value${note == null ? '' : '. $note'}',
             onTapHint: 'type a starting weight',
+            onTap: onTap,
             excludeSemantics: true,
             child: InkWell(
               key: Key('start.row.${row.exerciseId}'),

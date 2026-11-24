@@ -398,9 +398,10 @@ abstract interface class GymApi {
   /// logged history (any gym) or no starting weight.
   int? startingLoad({required String gymId, required String exerciseId});
 
-  /// The starting-weights screen: the loaded lifts a session of each type
-  /// in his rotation (else push, pull, legs) plans at [gymId], then any
-  /// other lift that already has a starting weight.
+  /// The starting-weights screen: the loaded lifts his next session of each
+  /// type in his rotation (else push, pull, legs) plans at [gymId] (typeId
+  /// set), then every other loaded lift the gym has and any lift that
+  /// already has a starting weight, by name (typeId null).
   List<StartingWeightLift> startingWeightLifts({required String gymId});
 
   // Finish and resume (item 5, B1).

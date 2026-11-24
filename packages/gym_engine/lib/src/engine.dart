@@ -744,6 +744,12 @@ class GymEngine implements GymApi {
   int? startingLoad({required String gymId, required String exerciseId}) {
     final typed = startingWeights()[exerciseId];
     if (typed == null) return null;
+    // An import can carry an id this build treats as unloaded: never give
+    // a bodyweight or timed lift a load.
+    final e = catalog.exercise(exerciseId);
+    if (e == null) return null;
+    final unit = unitFor(e);
+    if (unit != LoadUnit.kg && unit != LoadUnit.ea) return null;
     if (hasLoggedHistory(exerciseId, store.workouts())) return null;
     final steps = loadSteps(gymId: gymId, exerciseId: exerciseId);
     if (steps.loadsG.isEmpty) return typed;
@@ -774,13 +780,17 @@ class GymEngine implements GymApi {
       loadG: stored[e.id],
       hasHistory: hasLoggedHistory(e.id, workouts),
     );
+    // First the lifts his next session of each type would plan (the
+    // picker's seed: stored sessions + 1), then every other loaded lift this
+    // gym has, so a lift a later seed rotates in is never missing.
+    final seed = counters().sessionsTotal + 1;
     for (final t in types) {
-      // Seed 0: no rotated accessory, so the list does not reshuffle.
       final plan = suggest(
         gymId: gymId,
         muscleIds: t.muscles,
         typeId: t.id,
         minutes: 60,
+        seed: seed,
       );
       for (final item in plan.items) {
         if (item.unit != LoadUnit.kg && item.unit != LoadUnit.ea) continue;
@@ -788,9 +798,14 @@ class GymEngine implements GymApi {
         if (e != null && seen.add(e.id)) out.add(row(e, t.id));
       }
     }
+    final kit = store.gym(gymId)?.equipmentIds ?? const <String>{};
     final rest = [
-      for (final id in stored.keys)
-        if (!seen.contains(id)) ?catalog.exercise(id),
+      for (final e in catalog.exercises)
+        if (!seen.contains(e.id) &&
+            (stored.containsKey(e.id) ||
+                (e.availableWith(kit) &&
+                    (unitFor(e) == LoadUnit.kg || unitFor(e) == LoadUnit.ea))))
+          e,
     ]..sort((a, b) => a.name.compareTo(b.name));
     for (final e in rest) {
       out.add(row(e, null));

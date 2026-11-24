@@ -447,42 +447,92 @@ void main() {
       });
 
       group('the entry screen list', () {
-        test('loaded lifts of push, pull and legs; history flagged', () {
-          final lifts = r.engine.startingWeightLifts(gymId: r.g1);
-          expect(lifts, isNotEmpty);
-          for (final l in lifts) {
-            expect(l.unit, anyOf(LoadUnit.kg, LoadUnit.ea), reason: l.name);
+        test(
+          'next sessions first, then every loaded lift; history flagged',
+          () {
+            final lifts = r.engine.startingWeightLifts(gymId: r.g1);
+            expect(lifts, isNotEmpty);
+            for (final l in lifts) {
+              expect(l.unit, anyOf(LoadUnit.kg, LoadUnit.ea), reason: l.name);
+            }
+            expect(
+              lifts.map((l) => l.exerciseId).toSet().length,
+              lifts.length,
+              reason: 'no duplicates',
+            );
+            final typed = lifts.takeWhile((l) => l.typeId != null).toList();
+            expect({for (final l in typed) l.typeId}, {'push', 'pull', 'legs'});
+            final more = lifts.skip(typed.length).toList();
+            expect(more, isNotEmpty);
+            expect(more.every((l) => l.typeId == null), isTrue);
+            expect([
+              for (final l in more) l.name,
+            ], [for (final l in more) l.name]..sort());
+            final row = lifts.where((l) => l.exerciseId == d.row).firstOrNull;
+            if (row != null) expect(row.hasHistory, isTrue);
+            expect(lifts.where((l) => l.hasHistory == false), isNotEmpty);
+          },
+        );
+
+        test('every loaded lift any picker seed plans is listed', () {
+          // The picker seeds with sessions + 1 and ties between lifts with
+          // no history break on it, so later sessions can pick lifts the
+          // next one does not: all of them must be on the screen.
+          final ids = {
+            for (final l in r.engine.startingWeightLifts(gymId: r.g1))
+              l.exerciseId,
+          };
+          for (var seed = 0; seed <= 12; seed++) {
+            for (final t in ['push', 'pull', 'legs', 'core']) {
+              for (final minutes in [30, 45, 60]) {
+                final plan = r.engine.suggest(
+                  gymId: r.g1,
+                  muscleIds: workoutType(t)!.muscles,
+                  typeId: t,
+                  minutes: minutes,
+                  seed: seed,
+                );
+                for (final i in plan.items) {
+                  if (i.unit != LoadUnit.kg && i.unit != LoadUnit.ea) continue;
+                  expect(ids, contains(i.exerciseId), reason: '$t seed $seed');
+                }
+              }
+            }
           }
-          expect(
-            lifts.map((l) => l.exerciseId).toSet().length,
-            lifts.length,
-            reason: 'no duplicates',
-          );
-          expect({for (final l in lifts) l.typeId}, {'push', 'pull', 'legs'});
-          final row = lifts.where((l) => l.exerciseId == d.row).firstOrNull;
-          if (row != null) expect(row.hasHistory, isTrue);
-          expect(lifts.where((l) => l.hasHistory == false), isNotEmpty);
         });
 
-        test('a stored weight shows; one off the plan is listed last', () {
+        test('a stored weight shows, also for a lift this gym cannot do', () {
           final planned = r.engine.startingWeightLifts(gymId: r.g1);
           final first = planned.firstWhere((l) => !l.hasHistory);
           r.engine.setStartingWeight(first.exerciseId, 14000);
-          // A loaded lift no push / pull / legs plan picks here.
+          // A loaded lift the condo kit cannot do (barbell): listed only
+          // because it has a starting weight.
           final off = d.catalog.exercises.firstWhere(
             (e) =>
-                (e.load == 'dumbbell' || e.load == 'stack') &&
+                e.load == 'barbell' &&
                 !planned.any((l) => l.exerciseId == e.id),
           );
-          r.engine.setStartingWeight(off.id, 8000);
+          r.engine.setStartingWeight(off.id, 60000);
           final lifts = r.engine.startingWeightLifts(gymId: r.g1);
           expect(
             lifts.firstWhere((l) => l.exerciseId == first.exerciseId).loadG,
             14000,
           );
-          expect(lifts.last.exerciseId, off.id);
-          expect(lifts.last.typeId, isNull);
-          expect(lifts.last.loadG, 8000);
+          final o = lifts.firstWhere((l) => l.exerciseId == off.id);
+          expect(o.typeId, isNull);
+          expect(o.loadG, 60000);
+        });
+
+        test('an imported weight on an unloaded lift is never used', () {
+          r.store.saveSetting(
+            startingWeightsSettingKey,
+            jsonEncode({'pushups': 20000}),
+          );
+          expect(r.engine.startingWeights(), {'pushups': 20000});
+          expect(
+            r.engine.startingLoad(gymId: r.g1, exerciseId: 'pushups'),
+            isNull,
+          );
         });
       });
 

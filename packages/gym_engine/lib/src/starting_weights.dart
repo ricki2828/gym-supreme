@@ -87,8 +87,8 @@ class StartingWeightLift {
   /// kg (total) or ea (per hand). Bodyweight and timed lifts are not listed.
   final LoadUnit unit;
 
-  /// The workout type it was planned for (push, pull, legs, core); null for
-  /// a lift listed only because it already has a starting weight.
+  /// The workout type his next session of it plans this lift for (push,
+  /// pull, legs, core); null for every other lift listed.
   final String? typeId;
 
   /// The stored starting weight, or null when none is set.

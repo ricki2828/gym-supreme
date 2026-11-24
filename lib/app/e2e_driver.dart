@@ -502,6 +502,10 @@ class E2eDriver {
     _check(c, 'start');
     final live = c.snapshot!.exercises.firstWhere((e) => e.exerciseId == id);
     final target = live.sets.first.targetLoadG;
+    // One logged set, like the discard drill, so the discard path is the
+    // one the live screen takes mid-workout.
+    await c.done();
+    _check(c, 'set1');
     _log('start_weight', {
       'exercise': id,
       'start_load_g': s.engine.startingLoad(gymId: gymId, exerciseId: id),
