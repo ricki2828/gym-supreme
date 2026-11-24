@@ -25,10 +25,11 @@ e2e_wait() { # e2e_wait <step> <seconds>
 uuids_of() { sed -n 's/.*"uuids":\(\[[^]]*\]\).*/\1/p' | head -1; }
 history_line() { adb logcat -c || true; e2e_cmd history; e2e_wait ok 30; e2e_lines | grep '"step":"history"'; }
 newer_db_check() { # no boot "newer database" / failed-migration state in this logcat
-  local log; log="$(timeout 60 adb logcat -d)"
-  if grep -E 'is newer than this build|GymSupreme/db FAILED|migration failed|SqliteException' <<< "$log" > /tmp/newerdb.log; then
-    echo "::error::$1: newer-database or failed-migration state at boot:" >&2; cat /tmp/newerdb.log >&2; exit 1
+  local log hits; log="$(timeout 60 adb logcat -d)"; hits="$(mktemp)"
+  if grep -E 'is newer than this build|GymSupreme/db FAILED|GymSupreme/boot failed|SqliteException' <<< "$log" > "$hits"; then
+    echo "::error::$1: newer-database or failed-migration state at boot:" >&2; cat "$hits" >&2; rm -f "$hits"; exit 1
   fi
+  rm -f "$hits"
 }
 
 boot_wait
@@ -48,6 +49,8 @@ fin="$(e2e_lines | grep '"step":"finish"')"
 grep -q '"stored":true' <<< "$fin" || { echo "::error::0.2.0 e2e run did not store a workout: $fin" >&2; exit 1; }
 before_line="$(history_line)"
 before="$(uuids_of <<< "$before_line")"
+# 0.2.0 predates schema v2 and its history line has no schema_version key: proves the base is v1.
+! grep -q '"schema_version"' <<< "$before_line" || { echo "::error::base is not schema v1 (history has schema_version): $before_line" >&2; exit 1; }
 echo "migration before (0.2.0): uuids $before"
 [ -n "$before" ] && [ "$before" != "[]" ] || { echo "::error::migration: no workout on 0.2.0 to carry over" >&2; exit 1; }
 fatal_check "$PKG" "0.2.0 workout"

@@ -31,6 +31,7 @@ env:
   # Keep until 0.3.0 ships; then move to v0.2.1-dogfood.
   MIGRATION_BASE_TAG: v0.2.0-dogfood
   MIGRATION_BASE_APK: gym-supreme-dogfood-3076e4c-x64.apk
+  MIGRATION_BASE_SHA256: 5a27556262f19ba218f9a6c78dde0b19a9d6004e26a9a5a284223749d8f16776
 
 jobs:
   changes:
@@ -352,7 +353,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release download "$MIGRATION_BASE_TAG" --dir apk --pattern "$MIGRATION_BASE_APK"
-          ls -la "apk/$MIGRATION_BASE_APK"
+          echo "$MIGRATION_BASE_SHA256  apk/$MIGRATION_BASE_APK" | sha256sum -c -
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
