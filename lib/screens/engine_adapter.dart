@@ -420,6 +420,7 @@ WorkoutDetailView workoutDetailOf(
           sets: [
             for (final s in sets)
               DetailSet(
+                setId: s.setId,
                 loadG: s.loadG,
                 reps: s.reps,
                 skipped: s.skipped,
@@ -431,6 +432,8 @@ WorkoutDetailView workoutDetailOf(
   ];
   // All from the stored record (no history scan; review of #43).
   return WorkoutDetailView(
+    uuid: w.uuid,
+    edited: w.editedAtMs != null,
     type: workoutTypeOf(w.typeId),
     startedAt: localOf(w.startedAtMs, w.tzOffsetMin),
     gymName: gymName,

@@ -38,6 +38,7 @@ class GymDeps {
     int Function()? tzOffsetMin,
     this.store,
     this.notifications,
+    this.persist,
   }) : nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch),
        tzOffsetMin =
            tzOffsetMin ?? (() => DateTime.now().timeZoneOffset.inMinutes);
@@ -56,6 +57,11 @@ class GymDeps {
   /// Notification permission for the rest alert; null (tests, play build
   /// without the host call) skips the ask and the banner.
   final NotificationAccess? notifications;
+
+  /// Writes the backup snapshot (AppServices.persist). Called after a delete,
+  /// an undo and every edit, so the backup matches the history. Null in tests
+  /// that do not care.
+  final VoidCallback? persist;
 
   LiveController liveController() => LiveController(
     store: store,
@@ -330,6 +336,9 @@ class _GymRootState extends State<GymRoot> {
         onStart: _openPicker,
         onResume: _resume,
         onDiscard: _discardPending,
+        onHistoryChanged: () {
+          if (mounted) setState(() {});
+        },
         onOpenDiagnostics: widget.onOpenDiagnostics,
         recoveryError: _recoveryError,
         notificationsOff: _notificationsOff,
@@ -378,6 +387,7 @@ class _Today extends StatelessWidget {
     required this.onStart,
     required this.onResume,
     this.onDiscard,
+    this.onHistoryChanged,
     this.onOpenDiagnostics,
     this.recoveryError,
     this.notificationsOff = false,
@@ -396,6 +406,9 @@ class _Today extends StatelessWidget {
   final VoidCallback onStart;
   final VoidCallback onResume;
   final VoidCallback? onDiscard;
+
+  /// A workout was deleted, restored or edited: rebuild Today's list.
+  final VoidCallback? onHistoryChanged;
   final VoidCallback? onOpenDiagnostics;
 
   @override
@@ -517,6 +530,9 @@ class _Today extends StatelessWidget {
                 onOpen: deps.store == null
                     ? null
                     : (uuid) => _openDetail(context, uuid),
+                onDelete: deps.store == null
+                    ? null
+                    : (uuid) => _confirmDelete(context, uuid),
               ),
           if (onOpenDiagnostics != null) ...[
             const SizedBox(height: 24),
@@ -539,14 +555,24 @@ class _Today extends StatelessWidget {
   void _openDetail(BuildContext context, String uuid) {
     final w = deps.store!.workout(uuid);
     if (w == null) return;
-    final gymName = deps.engine.gym(w.gymId)?.name ?? '';
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => WorkoutDetailScreen(
-          view: workoutDetailOf(w, gymName: gymName, catalog: deps.catalog),
-        ),
-      ),
-    );
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute<void>(
+            builder: (_) => WorkoutDetailFlow(
+              deps: deps,
+              uuid: uuid,
+              onChanged: onHistoryChanged,
+            ),
+          ),
+        )
+        .then((_) => onHistoryChanged?.call());
+  }
+
+  /// Long-press a history row: confirm, delete, offer Undo.
+  Future<void> _confirmDelete(BuildContext context, String uuid) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (!await askDeleteWorkout(context)) return;
+    deleteWorkoutWithUndo(deps, messenger, uuid, onHistoryChanged);
   }
 
   static String _when(int atMs, int nowMs) {
@@ -1053,14 +1079,44 @@ class PostWorkoutFlow extends StatelessWidget {
   Widget build(BuildContext context) {
     final e = deps.engine;
     final rows = e.history(limit: 60);
-    final row = rows.firstWhere((r) => r.uuid == uuid);
+    // Deleted (or older than the list) while this route was up: no summary.
+    final row = rows.where((r) => r.uuid == uuid).firstOrNull;
+    final summary = e.summaryOrNull(uuid);
+    if (row == null || summary == null) {
+      return Scaffold(
+        backgroundColor: Lit.ground,
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'This workout is no longer in your history.',
+                    textAlign: TextAlign.center,
+                    style: LitType.body(17, Lit.ink, FontWeight.w700),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    key: const Key('post.gone.back'),
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Back'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     final units = {
       for (final x in deps.catalog.exercises) x.id: unitOfKind(x.load),
     };
     final tz = deps.tzOffsetMin();
     return PostWorkoutScreen(
       view: postWorkoutViewOf(
-        e.summary(uuid),
+        summary,
         row: row,
         weekTypes: weekTypesOf(rows, localOf(deps.nowMs(), tz)),
         unitByExercise: units,
@@ -1217,3 +1273,148 @@ class _GymFlowState extends State<GymFlow> {
 /// A short reason for a banner: the port's refusal code, else the type.
 String _reason(Object e) =>
     e is WorkoutPortException ? e.code : e.runtimeType.toString();
+
+/// Deletes [uuid] from history and offers Undo for 10 seconds on the ROOT
+/// ScaffoldMessenger [messenger] (captured before any pop, so the snackbar
+/// outlives the route that asked). Returns false when nothing was deleted.
+/// Rotation moves back only when the flag is on; UNDO hands the engine the
+/// rotation it returned. Every change persists the backup snapshot.
+bool deleteWorkoutWithUndo(
+  GymDeps deps,
+  ScaffoldMessengerState messenger,
+  String uuid,
+  VoidCallback? onChanged,
+) {
+  final eng.DeletedWorkout? d;
+  try {
+    d = deps.engine.deleteWorkout(uuid, rotation: Features.rotation);
+  } on Object catch (e) {
+    messenger.showSnackBar(
+      SnackBar(content: Text('Could not delete: ${_reason(e)}.')),
+    );
+    return false;
+  }
+  if (d == null) return false;
+  deps.persist?.call();
+  onChanged?.call();
+  messenger
+    ..clearSnackBars()
+    ..showSnackBar(
+      SnackBar(
+        content: const Text('Workout deleted'),
+        duration: const Duration(seconds: 10),
+        // An action keeps a snackbar up until dismissed unless told not to.
+        persist: false,
+        action: SnackBarAction(
+          label: 'UNDO',
+          onPressed: () {
+            try {
+              final ok = deps.engine.undoDelete(
+                uuid,
+                rotationBefore: d!.rotationBefore,
+              );
+              deps.persist?.call();
+              onChanged?.call();
+              if (!ok) {
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Nothing to undo.')),
+                );
+              }
+            } on Object catch (e) {
+              messenger.showSnackBar(
+                SnackBar(content: Text('Could not undo: ${_reason(e)}.')),
+              );
+            }
+          },
+        ),
+      ),
+    );
+  return true;
+}
+
+/// One stored workout: its sets (tap one to change reps or load, or remove
+/// it) and Delete. Every save is one engine.editWorkout; the totals are read
+/// back from the store, so they cannot drift from what was saved.
+class WorkoutDetailFlow extends StatefulWidget {
+  const WorkoutDetailFlow({
+    super.key,
+    required this.deps,
+    required this.uuid,
+    this.onChanged,
+  });
+  final GymDeps deps;
+  final String uuid;
+
+  /// Called after a delete, undo or edit (Today rebuilds its list).
+  final VoidCallback? onChanged;
+
+  @override
+  State<WorkoutDetailFlow> createState() => _WorkoutDetailFlowState();
+}
+
+class _WorkoutDetailFlowState extends State<WorkoutDetailFlow> {
+  GymDeps get _deps => widget.deps;
+
+  void _saved() {
+    _deps.persist?.call();
+    widget.onChanged?.call();
+    if (mounted) setState(() {});
+  }
+
+  void _say(String text) {
+    ScaffoldMessenger.maybeOf(context)
+        ?.showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  void _edit(String setId, int? loadG, int reps) {
+    try {
+      _deps.engine.editWorkout(widget.uuid, [
+        eng.WorkoutEdit.setValues(setId, loadG: loadG, reps: reps),
+      ]);
+      _saved();
+    } on Object catch (e) {
+      _say('Could not save: ${_failure(e)}.');
+    }
+  }
+
+  void _remove(String setId) {
+    try {
+      _deps.engine.editWorkout(widget.uuid, [eng.WorkoutEdit.removeSet(setId)]);
+      _saved();
+    } on Object catch (e) {
+      _say('Could not remove: ${_failure(e)}.');
+    }
+  }
+
+  static String _failure(Object e) =>
+      e is ArgumentError ? '${e.message}' : _reason(e);
+
+  void _delete() {
+    final messenger = ScaffoldMessenger.of(context);
+    final nav = Navigator.of(context);
+    if (deleteWorkoutWithUndo(
+      _deps,
+      messenger,
+      widget.uuid,
+      widget.onChanged,
+    )) {
+      nav.pop();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final w = _deps.store?.workout(widget.uuid);
+    if (w == null) {
+      // Deleted or unknown: nothing to show (a delete pops this route).
+      return const Scaffold(backgroundColor: Lit.ground, body: SizedBox());
+    }
+    final gymName = _deps.engine.gym(w.gymId)?.name ?? '';
+    return WorkoutDetailScreen(
+      view: workoutDetailOf(w, gymName: gymName, catalog: _deps.catalog),
+      onDelete: _delete,
+      onEditSet: _edit,
+      onRemoveSet: _remove,
+    );
+  }
+}

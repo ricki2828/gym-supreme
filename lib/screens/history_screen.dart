@@ -1,3 +1,4 @@
+import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter/material.dart';
 import 'package:supreme_ui/supreme_ui.dart';
 
@@ -91,9 +92,17 @@ class HistoryScreen extends StatelessWidget {
 }
 
 class HistoryRowTile extends StatelessWidget {
-  const HistoryRowTile({super.key, required this.row, this.onOpen});
+  const HistoryRowTile({
+    super.key,
+    required this.row,
+    this.onOpen,
+    this.onDelete,
+  });
   final HistoryRowView row;
   final ValueChanged<String>? onOpen;
+
+  /// Long-press: delete this workout (the caller confirms, then offers Undo).
+  final ValueChanged<String>? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -107,8 +116,15 @@ class HistoryRowTile extends StatelessWidget {
           '${row.durationS ~/ 60} minutes, ${row.setCount} sets, $volume kilograms',
       excludeSemantics: true,
       onTap: onOpen == null ? null : () => onOpen!(row.uuid),
+      onLongPress: onDelete == null ? null : () => onDelete!(row.uuid),
+      customSemanticsActions: {
+        if (onDelete != null)
+          const CustomSemanticsAction(label: 'Delete workout'): () =>
+              onDelete!(row.uuid),
+      },
       child: InkWell(
         onTap: onOpen == null ? null : () => onOpen!(row.uuid),
+        onLongPress: onDelete == null ? null : () => onDelete!(row.uuid),
         child: Container(
           constraints: const BoxConstraints(minHeight: 72),
           padding: const EdgeInsets.symmetric(vertical: 10),
