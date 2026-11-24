@@ -324,6 +324,7 @@ class E2eDriver {
       'count': rows.length,
       'pending_journal': pendingJournal,
       'uuids': [for (final r in rows) r.uuid],
+      'schema_version': s.store.schemaVersion,
       'restore_failed': s.restoreFailed,
       'restore_pending': s.restorePending,
     });
