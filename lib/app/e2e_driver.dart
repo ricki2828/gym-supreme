@@ -338,10 +338,14 @@ class E2eDriver {
     if (!s.engine.undoDelete(uuid)) throw StateError('no undo');
     await h.sync(uuid);
     _log('health_undo', {'written': h.written});
+    // Earlier drills (import's delete_one) leave tombstones: the backfill
+    // sends one more delete call for them.
+    final tombstones = s.store.deletedWorkoutUuids().length;
     final b = await h.backfill();
     _log('health_backfill', {
       'outcome': b?.outcome.name,
       'count': b?.count,
+      'tombstones': tombstones,
       'history': s.engine.history(limit: 500).length,
       'failed': h.failed,
     });

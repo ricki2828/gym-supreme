@@ -19,7 +19,8 @@ sdk="$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
 flag_on() { # like core/flags/FeatureSet: `all` only as the whole string, else trimmed names
   local raw="${GS_FEATURES:-}" x
   [ "$raw" = "all" ] && return 0
-  for x in $(tr ',' ' ' <<< "$raw"); do [ "$x" = "$1" ] && return 0; done
+  IFS=',' read -ra xs <<< "$raw"
+  for x in "${xs[@]}"; do x="${x#"${x%%[![:space:]]*}"}"; x="${x%"${x##*[![:space:]]}"}"; [ "$x" = "$1" ] && return 0; done
   return 1
 }
 health=0; flag_on health && health=1
@@ -106,8 +107,10 @@ grep -q '"enabled":true' <<< "$st" || { echo "::error::API $sdk health: granted 
 w="$(writes_ok)"
 d="$(svc_lines | grep -F '"event":"health_delete"' | grep -c '"outcome":"ok"' || true)"
 bf="$(step health_backfill)"
-echo "H1 API $sdk: Kotlin writes ok=$w (want 4: finish, edit, undo, backfill), deletes ok=$d (want 1); backfill $bf"
-[ "$w" -eq 4 ] && [ "$d" -eq 1 ] || { echo "::error::API $sdk health: Health Connect calls not all ok" >&2; svc_lines | grep -F '"event":"health_' >&2 || true; exit 1; }
+tomb="$(sed -n 's/.*"tombstones":\([0-9]*\).*/\1/p' <<< "$bf" | head -1 || true)"
+want_d=1; [ "${tomb:-0}" -gt 0 ] && want_d=2   # the drill's delete + one backfill catch-up call
+echo "H1 API $sdk: Kotlin writes ok=$w (want 4: finish, edit, undo, backfill), deletes ok=$d (want $want_d; tombstones $tomb); backfill $bf"
+[ "$w" -eq 4 ] && [ "$d" -eq "$want_d" ] || { echo "::error::API $sdk health: Health Connect calls not all ok" >&2; svc_lines | grep -F '"event":"health_' >&2 || true; exit 1; }
 grep -q '"outcome":"ok"' <<< "$bf" && grep -q '"failed":0' <<< "$bf" || { echo "::error::API $sdk health: backfill not ok: $bf" >&2; exit 1; }
 fatal_check "$PKG" "health drill"
 echo "H1 API $sdk: Health Connect write, edit rewrite, delete, undo rewrite and backfill all ok"

@@ -100,6 +100,9 @@ class HealthSync {
       final all = [for (final w in store.workouts()) healthSessionOf(w)];
       final r = await api.writeSessions(all);
       _note(r, write: true);
+      // Only after a good write: a refusal (permission off, Health Connect
+      // gone) would refuse the deletes too and count twice.
+      if (r.outcome != HealthOutcome.ok) return r;
       final gone = store.deletedWorkoutUuids();
       if (gone.isNotEmpty) _note(await api.deleteSessions(gone), write: false);
       return r;
