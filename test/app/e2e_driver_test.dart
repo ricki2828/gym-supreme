@@ -146,6 +146,28 @@ void main() {
     expect(h['count'], 1);
   });
 
+  test(
+    'stale_start: start + paused submit back to back, then cleaned up',
+    () async {
+      final store = SqliteStore.inMemory();
+      addTearDown(store.close);
+      final port = AlertingStubPort();
+      final s = services(store, port);
+      final lines = <String>[];
+      await E2eDriver(s, out: lines.add).run('stale_start:s');
+      final steps = lines.map(step).map((m) => m['step']).toList();
+      expect(steps, [
+        'stale_start',
+        'stale_cleanup',
+        'ok',
+      ], reason: lines.join('\n'));
+      final c = lines.map(step).firstWhere((m) => m['step'] == 'stale_start');
+      expect(c['rev'], 1);
+      expect(await port.readPendingJournal(), isNull);
+      expect(s.engine.history(limit: 5), isEmpty);
+    },
+  );
+
   test('history lists stored workouts for the restore drill', () async {
     final store = SqliteStore.inMemory();
     addTearDown(store.close);

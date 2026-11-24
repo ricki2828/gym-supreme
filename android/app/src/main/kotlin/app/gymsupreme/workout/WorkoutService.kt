@@ -91,7 +91,7 @@ class WorkoutService : Service() {
         val staleSession = wanted == MODE_SESSION && pendingView == null
         if (wanted == null || status.running || staleSession) {
             // Every startForegroundService must reach startForeground, even with nothing to do.
-            SpikeLog.write(this, SpikeLog.line("start_ignored").put("action", action).put("running", status.running))
+            SpikeLog.write(this, SpikeLog.line("start_ignored").put("action", action).put("running", status.running).put("stale", staleSession))
             if (status.running) {
                 goForeground(currentTypes(), "restart")
             } else {

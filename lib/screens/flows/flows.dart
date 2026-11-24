@@ -941,6 +941,13 @@ class _LiveFlowState extends State<LiveFlow> {
     if (_leaving) return;
     _leaving = true;
     await c.discard();
+    // A lock-screen finish that landed mid-discard stored the workout: show
+    // its summary, as _changed would have (it skips while _leaving).
+    final done = c.finishedUuid;
+    if (done != null) {
+      _leave(done);
+      return;
+    }
     // Leave when the journal is gone, or when it is safely paused and only
     // the delete failed (Today then offers Resume and says so). A refused
     // pause leaves the workout running: stay, the error banner shows.
@@ -955,7 +962,11 @@ class _LiveFlowState extends State<LiveFlow> {
   Future<void> _pause() async {
     if (_leaving) return;
     _leaving = true;
-    if (await c.pause()) {
+    final paused = await c.pause();
+    final done = c.finishedUuid;
+    if (done != null) {
+      _leave(done);
+    } else if (paused) {
       _leave();
     } else {
       _leaving = false;

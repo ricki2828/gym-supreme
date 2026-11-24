@@ -10,6 +10,7 @@ import 'package:gym_supreme/screens/flows/flows.dart';
 import 'package:gym_supreme/screens/live_controller.dart';
 import 'package:gym_supreme/screens/live_screen.dart';
 import 'package:gym_supreme/screens/picker_screen.dart';
+import 'package:gym_supreme/screens/post_workout_screen.dart';
 
 import 'fixtures.dart';
 import 'flaky_port.dart';
@@ -21,6 +22,9 @@ class RecordingPort extends FlakyPort {
   final calls = <String>[];
   String? lastSubmitted;
 
+  /// Simulates a lock-screen Finish landing just before the next submit.
+  bool finishBeforeNextSubmit = false;
+
   @override
   Future<int> startSession(String snapshotJson) {
     calls.add('start');
@@ -28,7 +32,11 @@ class RecordingPort extends FlakyPort {
   }
 
   @override
-  Future<int> submitSnapshot(String snapshotJson, int baseRev) {
+  Future<int> submitSnapshot(String snapshotJson, int baseRev) async {
+    if (finishBeforeNextSubmit) {
+      finishBeforeNextSubmit = false;
+      await super.finishSession();
+    }
     final state = (jsonDecode(snapshotJson) as Map)['state'];
     calls.add('submit:$state');
     lastSubmitted = snapshotJson;
@@ -523,6 +531,26 @@ void main() {
       expect(await port.readPendingJournal(), isNull);
       expect(engine.history(), isEmpty);
     });
+
+    testWidgets(
+      'live: a lock-screen finish landing mid-discard shows the summary',
+      (tester) async {
+        await pumpRoot(tester);
+        await startChest(tester);
+        await logOneSet(tester);
+        await tester.tap(find.byKey(const Key('live.finish')));
+        await tester.pumpAndSettle();
+        await tapKey(tester, 'finish.discard');
+        // Between the confirm and the paused submit the workout finishes
+        // elsewhere: the discard loses, the workout is stored, and the live
+        // screen leaves for its summary instead of hanging.
+        port.finishBeforeNextSubmit = true;
+        await tapKey(tester, 'discard.confirm');
+        expect(find.byType(LiveScreen), findsNothing);
+        expect(find.byType(PostWorkoutScreen), findsOneWidget);
+        expect(engine.history(), hasLength(1));
+      },
+    );
 
     testWidgets('live: a refused pause stays on the live screen', (
       tester,

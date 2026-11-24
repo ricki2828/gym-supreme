@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
+import 'package:gym_engine/cut2.dart' as c2;
 import 'package:gym_engine/gym_engine.dart' as eng;
 
 import '../screens/live_controller.dart';
@@ -21,6 +22,9 @@ import 'services.dart';
 ///   stored (crash-safe resume, item 5).
 /// - `discard`: start, log 2 sets, discard (pause then delete the journal):
 ///   journal gone, nothing stored, a new start accepted (0.2.1 D2).
+/// - `stale_start`: startSession and a paused submit sent back to back with
+///   no await between, so the pause reaches the service before its start
+///   callback ran. The service must go idle for that start (0.2.1 D2).
 /// - `ask`: the one-time notification ask (0.1.1).
 /// - `history`: list stored workouts and whether a journal is pending
 ///   (restore drill, 0.2; discard check, 0.2.1).
@@ -69,6 +73,8 @@ class E2eDriver {
           await _resume();
         case 'discard':
           await _discard();
+        case 'stale_start':
+          await _staleStart();
         case 'ask':
           await _ask();
         case 'history':
@@ -166,6 +172,43 @@ class E2eDriver {
     _log('restart', {'accepted': true, 'uuid': c2.snapshot!.workoutUuid});
     if (!await c2.discard()) throw StateError('second discard failed');
     c2.dispose();
+    _log('ok');
+  }
+
+  /// The service's stale-start path (WorkoutService.onStartCommand): the
+  /// start and the paused submit are both on the wire before Kotlin has run
+  /// the foreground-service callback the start queued. Dogfood/debug only.
+  Future<void> _staleStart() async {
+    final gymId = _gymId();
+    final plan = s.engine.suggest(
+      gymId: gymId,
+      muscleIds: const ['chest'],
+      minutes: 30,
+      seed: 1,
+    );
+    if (plan.items.isEmpty) throw StateError('empty plan');
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final started = eng.Session.start(
+      plan,
+      nowMs: now,
+      tzOffsetMin: DateTime.now().timeZoneOffset.inMinutes,
+      appVersion: s.appVersion,
+    );
+    final paused = c2.TimerSession.pause(started, nowMs: now + 1);
+    if (identical(paused, started) || paused.rev != started.rev + 1) {
+      throw StateError('pause did not advance the rev');
+    }
+    // No awaits between the two calls.
+    final startF = s.port.startSession(started.encode());
+    final pauseF = s.port.submitSnapshot(paused.encode(), started.rev);
+    await Future.wait([startF, pauseF]);
+    _log('stale_start', {'uuid': started.workoutUuid, 'rev': paused.rev});
+    // The journal holds the paused snapshot and the service never started,
+    // so the delete is accepted (still_running would mean it did start).
+    await s.port.deleteJournal(started.workoutUuid);
+    final journal = await s.port.readPendingJournal();
+    _log('stale_cleanup', {'journal_gone': journal == null});
+    if (journal != null) throw StateError('journal left behind');
     _log('ok');
   }
 
