@@ -59,11 +59,11 @@ object SessionSelfTest {
                         val lock = (s["exercises"] as List<*>).flatMap { (it as Map<*, *>)["sets"] as List<*> }
                             .map { it as Map<*, *> }.filter { it["state"] == "done" && it["source"] == "lockscreen" }
                         line.put("lockscreen_sets", lock.size)
+                        lock.firstOrNull()?.let { line.put("lock_load_g", it["load_g"] as? Long).put("lock_reps", it["reps"] as? Long).put("lock_completion", it["completion"] as? String) }
                         // R2: which exercise the lock-screen set belongs to.
                         (s["exercises"] as List<*>).map { it as Map<*, *> }
                             .firstOrNull { e -> (e["sets"] as List<*>).any { x -> (x as Map<*, *>)["source"] == "lockscreen" } }
                             ?.let { line.put("lock_exercise", it["exercise_id"] as? String) }
-                        lock.firstOrNull()?.let { line.put("lock_load_g", it["load_g"] as? Long).put("lock_reps", it["reps"] as? Long).put("lock_completion", it["completion"] as? String) }
                     }
                 }
                 "lock_fire" -> lockFire(context, line)
