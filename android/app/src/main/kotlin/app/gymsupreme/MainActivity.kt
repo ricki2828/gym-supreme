@@ -232,7 +232,7 @@ class MainActivity : FlutterActivity() {
         private const val IMPORT_REQUEST_CODE = 7303
 
         /** pickImportFile refuses anything bigger with `too_large`. */
-        const val IMPORT_MAX_BYTES = 16 * 1024 * 1024
+        const val IMPORT_MAX_BYTES = 8 * 1024 * 1024
 
         /** Stops once more than IMPORT_MAX_BYTES are read (at most one 64 KiB buffer over), so an oversize file is seen without reading all of it. */
         internal fun readCapped(input: java.io.InputStream): ByteArray {

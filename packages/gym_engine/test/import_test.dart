@@ -315,6 +315,19 @@ void cases(HistoryStore Function() make) {
       refused('{"workouts": []}', contains('no export_format'));
     });
 
+    test('a leading UTF-8 BOM is accepted, not refused', () {
+      final c = dst.importBundle('\uFEFF$file');
+      expect(c.workoutsAdded, 6);
+      expect(dst.previewImport('\uFEFF$file').workoutsAdded, 0);
+      // A BOM anywhere else is still malformed.
+      final after = comparable(dst);
+      expect(
+        () => dst.importBundle('\uFEFF\uFEFF$file'),
+        throwsA(isA<ImportRefused>()),
+      );
+      expect(comparable(dst), after);
+    });
+
     test('truncated', () {
       refused(file.substring(0, file.length ~/ 2), contains('cut short'));
       refused(file.substring(0, file.length - 1), contains('cut short'));

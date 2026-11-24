@@ -301,7 +301,7 @@ class GymHostApi {
   /// storage permission) and returns the picked file's text, decoded as
   /// strict UTF-8, or null when the user backs out. Nothing is written on
   /// either side: Dart parses and imports the text. Refusals: `already_pending`
-  /// (a pick is already open), `too_large` (file over 16 MiB), `io_error` (the
+  /// (a pick is already open), `too_large` (file over 8 MiB), `io_error` (the
   /// file cannot be read or is not UTF-8). If the activity goes away while the
   /// picker is open, the call returns null.
   Future<String?> pickImportFile() async {

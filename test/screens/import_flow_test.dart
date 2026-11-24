@@ -192,7 +192,7 @@ void main() {
       pick: () async => throw PlatformException(code: 'too_large'),
     );
     expect(find.text('Could not open the file'), findsOneWidget);
-    expect(find.textContaining('too big'), findsOneWidget);
+    expect(find.textContaining('over 8 MB'), findsOneWidget);
   });
 
   testWidgets('blocked (temporary store): no picker', (tester) async {

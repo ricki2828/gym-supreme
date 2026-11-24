@@ -31,7 +31,7 @@ Future<eng.ImportCounts?> runImport(
   } on PlatformException catch (e) {
     if (!context.mounted) return null;
     await _message(context, 'Could not open the file', switch (e.code) {
-      'too_large' => 'That file is too big to be a Gym Supreme export.',
+      'too_large' => 'That file is over 8 MB, the most an import reads.',
       'already_pending' => 'A file picker is already open.',
       _ => 'The file could not be read. Pick the .json export, not the CSV.',
     });

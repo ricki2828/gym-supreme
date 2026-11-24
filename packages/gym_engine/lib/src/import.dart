@@ -104,6 +104,9 @@ class ImportBundle {
 /// Parses [text] strictly. Throws [ImportRefused] for anything that is not
 /// a whole, well-typed export this build understands: no partial reads.
 ImportBundle parseImportBundle(String text) {
+  // Some editors and Windows tools save UTF-8 with a byte-order mark;
+  // jsonDecode refuses it.
+  if (text.startsWith('\uFEFF')) text = text.substring(1);
   final Object? root;
   try {
     root = jsonDecode(text);
