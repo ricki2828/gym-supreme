@@ -5,7 +5,9 @@ import '../screens/diagnostics_panel.dart';
 import '../screens/engine_adapter.dart';
 import '../screens/import_flow.dart';
 import '../spike/spike_screen.dart';
+import '../platform/platform_api.g.dart';
 import 'flavor.dart';
+import 'health_sync.dart';
 import 'services.dart';
 
 /// The last timer block's cue log in one readable line (0.3 cut T1), from
@@ -59,6 +61,11 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
   Map<String, int> _native = const {};
   DeviceView? _device;
 
+  // 0.3 H1: Health Connect switch and backfill (only with the flag on).
+  HealthStatus? _health;
+  bool _healthBusy = false;
+  String? _healthResult;
+
   AppServices get s => widget.services;
 
   @override
@@ -92,12 +99,79 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
         device = null;
       }
     }
+    final health = await s.health?.refresh();
     if (mounted) {
       setState(() {
         _native = native;
         _device = device;
+        _health = health;
       });
     }
+  }
+
+  Future<void> _setHealth(bool on) async {
+    final h = s.health;
+    if (h == null) return;
+    setState(() => _healthBusy = true);
+    String? result;
+    try {
+      final st = await h.setEnabled(on);
+      _health = st;
+      if (on && !(st?.enabled ?? false)) {
+        result = st?.availability == HealthAvailability.available
+            ? 'Health Connect permission was not given; the switch stays off.'
+            : 'Health Connect is not available here; the switch stays off.';
+      }
+    } on Object catch (e) {
+      result = 'Could not change it: $e';
+    }
+    if (mounted) {
+      setState(() {
+        _healthBusy = false;
+        _healthResult = result;
+      });
+    }
+  }
+
+  Future<void> _sendPast() async {
+    final h = s.health;
+    if (h == null) return;
+    setState(() => _healthBusy = true);
+    final r = await h.backfill();
+    final text = switch (r?.outcome) {
+      null => 'Nothing sent: the switch is off.',
+      HealthOutcome.ok =>
+        'Sent ${r!.count} workouts. Ones already in Health Connect stay '
+            'as they are.',
+      HealthOutcome.permissionDenied =>
+        'Health Connect permission is off. Turn the switch off and on again.',
+      HealthOutcome.notAvailable => 'Health Connect is not available.',
+      HealthOutcome.disabled => 'Nothing sent: the switch is off.',
+      HealthOutcome.failed =>
+        'Health Connect refused it (${r!.detail ?? 'no detail'}). Try again '
+            'later.',
+    };
+    if (mounted) {
+      setState(() {
+        _healthBusy = false;
+        _healthResult = text;
+      });
+    }
+  }
+
+  Widget? _healthSection() {
+    if (s.health == null) return null;
+    final st = _health;
+    return HealthSection(
+      statusText: healthStatusText(st),
+      enabled: st?.enabled ?? false,
+      canTurnOn: st?.availability == HealthAvailability.available,
+      canSend: (st?.enabled ?? false) && (st?.granted ?? false),
+      busy: _healthBusy,
+      result: _healthResult,
+      onChanged: _setHealth,
+      onSendPast: _sendPast,
+    );
   }
 
   Future<void> _export({required bool csv}) async {
@@ -167,6 +241,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       onExportJson: () => _export(csv: false),
       onExportCsv: () => _export(csv: true),
       onImport: host == null ? null : _import,
+      health: _healthSection(),
       onOpenNotificationSettings: host == null
           ? null
           : () => host.openNotificationSettings(),

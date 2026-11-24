@@ -7,7 +7,9 @@ import 'package:path_provider/path_provider.dart';
 
 import '../platform/platform_api.g.dart';
 import '../screens/notification_access.dart';
+import 'feature_flags.dart';
 import 'flavor.dart';
+import 'health_sync.dart';
 import 'notifications.dart';
 import 'workout_port.dart';
 
@@ -27,6 +29,7 @@ class AppServices {
     this.restoreGaveUp = 0,
     this.notifications,
     this.host,
+    this.health,
   });
 
   final eng.Catalog catalog;
@@ -58,6 +61,10 @@ class AppServices {
 
   /// Null in tests (no platform channel).
   final GymHostApi? host;
+
+  /// Health Connect write (0.3 H1): only with the `health` flag and a real
+  /// store (never on the temporary store of a pending restore).
+  final HealthSync? health;
 
   /// WAL checkpoint plus the backup snapshot (plan 7, B6). Called on
   /// pause/hide and before export. Both return false when the db is busy;
@@ -96,6 +103,12 @@ class AppServices {
     'backup_set_aside': snapshotPath != null && hasSetAsideBackup(snapshotPath!)
         ? 1
         : 0,
+    // Flag off: no health keys at all, so the export matches 0.3.0.
+    if (health != null) ...{
+      'health_written': health!.written,
+      'health_deleted': health!.deleted,
+      'health_failed': health!.failed,
+    },
   };
 }
 
@@ -214,5 +227,8 @@ Future<AppServices> bootstrap() async {
     restoreGaveUp: _counter(dir, 'restore_gave_up', bump: gaveUp),
     notifications: HostNotificationAccess(host, dir),
     host: host,
+    health: Features.health && !pending
+        ? HealthSync(api: HealthApi(), store: store)
+        : null,
   );
 }

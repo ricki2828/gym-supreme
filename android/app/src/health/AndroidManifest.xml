@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Health Connect write (0.3 H1). Merged into the dogfood flavour ONLY when the build's
+     GS_FEATURES has `health` (android/app/build.gradle.kts). tools/check_manifest_permissions.sh
+     then requires exactly WRITE_EXERCISE on top of the base allowlist, and forbids it otherwise. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
+
+    <application>
+        <!-- connect-client 1.1.0's own declaration, byte for byte (its AAR manifest); the main
+             manifest removes it for builds without the flag. replace: this copy wins over the
+             main manifest's remove marker. -->
+        <service
+            android:name="androidx.health.platform.client.impl.sdkservice.HealthDataSdkService"
+            android:enabled="true"
+            android:exported="true"
+            tools:ignore="ExportedService"
+            tools:node="replace">
+            <intent-filter>
+                <action android:name="androidx.health.platform.client.ACTION_BIND_SDK_SERVICE" />
+            </intent-filter>
+        </service>
+        <!-- Health Connect's privacy screen: Android 13 and older start the intent below,
+             Android 14+ the alias. In-app text: no internet, no policy page. -->
+        <activity
+            android:name="app.gymsupreme.health.HealthRationaleActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.DeviceDefault.Dialog">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+        <activity-alias
+            android:name="app.gymsupreme.health.ViewPermissionUsageActivity"
+            android:exported="true"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
+            android:targetActivity="app.gymsupreme.health.HealthRationaleActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+    </application>
+
+    <queries>
+        <!-- Health Connect's provider app (Android 13 and older). -->
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
+</manifest>

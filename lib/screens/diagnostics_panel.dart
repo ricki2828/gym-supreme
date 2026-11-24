@@ -63,6 +63,9 @@ const Map<String, String> nativeCounterLabels = {
   'rest_alerts_missed': 'Rest alerts missed (app dead)',
   'rest_alert_max_late_ms': 'Latest rest alert, ms',
   'rest_alerts_audio_failed': 'Tone failed (buzz may have worked)',
+  'health_written': 'Health Connect sessions written',
+  'health_deleted': 'Health Connect sessions deleted',
+  'health_failed': 'Health Connect writes not done',
 };
 
 /// The body of the Diagnostics page (t5t hosts it in lib/app, dogfood
@@ -79,6 +82,7 @@ class DiagnosticsPanel extends StatelessWidget {
     this.onImport,
     this.onOpenNotificationSettings,
     this.onOpenSpike,
+    this.health,
   });
   final String appVersion;
   final GateView gate;
@@ -93,6 +97,10 @@ class DiagnosticsPanel extends StatelessWidget {
 
   /// The phase-0 spike checklist; null hides the entry.
   final VoidCallback? onOpenSpike;
+
+  /// The Health Connect section body (0.3 H1, [HealthSection]); null hides
+  /// the section (flag off: the page is as it was).
+  final Widget? health;
 
   @override
   Widget build(BuildContext context) {
@@ -165,7 +173,8 @@ class DiagnosticsPanel extends StatelessWidget {
               'journal_delete_failed' ||
               'journal_corrupt_lines' ||
               'rest_alerts_missed' ||
-              'rest_alerts_audio_failed' => native[k] == 0,
+              'rest_alerts_audio_failed' ||
+              'health_failed' => native[k] == 0,
               _ => null,
             },
           ),
@@ -182,6 +191,11 @@ class DiagnosticsPanel extends StatelessWidget {
             ok: d.notificationsEnabled,
           ),
           _Row('Battery saver', d.batterySaver ? 'on' : 'off'),
+        ],
+        if (health != null) ...[
+          const SizedBox(height: 22),
+          _Section('Health Connect'),
+          health!,
         ],
         const SizedBox(height: 22),
         _Section('Export'),
@@ -372,4 +386,97 @@ class _Banner extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// The Health Connect switch and "send past workouts" (0.3 H1). Off by
+/// default; turning it on asks for the permission. Plain values in, so it
+/// renders the same with any flags.
+class HealthSection extends StatelessWidget {
+  const HealthSection({
+    super.key,
+    required this.statusText,
+    required this.enabled,
+    required this.canTurnOn,
+    required this.canSend,
+    this.busy = false,
+    this.result,
+    this.onChanged,
+    this.onSendPast,
+  });
+
+  final String statusText;
+
+  /// The switch position.
+  final bool enabled;
+
+  /// Health Connect is there and the build declares the permission.
+  final bool canTurnOn;
+
+  /// On and granted: "send past workouts" is allowed.
+  final bool canSend;
+  final bool busy;
+
+  /// The last action's outcome, in words.
+  final String? result;
+  final ValueChanged<bool>? onChanged;
+  final VoidCallback? onSendPast;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = result;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Sends each finished workout to Health Connect as a strength '
+          'session (type, start and end only), so Body Age counts it. Edits '
+          'and deletes follow. Workouts from before the switch, and imported '
+          'ones, go with "Send past workouts". Nothing is read back.',
+          style: LitType.body(14, Lit.inkSecondary),
+        ),
+        SwitchListTile(
+          key: const Key('diagnostics.health.switch'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(
+            'Write workouts to Health Connect',
+            style: LitType.body(16, Lit.ink, FontWeight.w700),
+          ),
+          value: enabled,
+          // Off is always allowed; on only where Health Connect can take it.
+          onChanged: busy || onChanged == null || (!enabled && !canTurnOn)
+              ? null
+              : onChanged,
+        ),
+        Text(
+          statusText,
+          key: const Key('diagnostics.health.status'),
+          style: LitType.body(14, Lit.inkSecondary),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton(
+          key: const Key('diagnostics.health.backfill'),
+          onPressed: canSend && !busy ? onSendPast : null,
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(56),
+            side: const BorderSide(color: Lit.ink, width: 2),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+          child: Text(
+            'Send past workouts',
+            style: LitType.body(16, Lit.ink, FontWeight.w700),
+          ),
+        ),
+        if (r != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            r,
+            key: const Key('diagnostics.health.result'),
+            style: LitType.body(14, Lit.inkSecondary),
+          ),
+        ],
+      ],
+    );
+  }
 }

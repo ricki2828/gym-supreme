@@ -97,6 +97,46 @@ int _deepHash(Object? value) {
 }
 
 
+/// Whether this build and phone can write to Health Connect (0.3 H1).
+enum HealthAvailability {
+  /// Health Connect is there and this build declares the permission.
+  available,
+  /// Android 13 and older without the Health Connect app.
+  notInstalled,
+  /// The Health Connect app needs an update first.
+  needsUpdate,
+  /// Android 14+ where Health Connect is not supported.
+  unsupported,
+  /// This build does not declare `WRITE_EXERCISE` (play flavour, or a build
+  /// without the `health` flag).
+  notDeclared,
+  /// The `health` feature flag is off in this build.
+  flagOff,
+}
+
+/// What a workout counts as in Health Connect.
+enum HealthExerciseKind {
+  /// Push, Pull, Legs, Core and mixed picks: `EXERCISE_TYPE_STRENGTH_TRAINING`.
+  strength,
+  /// The Engine type (EMOM, AMRAP, intervals):
+  /// `EXERCISE_TYPE_HIGH_INTENSITY_INTERVAL_TRAINING`, so it never counts
+  /// toward Body Age's strength factor.
+  conditioning,
+}
+
+enum HealthOutcome {
+  /// Written or deleted.
+  ok,
+  /// Health Connect missing, needs an update, or not declared.
+  notAvailable,
+  /// `WRITE_EXERCISE` not granted (or revoked).
+  permissionDenied,
+  /// His switch is off, or the `health` flag is off: nothing was sent.
+  disabled,
+  /// Health Connect threw; [HealthResult.detail] says what.
+  failed,
+}
+
 /// Device facts for the diagnostics page and the spike log.
 class HostInfo {
   HostInfo({
@@ -167,6 +207,185 @@ class HostInfo {
   int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
 }
 
+class HealthStatus {
+  HealthStatus({
+    required this.availability,
+    required this.granted,
+    required this.enabled,
+  });
+
+  HealthAvailability availability;
+
+  /// `WRITE_EXERCISE` is granted.
+  bool granted;
+
+  /// His switch (off by default; kept on the phone, not in the backup).
+  /// Writes happen only while it is on and [granted] is true.
+  bool enabled;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      availability,
+      granted,
+      enabled,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static HealthStatus decode(Object result) {
+    result as List<Object?>;
+    return HealthStatus(
+      availability: result[0]! as HealthAvailability,
+      granted: result[1]! as bool,
+      enabled: result[2]! as bool,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! HealthStatus || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(availability, other.availability) && _deepEquals(granted, other.granted) && _deepEquals(enabled, other.enabled);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+/// One finished workout as a Health Connect exercise session.
+class HealthSession {
+  HealthSession({
+    required this.clientRecordId,
+    required this.version,
+    required this.title,
+    required this.startEpochMs,
+    required this.endEpochMs,
+    required this.utcOffsetSeconds,
+    required this.kind,
+  });
+
+  /// The workout uuid: writing it again replaces the record (upsert).
+  String clientRecordId;
+
+  /// `edited_at_ms ?? 0`: an edit raises it, so the rewrite wins; the same
+  /// version again is ignored by Health Connect (idempotent backfill).
+  int version;
+
+  String title;
+
+  int startEpochMs;
+
+  int endEpochMs;
+
+  /// The workout's own UTC offset (tz_offset_min * 60).
+  int utcOffsetSeconds;
+
+  HealthExerciseKind kind;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      clientRecordId,
+      version,
+      title,
+      startEpochMs,
+      endEpochMs,
+      utcOffsetSeconds,
+      kind,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static HealthSession decode(Object result) {
+    result as List<Object?>;
+    return HealthSession(
+      clientRecordId: result[0]! as String,
+      version: result[1]! as int,
+      title: result[2]! as String,
+      startEpochMs: result[3]! as int,
+      endEpochMs: result[4]! as int,
+      utcOffsetSeconds: result[5]! as int,
+      kind: result[6]! as HealthExerciseKind,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! HealthSession || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(clientRecordId, other.clientRecordId) && _deepEquals(version, other.version) && _deepEquals(title, other.title) && _deepEquals(startEpochMs, other.startEpochMs) && _deepEquals(endEpochMs, other.endEpochMs) && _deepEquals(utcOffsetSeconds, other.utcOffsetSeconds) && _deepEquals(kind, other.kind);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
+class HealthResult {
+  HealthResult({
+    required this.outcome,
+    required this.count,
+    this.detail,
+  });
+
+  HealthOutcome outcome;
+
+  /// Records written or deleted.
+  int count;
+
+  String? detail;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      outcome,
+      count,
+      detail,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static HealthResult decode(Object result) {
+    result as List<Object?>;
+    return HealthResult(
+      outcome: result[0]! as HealthOutcome,
+      count: result[1]! as int,
+      detail: result[2] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! HealthResult || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(outcome, other.outcome) && _deepEquals(count, other.count) && _deepEquals(detail, other.detail);
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
+}
+
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -175,8 +394,26 @@ class _PigeonCodec extends StandardMessageCodec {
     if (value is int) {
       buffer.putUint8(4);
       buffer.putInt64(value);
-    }    else if (value is HostInfo) {
+    }    else if (value is HealthAvailability) {
       buffer.putUint8(129);
+      writeValue(buffer, value.index);
+    }    else if (value is HealthExerciseKind) {
+      buffer.putUint8(130);
+      writeValue(buffer, value.index);
+    }    else if (value is HealthOutcome) {
+      buffer.putUint8(131);
+      writeValue(buffer, value.index);
+    }    else if (value is HostInfo) {
+      buffer.putUint8(132);
+      writeValue(buffer, value.encode());
+    }    else if (value is HealthStatus) {
+      buffer.putUint8(133);
+      writeValue(buffer, value.encode());
+    }    else if (value is HealthSession) {
+      buffer.putUint8(134);
+      writeValue(buffer, value.encode());
+    }    else if (value is HealthResult) {
+      buffer.putUint8(135);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -187,7 +424,22 @@ class _PigeonCodec extends StandardMessageCodec {
   Object? readValueOfType(int type, ReadBuffer buffer) {
     switch (type) {
       case 129:
+        final value = readValue(buffer) as int?;
+        return value == null ? null : HealthAvailability.values[value];
+      case 130:
+        final value = readValue(buffer) as int?;
+        return value == null ? null : HealthExerciseKind.values[value];
+      case 131:
+        final value = readValue(buffer) as int?;
+        return value == null ? null : HealthOutcome.values[value];
+      case 132:
         return HostInfo.decode(readValue(buffer)!);
+      case 133:
+        return HealthStatus.decode(readValue(buffer)!);
+      case 134:
+        return HealthSession.decode(readValue(buffer)!);
+      case 135:
+        return HealthResult.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -569,6 +821,108 @@ class WorkoutApi {
     )
     ;
     return (pigeonVar_replyValue! as Map<Object?, Object?>).cast<String, int>();
+  }
+}
+
+/// Health Connect write of finished sessions (0.3 H1, flag `health`). Write
+/// only: no read permission is declared or asked. Never throws for a Health
+/// Connect problem: it answers with a [HealthOutcome]. Logcat
+/// `GymSupreme/service` lines: `health_status`, `health_permission_shown`,
+/// `health_permission`, `health_write`, `health_delete`.
+class HealthApi {
+  /// Constructor for [HealthApi].  The [binaryMessenger] named argument is
+  /// available for dependency injection.  If it is left null, the default
+  /// BinaryMessenger will be used which routes to the host platform.
+  HealthApi({BinaryMessenger? binaryMessenger, String messageChannelSuffix = ''})
+      : pigeonVar_binaryMessenger = binaryMessenger,
+        pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
+  final BinaryMessenger? pigeonVar_binaryMessenger;
+
+  static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
+
+  final String pigeonVar_messageChannelSuffix;
+
+  Future<HealthStatus> status() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.HealthApi.status$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as HealthStatus;
+  }
+
+  /// Turning it on asks for `WRITE_EXERCISE` on Health Connect's own screen
+  /// when it is not granted yet; it stays off when he refuses or Health
+  /// Connect is not available. Off never asks. Refusal code
+  /// `already_pending` while a permission screen is open.
+  Future<HealthStatus> setEnabled(bool enabled) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.HealthApi.setEnabled$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[enabled]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as HealthStatus;
+  }
+
+  /// Upserts by `clientRecordId`, in batches. [HealthOutcome.disabled] while
+  /// the switch is off.
+  Future<HealthResult> writeSessions(List<HealthSession> sessions) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.HealthApi.writeSessions$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[sessions]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as HealthResult;
+  }
+
+  /// Deletes by `clientRecordId` (an id with no record is fine).
+  Future<HealthResult> deleteSessions(List<String> clientRecordIds) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.HealthApi.deleteSessions$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[clientRecordIds]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as HealthResult;
   }
 }
 

@@ -52,6 +52,14 @@ import 'services.dart';
 ///   stored. The script asserts 20000 g on both.
 /// - `history`: list stored workouts and whether a journal is pending
 ///   (restore drill, 0.2; discard check, 0.2.1).
+/// - `health`: Health Connect drill (0.3 H1). Switch on (the script grants
+///   WRITE_EXERCISE with `pm grant` first), then finish, edit, delete, undo
+///   and backfill one workout, each through [HealthSync]; logs the status
+///   and the counts. Kotlin logs one `health_write` / `health_delete` line
+///   per call. Without Health Connect it logs the status and stops.
+/// - `health_ask`: turns the switch on from scratch, so Health Connect's
+///   permission screen opens (the script grants and backs out of it); logs
+///   `health_asked` with the status once Kotlin answers.
 class E2eDriver {
   E2eDriver(this.s, {void Function(String line)? out}) : _out = out ?? print;
 
@@ -123,6 +131,15 @@ class E2eDriver {
           await _startWeight();
         case 'history':
           await _history();
+        case 'health':
+          await _health();
+        case 'health_ask':
+          final st = await s.health?.setEnabled(true);
+          _log('health_asked', {
+            'availability': st?.availability.name,
+            'granted': st?.granted,
+            'enabled': st?.enabled,
+          });
         default:
           _log('unknown', {'command': name});
       }
@@ -264,6 +281,87 @@ class E2eDriver {
   }
 
   /// Start, log one set, finish: stored, journal gone. No rest wait.
+  Future<void> _health() async {
+    final h = s.health;
+    if (h == null) {
+      _log('health', {'sync': false});
+      _log('ok');
+      return;
+    }
+    final st = await h.setEnabled(true);
+    _log('health_status', {
+      'availability': st?.availability.name,
+      'granted': st?.granted,
+      'enabled': st?.enabled,
+    });
+    if (!h.enabled || !(st?.granted ?? false)) {
+      _log('ok');
+      return;
+    }
+    final plan = s.engine.suggest(
+      gymId: _gymId(),
+      muscleIds: const ['chest'],
+      minutes: 30,
+      seed: 1,
+    );
+    if (plan.items.isEmpty) throw StateError('empty plan');
+    // Finish: the controller's onStored is the hook the app uses.
+    Future<void>? stored;
+    final c = LiveController(
+      engine: s.engine,
+      port: s.port,
+      nowMs: () => DateTime.now().millisecondsSinceEpoch,
+      tzOffsetMin: DateTime.now().timeZoneOffset.inMinutes,
+      appVersion: s.appVersion,
+      onStored: (u) => stored = h.sync(u),
+    );
+    await c.start(plan);
+    _check(c, 'start');
+    await c.done();
+    _check(c, 'set');
+    final uuid = await c.finish();
+    _check(c, 'finish');
+    c.dispose();
+    if (uuid == null || stored == null) throw StateError('finish not synced');
+    await stored;
+    _log('health_finish', {'uuid': uuid, 'written': h.written});
+    // Edit: a new edited_at_ms, so the rewrite replaces the record.
+    final set = s.engine
+        .editWorkout(uuid, const [])
+        .sets
+        .firstWhere(
+          (x) => !x.skipped && x.kind == eng.SetKind.reps && x.reps != null,
+        );
+    s.engine.editWorkout(uuid, [
+      eng.WorkoutEdit.setValues(
+        set.setId,
+        loadG: set.loadG,
+        reps: (set.reps ?? 0) + 1,
+      ),
+    ]);
+    await h.sync(uuid);
+    _log('health_edit', {'written': h.written});
+    if (s.engine.deleteWorkout(uuid) == null) throw StateError('no delete');
+    await h.sync(uuid);
+    _log('health_delete', {'deleted': h.deleted});
+    if (!s.engine.undoDelete(uuid)) throw StateError('no undo');
+    await h.sync(uuid);
+    _log('health_undo', {'written': h.written});
+    // Earlier drills (import's delete_one) leave tombstones: the backfill
+    // sends one more delete call for them.
+    final tombstones = s.store.deletedWorkoutUuids().length;
+    final b = await h.backfill();
+    _log('health_backfill', {
+      'outcome': b?.outcome.name,
+      'count': b?.count,
+      'tombstones': tombstones,
+      'history': s.engine.history(limit: 500).length,
+      'failed': h.failed,
+    });
+    s.persist();
+    _log('ok');
+  }
+
   Future<String> _quickWorkout(eng.SessionPlan plan) async {
     final c = _controller();
     await c.start(plan);

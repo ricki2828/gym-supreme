@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -9,6 +11,21 @@ plugins {
 // core/flags/DartDefines decodes GS_FEATURES from it (unit-tested), so the native and Dart flags
 // of one APK cannot disagree. Plain ./gradlew runs (lint, unit tests) get "" = all off.
 val dartDefines: String = (project.findProperty("dart-defines") as String?) ?: ""
+
+// The same GS_FEATURES, decoded here for the one manifest decision Gradle makes (0.3 H1): the
+// Health Connect permission and privacy screen merge into the dogfood flavour only when the build
+// has `health`. Without it the merged manifest is exactly what it was before H1, and
+// tools/check_manifest_permissions.sh forbids the permission. Parsed exactly like
+// core/flags/FeatureSet (and Dart, the gate, the emulator scripts): `all` only as the whole
+// string, otherwise a comma list of trimmed names.
+val gsFeaturesRaw: String = dartDefines.split(',')
+    .filter { it.isNotBlank() }
+    .mapNotNull { runCatching { String(Base64.getDecoder().decode(it), Charsets.UTF_8) }.getOrNull() }
+    .lastOrNull { it.startsWith("GS_FEATURES=") } // the last define wins, as in DartDefines
+    ?.removePrefix("GS_FEATURES=")
+    ?: ""
+val healthManifest: Boolean =
+    gsFeaturesRaw == "all" || "health" in gsFeaturesRaw.split(',').map { it.trim() }
 
 android {
     // Permanent ids (plan 6.5): namespace and applicationId app.gymsupreme.
@@ -77,6 +94,11 @@ android {
         }
     }
 
+    sourceSets {
+        // H1: see healthManifest above. Dogfood only; play never declares Health Connect yet.
+        if (healthManifest) getByName("dogfood").manifest.srcFile("src/health/AndroidManifest.xml")
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -103,4 +125,11 @@ flutter {
 dependencies {
     // Pure Kotlin core from the included build android/core.
     implementation("app.gymsupreme:core")
+    // H1: Health Connect write (write only). Its client API is suspend functions.
+    // re-copy HealthDataSdkService declaration from the AAR on every bump
+    // (into src/health/AndroidManifest.xml; the main manifest removes the library's copy).
+    implementation("androidx.health.connect:connect-client:1.1.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // JVM unit tests (health record mapping); CI runs :app:testPlayDebugUnitTest.
+    testImplementation("junit:junit:4.13.2")
 }

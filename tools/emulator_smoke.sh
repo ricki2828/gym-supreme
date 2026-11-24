@@ -104,7 +104,8 @@ if [ "$sdk" -ge 33 ]; then
 fi
 e2e_wait ok 30
 e2e_lines | sed 's/^/ask: /'
-e2e_lines | grep '"step":"ask"' | grep -q '"allowed":true' || { echo "::error::API $sdk: the ask did not end allowed" >&2; exit 1; }
+askl="$(e2e_lines | grep '"step":"ask"' || true)"  # captured: grep -q + pipefail SIGPIPE
+grep -q '"allowed":true' <<< "$askl" || { echo "::error::API $sdk: the ask did not end allowed" >&2; exit 1; }
 if [ "$sdk" -lt 33 ] && ask_lines | grep -q '"event":"notif_request_shown"'; then
   echo "::error::API $sdk: a dialog was asked for below Android 13" >&2; exit 1
 fi
@@ -288,7 +289,8 @@ svc_lines | grep '"event":"keep_screen_on"' | tail -n 1 | grep -q '"on":false' \
   || { echo "::error::API $sdk: discard left keep_screen_on set" >&2; svc_lines | grep keep_screen_on >&2; exit 1; }
 discarded_uuid="$(e2e_field uuid <<< "$d")"
 [ -n "$discarded_uuid" ] || { echo "::error::API $sdk: discard: no uuid" >&2; exit 1; }
-svc_lines | grep '"event":"journal_delete"' | grep -F "$discarded_uuid" | grep -q '"ok":true' \
+jdel="$(svc_lines | grep '"event":"journal_delete"' | grep -F "$discarded_uuid" || true)"  # captured: pipefail
+grep -q '"ok":true' <<< "$jdel" \
   || { echo "::error::API $sdk: no journal_delete ok=true for $discarded_uuid" >&2; svc_lines | grep -E 'journal|session_' | tail -n 12 >&2; exit 1; }
 if svc_lines | grep -q '"event":"journal_delete_failed"'; then
   echo "::error::API $sdk: journal_delete_failed during the discard drill" >&2; svc_lines | grep journal_delete >&2; exit 1
@@ -296,7 +298,8 @@ fi
 # No foreground service left for the discarded workout (a start still queued behind the pause
 # must go idle, WorkoutService.cancelPendingStart). Absent output = not running = pass.
 sleep 3
-if adb shell dumpsys activity services "$PKG" | tr -d '\r' | grep -q 'isForeground=true'; then
+svcs="$(adb shell dumpsys activity services "$PKG" | tr -d '\r')"  # captured: grep -q + pipefail SIGPIPE
+if grep -q 'isForeground=true' <<< "$svcs"; then
   echo "::error::API $sdk: a foreground service is still running after the discard" >&2
   adb shell dumpsys activity services "$PKG" | tr -d '\r' | head -n 30 >&2; exit 1
 fi
@@ -324,12 +327,14 @@ for _ in $(seq 1 20); do [ -n "$(stale_line)" ] && break; sleep 1; done
 # The logcat was cleared just before the command, so any service_started here belongs to it: the
 # queued start must have gone idle (service_idle_start), never begun a session. (session_start is
 # the journal write in LiveSession.start and always fires; service events carry no uuid.)
-if svc_lines | grep -F '"event":"service_started"' | grep -qF '"mode":"session"'; then
+started="$(svc_lines | grep -F '"event":"service_started"' || true)"  # captured: pipefail SIGPIPE
+if grep -qF '"mode":"session"' <<< "$started"; then
   echo "::error::API $sdk: a session service began for the stale start" >&2
   svc_lines | grep -E 'start_ignored|service_|session_' | tail -n 12 >&2; exit 1
 fi
 sleep 2
-if adb shell dumpsys activity services "$PKG" | tr -d '\r' | grep -q 'isForeground=true'; then
+svcs="$(adb shell dumpsys activity services "$PKG" | tr -d '\r')"  # captured: grep -q + pipefail SIGPIPE
+if grep -q 'isForeground=true' <<< "$svcs"; then
   echo "::error::API $sdk: a foreground service is running after the stale start" >&2
   adb shell dumpsys activity services "$PKG" | tr -d '\r' | head -n 30 >&2; exit 1
 fi
@@ -412,7 +417,10 @@ if [ "$sdk" -ge 33 ]; then
   [ -n "$denied" ] || { echo "::error::API $sdk: no rest_alert with notifications denied" >&2; exit 1; }
   grep -q '"audio":"ok"' <<< "$denied" || { echo "::error::API $sdk: tone failed with notifications denied" >&2; exit 1; }
   grep -q '"vibrate":"ok' <<< "$denied" || { echo "::error::API $sdk: no vibration with notifications denied" >&2; exit 1; }
-  adb shell dumpsys package "$PKG" | tr -d '\r' | grep -q 'POST_NOTIFICATIONS: granted=false' || { echo "::error::API $sdk: permission was not actually denied during the check" >&2; exit 1; }
+  # Captured first: grep -q stops early, and under pipefail the SIGPIPE to tr fails the pipe once
+  # the output has more after the match (H1's Health Connect permission on API 34+).
+  pkgd="$(adb shell dumpsys package "$PKG" | tr -d '\r')"
+  grep -q 'POST_NOTIFICATIONS: granted=false' <<< "$pkgd" || { echo "::error::API $sdk: permission was not actually denied during the check" >&2; exit 1; }
   fatal_check "$PKG" "rest alert, notifications denied"
 fi
 # Restore drill (0.2 item 5b, review P1-7), API 34 only: Android Auto Backup through the local

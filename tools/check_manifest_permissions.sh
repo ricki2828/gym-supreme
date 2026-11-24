@@ -6,7 +6,10 @@
 #   location, Health Connect, CAMERA, AD_ID...) fails until it is added here on purpose.
 # - Every allowlisted permission must be present.
 # - BLUETOOTH_SCAN must carry usesPermissionFlags=neverForLocation.
-# Usage: tools/check_manifest_permissions.sh <apk> <build-tools-dir> <package>
+# - Health Connect (0.3 H1): with `health` in GS_FEATURES (the build's own, from the environment)
+#   exactly android.permission.health.WRITE_EXERCISE is added to the allowlist and required;
+#   without it, it is forbidden like any other extra. Nothing else from Health Connect, ever.
+# Usage: GS_FEATURES=... tools/check_manifest_permissions.sh <apk> <build-tools-dir> <package>
 set -euo pipefail
 APK="${1:?apk}"; BT="${2:?build-tools dir}"; PKG="${3:?package}"
 allowed="android.permission.BLUETOOTH_CONNECT
@@ -17,6 +20,21 @@ android.permission.FOREGROUND_SERVICE_SPECIAL_USE
 android.permission.POST_NOTIFICATIONS
 android.permission.VIBRATE
 android.permission.WAKE_LOCK"
+# Parsed like core/flags/FeatureSet: `all` only as the whole string, else trimmed comma names.
+health_on() {
+  local raw="${GS_FEATURES:-}" x
+  [ "$raw" = "all" ] && return 0
+  IFS=',' read -ra xs <<< "$raw"
+  for x in "${xs[@]}"; do x="${x#"${x%%[![:space:]]*}"}"; x="${x%"${x##*[![:space:]]}"}"; [ "$x" = health ] && return 0; done
+  return 1
+}
+if health_on; then
+  allowed="$allowed
+android.permission.health.WRITE_EXERCISE"
+  echo "health flag on: WRITE_EXERCISE required"
+else
+  echo "health flag off: no Health Connect permission allowed"
+fi
 # Allowed but not required: androidx.core adds it when a dependency registers receivers.
 optional="$PKG.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
 dump="$("$BT/aapt" dump permissions "$APK")"
@@ -28,8 +46,30 @@ extra="$(comm -23 <(echo "$perms") <(printf '%s\n%s\n' "$allowed" "$optional" | 
 missing="$(comm -13 <(echo "$perms") <(sort <<< "$allowed"))"
 [ -z "$extra" ] || { echo "::error::permission(s) not on the allowlist: $(echo $extra)"; exit 1; }
 [ -z "$missing" ] || { echo "::error::required permission(s) missing: $(echo $missing)"; exit 1; }
+# H1: connect-client's exported bind service ships only with the health flag (the main manifest
+# removes it; src/health/AndroidManifest.xml puts it back). Its attributes are printed.
+xml="$("$BT/aapt2" dump xmltree --file AndroidManifest.xml "$APK")"
+tmpx="$(mktemp)"; printf '%s\n' "$xml" > "$tmpx"
+report="$(python3 "$(dirname "$0")/manifest_health_report.py" "$tmpx")"
+rm -f "$tmpx"
+echo "$report"
+svc="$(grep -c 'androidx.health.platform.client.impl.sdkservice.HealthDataSdkService' <<< "$xml" || true)"
+if health_on; then
+  [ "$svc" -ge 1 ] || { echo "::error::health flag on but HealthDataSdkService is missing"; exit 1; }
+  # Exactly as connect-client declares it: enabled, exported, one ACTION_BIND_SDK_SERVICE action.
+  svc_line="$(grep -F 'manifest/application/service: ' <<< "$report" | grep -F 'HealthDataSdkService' || true)"
+  [ "$(grep -c . <<< "$svc_line")" -eq 1 ] || { echo "::error::expected one HealthDataSdkService element: $svc_line"; exit 1; }
+  grep -q 'exported=true' <<< "$svc_line" && grep -q 'enabled=true' <<< "$svc_line" \
+    || { echo "::error::HealthDataSdkService must be exported=true enabled=true: $svc_line"; exit 1; }
+  acts="$(grep -F 'manifest/application/service/intent-filter/action: ' <<< "$report" || true)"
+  [ "$(grep -c . <<< "$acts")" -eq 1 ] && grep -q 'name=androidx.health.platform.client.ACTION_BIND_SDK_SERVICE$' <<< "$acts" \
+    || { echo "::error::HealthDataSdkService must have exactly one action, ACTION_BIND_SDK_SERVICE: $acts"; exit 1; }
+  echo "HealthDataSdkService: enabled, exported, one ACTION_BIND_SDK_SERVICE action"
+else
+  [ "$svc" -eq 0 ] || { echo "::error::health flag off but HealthDataSdkService is in the manifest"; exit 1; }
+fi
 # neverForLocation = 0x10000 on uses-permission BLUETOOTH_SCAN.
-"$BT/aapt2" dump xmltree --file AndroidManifest.xml "$APK" | python3 -c '
+printf '%s\n' "$xml" | python3 -c '
 import re, sys
 blocks = re.split(r"\n\s*E: ", sys.stdin.read())
 scan = [b for b in blocks if b.startswith("uses-permission") and "android.permission.BLUETOOTH_SCAN\"" in b]

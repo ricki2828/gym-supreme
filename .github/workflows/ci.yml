@@ -25,8 +25,9 @@ env:
   DOGFOOD_PKG: app.gymsupreme.dogfood
   # Cut-2 features compiled ON in the dogfood build (lib/app/feature_flags.dart). Set with the repo
   # variable GS_FEATURES (e.g. ghost,rotation) only on t3x's call; empty = all off (APK 0.1).
-  # build-dogfood and emulator replace it with tools/ci_features.sh (pull requests add lockdone and
-  # timers). The 20-minute screen-off timer proof is timers-nightly.yml.
+  # build-dogfood and emulator replace it with tools/ci_features.sh (pull requests add lockdone,
+  # timers and health; health also merges the Health Connect manifest into the dogfood APK, and the
+  # permission gate follows the flag). The 20-minute screen-off timer proof is timers-nightly.yml.
   GS_FEATURES: ${{ vars.GS_FEATURES || '' }}
   # Pinned base for the schema v1 -> v2 migration install-over (API 36 emulator job). A real 0.2.0
   # (schema v1) APK; dogfood-latest is already v2 so it cannot prove the migration.
@@ -199,6 +200,15 @@ jobs:
       - run: flutter pub get
       - name: Build debug APK (play flavour, app.gymsupreme.debug)
         run: flutter build apk --debug --flavor play --dart-define=BUILD_SHA=${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Health Connect footprint with the health flag off (H1, report only)
+        # This APK has no GS_FEATURES, so no src/health manifest: whatever Health Connect shows up
+        # here comes from the connect-client library itself (its merged manifest), in every build.
+        run: |
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          APK=build/app/outputs/flutter-apk/app-play-debug.apk
+          "$BT/aapt2" dump xmltree --file AndroidManifest.xml "$APK" > "$RUNNER_TEMP/manifest.txt"
+          python3 tools/manifest_health_report.py "$RUNNER_TEMP/manifest.txt" | tee "$RUNNER_TEMP/hc.txt"
+          { echo "### Health Connect, flag off (play debug APK)"; echo '```'; cat "$RUNNER_TEMP/hc.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - name: Android lint NewApi
         working-directory: android
         run: ./gradlew :app:lintPlayDebug --no-daemon
@@ -218,7 +228,7 @@ jobs:
       has_prev: ${{ steps.prev.outputs.has_prev }}
     steps:
       - uses: actions/checkout@v4
-      - name: Effective GS_FEATURES (pull requests add lockdone + timers; main keeps the repo variable)
+      - name: Effective GS_FEATURES (pull requests add lockdone + timers + health; main keeps the repo variable)
         run: |
           f="$(tools/ci_features.sh)"
           echo "GS_FEATURES=$f" >> "$GITHUB_ENV"
@@ -283,6 +293,9 @@ jobs:
             label="$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' pubspec.yaml)"
             grep -q "versionName='$label-dogfood'" "$RUNNER_TEMP/pkg.txt" || { echo "::error::versionName is not $label-dogfood"; exit 1; }
             tools/check_manifest_permissions.sh "$APK" "$BT" "$DOGFOOD_PKG"
+            "$BT/aapt2" dump xmltree --file AndroidManifest.xml "$APK" > "$RUNNER_TEMP/manifest-$abi.txt"
+            echo "Health Connect footprint ($abi, GS_FEATURES='${GS_FEATURES:-}'):"
+            python3 tools/manifest_health_report.py "$RUNNER_TEMP/manifest-$abi.txt"
             tools/check_16kb_alignment.sh "$APK" "$BT/zipalign"
           done
           SIZE=$(stat -c %s build/app/outputs/flutter-apk/app-arm64-v8a-dogfood-release.apk)
@@ -350,7 +363,7 @@ jobs:
         api-level: [29, 33, 34, 36]
     steps:
       - uses: actions/checkout@v4
-      - name: Effective GS_FEATURES (pull requests add lockdone + timers; main keeps the repo variable)
+      - name: Effective GS_FEATURES (pull requests add lockdone + timers + health; main keeps the repo variable)
         run: |
           f="$(tools/ci_features.sh)"
           echo "GS_FEATURES=$f" >> "$GITHUB_ENV"
@@ -375,7 +388,7 @@ jobs:
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
-      - name: Boot, install, launch (+ install-over and v1->v2 migration on API 36), T1 3-cue screen-off timer run
+      - name: Boot, install, launch (+ install-over and v1->v2 migration on API 36), T1 3-cue screen-off timer run, H1 Health Connect drill
         uses: reactivecircus/android-emulator-runner@v2
         env:
           INSTALL_OVER: ${{ matrix.api-level == 36 && needs.build-dogfood.outputs.has_prev == 'true' }}
@@ -392,6 +405,7 @@ jobs:
             tools/emulator_smoke.sh apk/app-x86_64-dogfood-release.apk "$DOGFOOD_PKG"
             tools/emulator_import.sh apk/app-x86_64-dogfood-release.apk "$DOGFOOD_PKG"
             tools/emulator_emom.sh "$DOGFOOD_PKG" 3 20000 10000
+            tools/emulator_health.sh "$DOGFOOD_PKG"
 
   ui-e2e:
     # Widget-driven flow on a real device (t60's integration_test/ui_flow_test.dart): picker tap

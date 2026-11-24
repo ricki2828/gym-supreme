@@ -39,6 +39,7 @@ class LiveController extends ChangeNotifier {
     this.appVersion = '',
     this.tick = const Duration(seconds: 1),
     this.store,
+    this.onStored,
     this.awake,
     this.plateMath = false,
   }) {
@@ -72,6 +73,10 @@ class LiveController extends ChangeNotifier {
 
   /// Clock and rest countdown refresh.
   final Duration tick;
+
+  /// Called once a finished workout is in the store (0.3 H1: Health
+  /// Connect). Must not throw or block; never called for a discard.
+  final void Function(String workoutUuid)? onStored;
 
   eng.SessionSnapshot? _s;
   Timer? _timer;
@@ -579,6 +584,8 @@ class LiveController extends ChangeNotifier {
   /// Store, then delete the journal (B1). Never deletes before the save.
   Future<void> _complete(eng.SessionSnapshot done) async {
     engine.saveFinished(done);
+    // H1: stored, so Health Connect may have it; fire and forget.
+    onStored?.call(done.workoutUuid);
     await port.deleteJournal(done.workoutUuid);
     final st = store;
     if (Features.rotation && st != null) {

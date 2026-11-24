@@ -11,6 +11,9 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.os.Bundle
 import android.util.Log
+import androidx.health.connect.client.PermissionController
+import app.gymsupreme.health.HealthApiImpl
+import app.gymsupreme.platform.HealthApi
 import android.view.WindowManager
 import app.gymsupreme.platform.GymHostApi
 import app.gymsupreme.platform.FlutterError
@@ -84,6 +87,10 @@ class MainActivity : FlutterActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == HEALTH_REQUEST_CODE) {
+            resolveHealth(permissions.filterIndexed { i, _ -> grantResults.getOrNull(i) == PackageManager.PERMISSION_GRANTED }.toSet())
+            return
+        }
         if (requestCode != NOTIF_REQUEST_CODE) return
         val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
         resolveNotif(granted && notificationsEnabled(), if (grantResults.isEmpty()) "cancelled" else null)
@@ -96,6 +103,39 @@ class MainActivity : FlutterActivity() {
         if (why != null) line.put("why", why)
         SpikeLog.write(this, line)
         cb(Result.success(on))
+    }
+
+    /** Health Connect's permission screen (0.3 H1): one at a time, answered in onActivityResult. */
+    // Lazy: with the flag off no androidx.health class is loaded at all (review P2, PR #61).
+    private val healthContract by lazy { PermissionController.createRequestPermissionResultContract() }
+    private var healthCallback: ((Set<String>?) -> Unit)? = null
+
+    /** Null to [callback] when a screen is already open; the granted set otherwise (empty on any failure). */
+    fun requestHealthPermissions(permissions: Set<String>, callback: (Set<String>?) -> Unit) {
+        if (healthCallback != null) {
+            callback(null)
+            return
+        }
+        healthCallback = callback
+        try {
+            // Android 14+: health permissions are runtime permissions. The client's contract builds
+            // an androidx `REQUEST_PERMISSIONS` intent there, which only a ComponentActivity's
+            // result registry can launch; this is a plain FlutterActivity (review P1, PR #61).
+            if (Build.VERSION.SDK_INT >= 34) {
+                requestPermissions(permissions.toTypedArray(), HEALTH_REQUEST_CODE)
+            } else {
+                startActivityForResult(healthContract.createIntent(this, permissions), HEALTH_REQUEST_CODE)
+            }
+        } catch (e: Exception) {
+            SpikeLog.write(this, SpikeLog.line("health_permission_error").put("message", e.javaClass.simpleName))
+            resolveHealth(emptySet())
+        }
+    }
+
+    private fun resolveHealth(granted: Set<String>) {
+        val cb = healthCallback ?: return
+        healthCallback = null
+        cb(granted)
     }
 
     /** The one in-flight pickImportFile call (Dart awaits it). */
@@ -122,6 +162,15 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == HEALTH_REQUEST_CODE) {
+            val granted = try {
+                healthContract.parseResult(resultCode, data)
+            } catch (_: Exception) {
+                emptySet()
+            }
+            resolveHealth(granted)
+            return
+        }
         if (requestCode != IMPORT_REQUEST_CODE) return
         val uri = data?.data
         if (resultCode != Activity.RESULT_OK || uri == null) {
@@ -212,6 +261,12 @@ class MainActivity : FlutterActivity() {
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         GymHostApi.setUp(messenger, HostApiImpl(this))
         WorkoutApi.setUp(messenger, WorkoutApiImpl(this))
+        // Flag off: no HealthApi channel and no Health Connect client classes; Dart never calls it
+        // (AppServices.health is null without the flag).
+        if (Features.health) {
+            HealthApi.setUp(messenger, HealthApiImpl(applicationContext) { perms, cb -> requestHealthPermissions(perms, cb) })
+        }
+        SpikeLog.write(this, SpikeLog.line("health_api").put("registered", Features.health))
         snapshots = SnapshotsStream(this).also { SnapshotsStreamHandler.register(messenger, it) }
         spike = SpikeChannel(this, messenger)
     }
@@ -219,9 +274,11 @@ class MainActivity : FlutterActivity() {
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         resolveNotif(false, "activity_gone")
         resolveImport(Result.success(null), "activity_gone", null)
+        resolveHealth(emptySet())
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         GymHostApi.setUp(messenger, null)
         WorkoutApi.setUp(messenger, null)
+        HealthApi.setUp(messenger, null)
         snapshots?.dispose()
         snapshots = null
         spike?.dispose()
@@ -241,6 +298,9 @@ class MainActivity : FlutterActivity() {
 
         /** pickImportFile (I1). Distinct from 7301 and 7302. */
         private const val IMPORT_REQUEST_CODE = 7303
+
+        /** Health Connect permission (H1). Distinct from 7301-7303. */
+        private const val HEALTH_REQUEST_CODE = 7304
 
         /** pickImportFile refuses anything bigger with `too_large`. */
         const val IMPORT_MAX_BYTES = 8 * 1024 * 1024

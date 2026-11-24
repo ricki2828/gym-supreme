@@ -6,6 +6,7 @@ import 'package:gym_engine/gym_engine.dart' as eng;
 import 'package:supreme_ui/supreme_ui.dart';
 
 import '../../app/feature_flags.dart';
+import '../../app/health_sync.dart';
 import '../../app/workout_port.dart';
 import '../../widgets/cut2/amrap_entry.dart';
 import '../../widgets/cut2/ghost_lines.dart';
@@ -41,6 +42,7 @@ class GymDeps {
     this.store,
     this.notifications,
     this.persist,
+    this.health,
     this.screenAwake,
   }) : nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch),
        tzOffsetMin =
@@ -69,6 +71,17 @@ class GymDeps {
   /// that do not care.
   final VoidCallback? persist;
 
+  /// Health Connect write (0.3 H1); null unless the `health` flag is on and
+  /// the store is real (and in tests that do not care).
+  final HealthSync? health;
+
+  /// Fire and forget: brings [uuid]'s Health Connect session in line with
+  /// history after a finish, edit, delete or undo. Never blocks or throws.
+  void healthSync(String uuid) {
+    final h = health;
+    if (h != null) unawaited(h.sync(uuid));
+  }
+
   LiveController liveController() => LiveController(
     awake: screenAwake,
     plateMath: Features.plateMath,
@@ -78,6 +91,7 @@ class GymDeps {
     nowMs: nowMs,
     tzOffsetMin: tzOffsetMin(),
     appVersion: appVersion,
+    onStored: health == null ? null : healthSync,
   );
 }
 
@@ -176,6 +190,11 @@ class _GymRootState extends State<GymRoot> {
               // Cosmetic: the pointer stays one step behind; he can tap a row in
               // the rotation editor to correct it.
             }
+          }
+          // H1: a workout finished while the app was dead goes to Health
+          // Connect now; an already-stored one is a no-op (same version).
+          if (uuid != null && snap != null && snap.finished) {
+            widget.deps.healthSync(uuid);
           }
           if (uuid != null) {
             try {
@@ -1546,6 +1565,7 @@ bool deleteWorkoutWithUndo(
   }
   if (d == null) return false;
   deps.persist?.call();
+  deps.healthSync(uuid);
   onChanged?.call();
   messenger
     ..clearSnackBars()
@@ -1564,6 +1584,7 @@ bool deleteWorkoutWithUndo(
                 rotationBefore: d!.rotationBefore,
               );
               deps.persist?.call();
+              if (ok) deps.healthSync(uuid);
               onChanged?.call();
               if (!ok) {
                 messenger.showSnackBar(
@@ -1607,6 +1628,7 @@ class _WorkoutDetailFlowState extends State<WorkoutDetailFlow> {
 
   void _saved() {
     _deps.persist?.call();
+    _deps.healthSync(widget.uuid);
     widget.onChanged?.call();
     if (mounted) setState(() {});
   }

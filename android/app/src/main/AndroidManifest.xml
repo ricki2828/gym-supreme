@@ -1,7 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <!-- Plan 7 and R1. No INTERNET, no location, no Health Connect: CI fails the dogfood build if
-         its merged manifest gains any of them (tools/check_manifest_permissions.sh). -->
+    <!-- Plan 7 and R1. No INTERNET, no location: CI fails the dogfood build if its merged manifest
+         gains any of them (tools/check_manifest_permissions.sh). Health Connect WRITE_EXERCISE
+         only from src/health/AndroidManifest.xml, merged into dogfood builds with the `health`
+         flag (0.3 H1); the gate requires it then and forbids it otherwise. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
@@ -54,6 +56,13 @@
         <receiver
             android:name=".workout.WorkoutActionReceiver"
             android:exported="false" />
+        <!-- connect-client (H1) merges an exported bind service into every build. Removed here, so
+             a build without the `health` flag ships no Health Connect component; the dogfood
+             overlay src/health/AndroidManifest.xml declares it again (tools:node="replace") when
+             the flag is on. tools/check_manifest_permissions.sh checks both ways. -->
+        <service
+            android:name="androidx.health.platform.client.impl.sdkservice.HealthDataSdkService"
+            tools:node="remove" />
         <!-- Serves only the shared spike log, read-only, per-URI grant. -->
         <provider
             android:name=".workout.SpikeLogProvider"

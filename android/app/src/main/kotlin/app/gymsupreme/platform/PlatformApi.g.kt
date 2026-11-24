@@ -192,6 +192,68 @@ class FlutterError (
   val details: Any? = null
 ) : RuntimeException()
 
+/** Whether this build and phone can write to Health Connect (0.3 H1). */
+enum class HealthAvailability(val raw: Int) {
+  /** Health Connect is there and this build declares the permission. */
+  AVAILABLE(0),
+  /** Android 13 and older without the Health Connect app. */
+  NOT_INSTALLED(1),
+  /** The Health Connect app needs an update first. */
+  NEEDS_UPDATE(2),
+  /** Android 14+ where Health Connect is not supported. */
+  UNSUPPORTED(3),
+  /**
+   * This build does not declare `WRITE_EXERCISE` (play flavour, or a build
+   * without the `health` flag).
+   */
+  NOT_DECLARED(4),
+  /** The `health` feature flag is off in this build. */
+  FLAG_OFF(5);
+
+  companion object {
+    fun ofRaw(raw: Int): HealthAvailability? {
+      return values().firstOrNull { it.raw == raw }
+    }
+  }
+}
+
+/** What a workout counts as in Health Connect. */
+enum class HealthExerciseKind(val raw: Int) {
+  /** Push, Pull, Legs, Core and mixed picks: `EXERCISE_TYPE_STRENGTH_TRAINING`. */
+  STRENGTH(0),
+  /**
+   * The Engine type (EMOM, AMRAP, intervals):
+   * `EXERCISE_TYPE_HIGH_INTENSITY_INTERVAL_TRAINING`, so it never counts
+   * toward Body Age's strength factor.
+   */
+  CONDITIONING(1);
+
+  companion object {
+    fun ofRaw(raw: Int): HealthExerciseKind? {
+      return values().firstOrNull { it.raw == raw }
+    }
+  }
+}
+
+enum class HealthOutcome(val raw: Int) {
+  /** Written or deleted. */
+  OK(0),
+  /** Health Connect missing, needs an update, or not declared. */
+  NOT_AVAILABLE(1),
+  /** `WRITE_EXERCISE` not granted (or revoked). */
+  PERMISSION_DENIED(2),
+  /** His switch is off, or the `health` flag is off: nothing was sent. */
+  DISABLED(3),
+  /** Health Connect threw; [HealthResult.detail] says what. */
+  FAILED(4);
+
+  companion object {
+    fun ofRaw(raw: Int): HealthOutcome? {
+      return values().firstOrNull { it.raw == raw }
+    }
+  }
+}
+
 /**
  * Device facts for the diagnostics page and the spike log.
  *
@@ -255,12 +317,200 @@ data class HostInfo (
     return result
   }
 }
+
+/** Generated class from Pigeon that represents data sent in messages. */
+data class HealthStatus (
+  val availability: HealthAvailability,
+  /** `WRITE_EXERCISE` is granted. */
+  val granted: Boolean,
+  /**
+   * His switch (off by default; kept on the phone, not in the backup).
+   * Writes happen only while it is on and [granted] is true.
+   */
+  val enabled: Boolean
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): HealthStatus {
+      val availability = pigeonVar_list[0] as HealthAvailability
+      val granted = pigeonVar_list[1] as Boolean
+      val enabled = pigeonVar_list[2] as Boolean
+      return HealthStatus(availability, granted, enabled)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      availability,
+      granted,
+      enabled,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as HealthStatus
+    return PlatformApiPigeonUtils.deepEquals(this.availability, other.availability) && PlatformApiPigeonUtils.deepEquals(this.granted, other.granted) && PlatformApiPigeonUtils.deepEquals(this.enabled, other.enabled)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + PlatformApiPigeonUtils.deepHash(this.availability)
+    result = 31 * result + PlatformApiPigeonUtils.deepHash(this.granted)
+    result = 31 * result + PlatformApiPigeonUtils.deepHash(this.enabled)
+    return result
+  }
+}
+
+/**
+ * One finished workout as a Health Connect exercise session.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class HealthSession (
+  /** The workout uuid: writing it again replaces the record (upsert). */
+  val clientRecordId: String,
+  /**
+   * `edited_at_ms ?? 0`: an edit raises it, so the rewrite wins; the same
+   * version again is ignored by Health Connect (idempotent backfill).
+   */
+  val version: Long,
+  val title: String,
+  val startEpochMs: Long,
+  val endEpochMs: Long,
+  /** The workout's own UTC offset (tz_offset_min * 60). */
+  val utcOffsetSeconds: Long,
+  val kind: HealthExerciseKind
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): HealthSession {
+      val clientRecordId = pigeonVar_list[0] as String
+      val version = pigeonVar_list[1] as Long
+      val title = pigeonVar_list[2] as String
+      val startEpochMs = pigeonVar_list[3] as Long
+      val endEpochMs = pigeonVar_list[4] as Long
+      val utcOffsetSeconds = pigeonVar_list[5] as Long
+      val kind = pigeonVar_list[6] as HealthExerciseKind
+      return HealthSession(clientRecordId, version, title, startEpochMs, endEpochMs, utcOffsetSeconds, kind)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      clientRecordId,
+      version,
+      title,
+      startEpochMs,
+      endEpochMs,
+      utcOffsetSeconds,
+      kind,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as HealthSession
+    return PlatformApiPigeonUtils.deepEquals(this.clientRecordId, other.clientRecordId) && PlatformApiPigeonUtils.deepEquals(this.version, other.version) && PlatformApiPigeonUtils.deepEquals(this.title, other.title) && PlatformApiPigeonUtils.deepEquals(this.startEpochMs, other.startEpochMs) && PlatformApiPigeonUtils.deepEquals(this.endEpochMs, other.endEpochMs) && PlatformApiPigeonUtils.deepEquals(this.utcOffsetSeconds, other.utcOffsetSeconds) && PlatformApiPigeonUtils.deepEquals(this.kind, other.kind)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + PlatformApiPigeonUtils.deepHash(this.clientRecordId)
+    result = 31 * result + PlatformApiPigeonUtils.deepHash(this.version)
+    result = 31 * result + PlatformApiPigeonUtils.deepHash(this.title)
+    result = 31 * result + PlatformApiPigeonUtils.deepHash(this.startEpochMs)
+    result = 31 * result + PlatformApiPigeonUtils.deepHash(this.endEpochMs)
+    result = 31 * result + PlatformApiPigeonUtils.deepHash(this.utcOffsetSeconds)
+    result = 31 * result + PlatformApiPigeonUtils.deepHash(this.kind)
+    return result
+  }
+}
+
+/** Generated class from Pigeon that represents data sent in messages. */
+data class HealthResult (
+  val outcome: HealthOutcome,
+  /** Records written or deleted. */
+  val count: Long,
+  val detail: String? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): HealthResult {
+      val outcome = pigeonVar_list[0] as HealthOutcome
+      val count = pigeonVar_list[1] as Long
+      val detail = pigeonVar_list[2] as String?
+      return HealthResult(outcome, count, detail)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      outcome,
+      count,
+      detail,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as HealthResult
+    return PlatformApiPigeonUtils.deepEquals(this.outcome, other.outcome) && PlatformApiPigeonUtils.deepEquals(this.count, other.count) && PlatformApiPigeonUtils.deepEquals(this.detail, other.detail)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + PlatformApiPigeonUtils.deepHash(this.outcome)
+    result = 31 * result + PlatformApiPigeonUtils.deepHash(this.count)
+    result = 31 * result + PlatformApiPigeonUtils.deepHash(this.detail)
+    return result
+  }
+}
 private open class PlatformApiPigeonCodec : StandardMessageCodec() {
   override fun readValueOfType(type: Byte, buffer: ByteBuffer): Any? {
     return when (type) {
       129.toByte() -> {
+        return (readValue(buffer) as Long?)?.let {
+          HealthAvailability.ofRaw(it.toInt())
+        }
+      }
+      130.toByte() -> {
+        return (readValue(buffer) as Long?)?.let {
+          HealthExerciseKind.ofRaw(it.toInt())
+        }
+      }
+      131.toByte() -> {
+        return (readValue(buffer) as Long?)?.let {
+          HealthOutcome.ofRaw(it.toInt())
+        }
+      }
+      132.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           HostInfo.fromList(it)
+        }
+      }
+      133.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          HealthStatus.fromList(it)
+        }
+      }
+      134.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          HealthSession.fromList(it)
+        }
+      }
+      135.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          HealthResult.fromList(it)
         }
       }
       else -> super.readValueOfType(type, buffer)
@@ -268,8 +518,32 @@ private open class PlatformApiPigeonCodec : StandardMessageCodec() {
   }
   override fun writeValue(stream: ByteArrayOutputStream, value: Any?)   {
     when (value) {
-      is HostInfo -> {
+      is HealthAvailability -> {
         stream.write(129)
+        writeValue(stream, value.raw.toLong())
+      }
+      is HealthExerciseKind -> {
+        stream.write(130)
+        writeValue(stream, value.raw.toLong())
+      }
+      is HealthOutcome -> {
+        stream.write(131)
+        writeValue(stream, value.raw.toLong())
+      }
+      is HostInfo -> {
+        stream.write(132)
+        writeValue(stream, value.toList())
+      }
+      is HealthStatus -> {
+        stream.write(133)
+        writeValue(stream, value.toList())
+      }
+      is HealthSession -> {
+        stream.write(134)
+        writeValue(stream, value.toList())
+      }
+      is HealthResult -> {
+        stream.write(135)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -673,6 +947,122 @@ interface WorkoutApi {
               PlatformApiPigeonUtils.wrapError(exception)
             }
             reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+    }
+  }
+}
+/**
+ * Health Connect write of finished sessions (0.3 H1, flag `health`). Write
+ * only: no read permission is declared or asked. Never throws for a Health
+ * Connect problem: it answers with a [HealthOutcome]. Logcat
+ * `GymSupreme/service` lines: `health_status`, `health_permission_shown`,
+ * `health_permission`, `health_write`, `health_delete`.
+ *
+ * Generated interface from Pigeon that represents a handler of messages from Flutter.
+ */
+interface HealthApi {
+  fun status(callback: (Result<HealthStatus>) -> Unit)
+  /**
+   * Turning it on asks for `WRITE_EXERCISE` on Health Connect's own screen
+   * when it is not granted yet; it stays off when he refuses or Health
+   * Connect is not available. Off never asks. Refusal code
+   * `already_pending` while a permission screen is open.
+   */
+  fun setEnabled(enabled: Boolean, callback: (Result<HealthStatus>) -> Unit)
+  /**
+   * Upserts by `clientRecordId`, in batches. [HealthOutcome.disabled] while
+   * the switch is off.
+   */
+  fun writeSessions(sessions: List<HealthSession>, callback: (Result<HealthResult>) -> Unit)
+  /** Deletes by `clientRecordId` (an id with no record is fine). */
+  fun deleteSessions(clientRecordIds: List<String>, callback: (Result<HealthResult>) -> Unit)
+
+  companion object {
+    /** The codec used by HealthApi. */
+    val codec: MessageCodec<Any?> by lazy {
+      PlatformApiPigeonCodec()
+    }
+    /** Sets up an instance of `HealthApi` to handle messages through the `binaryMessenger`. */
+    @JvmOverloads
+    fun setUp(binaryMessenger: BinaryMessenger, api: HealthApi?, messageChannelSuffix: String = "") {
+      val separatedMessageChannelSuffix = if (messageChannelSuffix.isNotEmpty()) ".$messageChannelSuffix" else ""
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.gym_supreme.HealthApi.status$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            api.status{ result: Result<HealthStatus> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(PlatformApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(PlatformApiPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.gym_supreme.HealthApi.setEnabled$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val enabledArg = args[0] as Boolean
+            api.setEnabled(enabledArg) { result: Result<HealthStatus> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(PlatformApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(PlatformApiPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.gym_supreme.HealthApi.writeSessions$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val sessionsArg = args[0] as List<HealthSession>
+            api.writeSessions(sessionsArg) { result: Result<HealthResult> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(PlatformApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(PlatformApiPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.gym_supreme.HealthApi.deleteSessions$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val clientRecordIdsArg = args[0] as List<String>
+            api.deleteSessions(clientRecordIdsArg) { result: Result<HealthResult> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(PlatformApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(PlatformApiPigeonUtils.wrapResult(data))
+              }
+            }
           }
         } else {
           channel.setMessageHandler(null)
