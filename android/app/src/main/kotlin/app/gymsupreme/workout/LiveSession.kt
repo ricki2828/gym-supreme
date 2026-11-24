@@ -8,6 +8,7 @@ import app.gymsupreme.core.journal.SnapshotView
 import app.gymsupreme.core.json.Json
 import app.gymsupreme.core.json.JsonException
 import app.gymsupreme.core.json.JsonWriter
+import app.gymsupreme.core.session.LockReducer
 
 /**
  * The live workout's native side (t3x 23-Nov ruling on t5v's proposal; plan 6.2, 7). Dart runs the
@@ -92,6 +93,33 @@ class LiveSession private constructor(private val context: Context) {
         head = r.head
         apply(r.snapshot, r.line)
         return r.head.rev
+    }
+
+    data class LockOutcome(val outcome: String, val newRev: Long? = null) {
+        val applied get() = outcome == "applied"
+    }
+
+    /**
+     * A lock-screen Done / +1 rep / Skip rest (0.3 cut L1) built at journal rev [rev]. Applied only
+     * while a session-mode service runs (this never starts one: the snapshot it writes is active,
+     * so [apply] just updates the running service) and only when [rev] is still the journal head;
+     * anything else is a no-op. The result is journalled as rev + 1 like a Dart submit, and goes
+     * to Dart's snapshot stream if Flutter is attached.
+     */
+    fun lockAction(action: LockReducer.Action, setId: String?, rev: Long): LockOutcome {
+        val st = WorkoutService.status
+        if (!st.running || st.mode != WorkoutService.MODE_SESSION || WorkoutService.instance == null) return LockOutcome("no_session")
+        val cur = current() ?: return LockOutcome("no_journal")
+        if (cur.finished) return LockOutcome("finished")
+        if (rev != cur.rev) return LockOutcome("stale_rev")
+        val line = store.read().lastLine ?: return LockOutcome("no_journal")
+        return when (val r = LockReducer.apply(Json.parseObject(line), action, setId, System.currentTimeMillis())) {
+            is LockReducer.Result.NoOp -> LockOutcome("noop:${r.reason}")
+            is LockReducer.Result.Applied -> {
+                val newRev = submit(JsonWriter.write(r.snapshot), cur.rev)
+                LockOutcome("applied", newRev)
+            }
+        }
     }
 
     /**

@@ -73,5 +73,8 @@ The first `pending` set in exercise order. The notification shows its exercise, 
 ## Kotlin-side transitions (cut 1: Done/rest/etc. come from Dart)
 Kotlin applies only finish stamping: `finished=true`, `rev+1`, `rest=null`, `ended_at_ms` if null, **and if `state=="paused"`: `paused_total_ms += now - paused_at_ms`, `paused_at_ms=null`, `state="active"`** (matches Dart `Session.finish`). Preferred path in cut 1: Dart submits `Session.finish(...)` itself, then `finishSession()` fsyncs and returns it unchanged.
 
+## Kotlin-side transitions (v1.1, cut L1: lock screen, flag `lockdone`)
+Done, +1 rep and Skip rest from the notification, applied by `android/core/.../session/LockReducer.kt` to the journal head and journalled as rev + 1, only while the session service runs (never started from the lock screen) and only when the tap's rev is still the head. Each is the twin of a Dart transition: Done = `Session.done(setId, nowMs, source: lockscreen)` (logs the targets; `cold_start` wins over `tap_unchanged`; does not finish on the last set); +1 rep = `Session.retarget(reps: max(1, target + 1))` with carry-forward; Skip rest = `Session.skipRest`. Refused (no-op) when paused or finished, for a non-pending or unknown set, and for Done / +1 on a timed set, a set with a `block`, null target reps, or a loaded lift with null target load. Shared vectors `lockscreen_v1_*.json` ({case, before, steps, after}) are generated from Dart by `tool/gen_contract_fixtures.dart`; Kotlin must reproduce the bytes.
+
 ## Changes
 Additive only after C2. A breaking change: hc ping t5t + affected lanes and a line in `contracts/CHANGES.md`; bump `schema`.

@@ -134,7 +134,9 @@ void main() {
     () async {
       await startPush();
       await c.load(1);
-      // Another writer (cut 2 lock screen) moves the journal on.
+      // Another writer (cut 2 lock screen) moves the journal on, and its
+      // stream event is lost (engine detached): the stale rev catches it.
+      port.emitSnapshots = false;
       final head = eng.SessionSnapshot.decode(
         (await port.readPendingJournal())!,
       );
@@ -271,6 +273,7 @@ void main() {
   test('stale rev with an unreadable journal keeps the old view', () async {
     await startPush();
     await logOne();
+    port.emitSnapshots = false; // the foreign write's event never arrives
     final head = eng.SessionSnapshot.decode((await port.readPendingJournal())!);
     await port.submitSnapshot(
       eng.Session.skipRest(head, nowMs: now).encode(),

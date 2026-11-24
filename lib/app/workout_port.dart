@@ -264,8 +264,26 @@ class StubWorkoutPort implements WorkoutPort {
 
   Future<void> dispose() => _controller.close();
 
+  /// Tests: false models a write whose stream event never reached Dart
+  /// (the engine was detached), so only the stale-rev resync can catch up.
+  bool emitSnapshots = true;
+
+  /// Tests: another writer (the lock screen, 0.3 L1) journals [snapshotJson]
+  /// as the next rev, as the Kotlin reducer does, and the stream carries it.
+  void foreignWrite(String snapshotJson) {
+    _checkRev(snapshotJson, _rev + 1);
+    _rev++;
+    final next = jsonDecode(snapshotJson) as Map<String, dynamic>;
+    _running = next['state'] != 'paused' && next['finished'] != true;
+    _write(snapshotJson);
+  }
+
+  /// Tests: puts [json] on the stream without touching the journal (a late
+  /// or duplicate event).
+  void emitForTest(String json) => _controller.add(json);
+
   void _write(String json) {
     _journal = json;
-    _controller.add(json);
+    if (emitSnapshots) _controller.add(json);
   }
 }

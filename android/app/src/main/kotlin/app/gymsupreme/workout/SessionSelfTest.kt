@@ -1,7 +1,15 @@
 package app.gymsupreme.workout
 
+import android.app.Activity
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import app.gymsupreme.core.journal.SnapshotView
+import app.gymsupreme.core.json.Json
 import app.gymsupreme.core.json.JsonWriter
+import app.gymsupreme.core.log.LogLine
 import java.util.UUID
 
 /**
@@ -11,6 +19,7 @@ import java.util.UUID
  *    exactly as Dart would send it (journal line, service start, rest armed, alert fired).
  *  - `pending`: after `am force-stop` and a relaunch, the journal is found (crash-safe resume).
  *  - `finish`: finish (stamps finished, stops the service) then delete, as Dart does after storing.
+ *  - `lock_fire` (0.3 L1): fires the notification's Done with the activity gone; see [lockFire].
  * Each step logs a `selftest_session` line under GymSupreme/service.
  */
 object SessionSelfTest {
@@ -32,8 +41,18 @@ object SessionSelfTest {
                 "pending" -> {
                     val json = live.readPending()
                     line.put("found", json != null).put("ok", json != null)
-                    if (json != null) line.put("chars", json.length)
+                    if (json != null) {
+                        line.put("chars", json.length)
+                        // L1: what a lock-screen Done left in the journal.
+                        val s = Json.parseObject(json)
+                        line.put("rev", s["rev"] as? Long).put("finished", s["finished"] == true)
+                        val lock = (s["exercises"] as List<*>).flatMap { (it as Map<*, *>)["sets"] as List<*> }
+                            .map { it as Map<*, *> }.filter { it["state"] == "done" && it["source"] == "lockscreen" }
+                        line.put("lockscreen_sets", lock.size)
+                        lock.firstOrNull()?.let { line.put("lock_load_g", it["load_g"] as? Long).put("lock_reps", it["reps"] as? Long).put("lock_completion", it["completion"] as? String) }
+                    }
                 }
+                "lock_fire" -> lockFire(context, line)
                 "finish" -> {
                     val out = live.finish()
                     val uuid = Regex("\"workout_uuid\":\"([^\"]+)\"").find(out)?.groupValues?.get(1)
@@ -52,6 +71,51 @@ object SessionSelfTest {
     }
 
     private const val REST_MS = 3_000L
+
+    /**
+     * L1 smoke: takes the Done button's own PendingIntent from the posted session notification,
+     * closes the activity (Flutter detaches) and, [FIRE_DELAY_MS] later with the screen off,
+     * fires it twice back to back (a double tap), then once more after the notification has
+     * moved on (a tap on a stale notification). The receiver logs one `lock_action` line per
+     * fire. With `lockdone` off there is no button: the same intent is built by hand to show the
+     * receiver ignores it.
+     */
+    private fun lockFire(context: Context, line: LogLine) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val n = nm.activeNotifications.firstOrNull { it.id == WorkoutNotification.SESSION_ID }?.notification
+        val actions = n?.actions.orEmpty()
+        line.put("notification", n != null).put("actions", actions.joinToString("|") { it.title.toString() })
+        val done = actions.firstOrNull { it.title == WorkoutNotification.LABEL_DONE }?.actionIntent
+        val head = LiveSession.get(context).readPending()
+        if (done == null && head == null) {
+            line.put("ok", false).put("error", "no journal")
+            return
+        }
+        val pi = done ?: SnapshotView.of(Json.parseObject(head!!)).let {
+            WorkoutNotification.lockIntent(context, WorkoutActionReceiver.ACTION_DONE, it.rev, it.currentSetId)
+        }
+        line.put("from_notification", done != null).put("ok", true)
+        val main = Handler(Looper.getMainLooper())
+        main.postDelayed({
+            send(context, pi, "first")
+            send(context, pi, "double")
+            main.postDelayed({ send(context, pi, "stale") }, 1_500)
+        }, FIRE_DELAY_MS)
+        (context as? Activity)?.finishAndRemoveTask()
+    }
+
+    private fun send(context: Context, pi: PendingIntent, which: String) {
+        val l = SpikeLog.line("lock_selftest_fire").put("which", which)
+        try {
+            pi.send()
+            l.put("sent", true)
+        } catch (e: PendingIntent.CanceledException) {
+            l.put("sent", false).put("error", e.message)
+        }
+        SpikeLog.write(context, l)
+    }
+
+    private const val FIRE_DELAY_MS = 5_000L
 
     private fun set(id: String, ordinal: Int, done: Boolean, now: Long): Map<String, Any?> = linkedMapOf(
         "set_id" to id,

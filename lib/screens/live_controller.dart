@@ -25,7 +25,9 @@ class LiveController extends ChangeNotifier {
     this.appVersion = '',
     this.tick = const Duration(seconds: 1),
     this.store,
-  });
+  }) {
+    _foreign = port.snapshots.listen(_onSnapshot, onError: (Object _) {});
+  }
 
   /// History for the cut-2 ghost and rotation; null hides both.
   final eng.HistoryStore? store;
@@ -619,6 +621,51 @@ class LiveController extends ChangeNotifier {
     }
   }
 
+  // ---- snapshots written by the service (0.3 L1: lock-screen actions) ------
+
+  StreamSubscription<String>? _foreign;
+  bool _disposed = false;
+
+  /// Every snapshot the service accepted or wrote. Our own submits come back
+  /// at a rev we already hold and are ignored; a lock-screen Done / +1 rep /
+  /// Skip rest arrives at a higher rev for the same workout and is adopted,
+  /// so the screen shows it and the next tap is based on it (not dropped as
+  /// stale). Queued like any intent: never runs beside an in-flight submit.
+  /// Ignored once this workout is stored or discarded.
+  void _onSnapshot(String json) {
+    if (_disposed) return;
+    unawaited(
+      _enqueue(() async {
+        final s = _s;
+        if (_disposed ||
+            s == null ||
+            finishedUuid != null ||
+            discardedUuid != null) {
+          return;
+        }
+        final eng.SessionSnapshot head;
+        try {
+          head = eng.SessionSnapshot.decode(json);
+        } on Object {
+          return;
+        }
+        if (head.workoutUuid != s.workoutUuid || head.rev <= s.rev) return;
+        lastError = null;
+        _set(head);
+        // Finished elsewhere: store it here, same order as Finish (B1).
+        if (head.finished) {
+          try {
+            await _complete(head);
+          } on Object catch (e) {
+            // Shown as all done; Finish retries (as in _resync).
+            lastError = e;
+            notifyListeners();
+          }
+        }
+      }),
+    );
+  }
+
   Future<void> _enqueue(Future<void> Function() job) {
     final run = _queue.then((_) => job());
     _queue = run.catchError((Object _) {});
@@ -646,6 +693,8 @@ class LiveController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    unawaited(_foreign?.cancel());
     _timer?.cancel();
     super.dispose();
   }
