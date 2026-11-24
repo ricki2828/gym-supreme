@@ -70,6 +70,8 @@ class GymSetupScreen extends StatelessWidget {
     required this.equipment,
     required this.presets,
     this.weights = const [],
+    this.plateRows = const [],
+    this.onEditPlates,
     this.firstRun = false,
     this.onPickGym,
     this.onAddGym,
@@ -93,6 +95,12 @@ class GymSetupScreen extends StatelessWidget {
   /// The ticked loaded items (dumbbells, cable and stack machines) and the
   /// weights each really has (P1-2).
   final List<WeightRow> weights;
+
+  /// Bars and plates (0.3 P1, Features.plateMath): empty hides the section.
+  final List<PlateRow> plateRows;
+
+  /// Opens the bar weight or the plate pairs editor for a kit id.
+  final ValueChanged<String>? onEditPlates;
   final bool firstRun;
 
   final ValueChanged<String>? onPickGym;
@@ -189,10 +197,32 @@ class GymSetupScreen extends StatelessWidget {
                     const SizedBox(height: 6),
                     for (final w in weights)
                       _WeightTile(
-                        row: w,
+                        name: w.name,
+                        summary: w.summary,
+                        fromDefaults: w.fromDefaults,
                         onTap: onEditWeights == null
                             ? null
                             : () => onEditWeights!(w.id),
+                      ),
+                  ],
+                  if (plateRows.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    Text('BAR & PLATES', style: LitType.display(30)),
+                    const SizedBox(height: 4),
+                    Text(
+                      'The bar and the pairs of plates it really has. '
+                      'Barbell loads only use what these can make.',
+                      style: LitType.body(14, Lit.inkSecondary),
+                    ),
+                    const SizedBox(height: 6),
+                    for (final p in plateRows)
+                      _WeightTile(
+                        name: p.name,
+                        summary: p.summary,
+                        fromDefaults: p.fromDefaults,
+                        onTap: onEditPlates == null
+                            ? null
+                            : () => onEditPlates!(p.id),
                       ),
                   ],
                   if (onStartingWeights != null) ...[
@@ -434,15 +464,22 @@ class _KitPill extends StatelessWidget {
 }
 
 class _WeightTile extends StatelessWidget {
-  const _WeightTile({required this.row, this.onTap});
-  final WeightRow row;
+  const _WeightTile({
+    required this.name,
+    required this.summary,
+    required this.fromDefaults,
+    this.onTap,
+  });
+  final String name;
+  final String summary;
+  final bool fromDefaults;
   final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) => Semantics(
     button: onTap != null,
     label:
-        '${row.name}, ${row.summary}'
-        '${row.fromDefaults ? ', app guesses' : ''}',
+        '$name, $summary'
+        '${fromDefaults ? ', app guesses' : ''}',
     onTapHint: 'edit weights',
     excludeSemantics: true,
     onTap: onTap,
@@ -460,17 +497,14 @@ class _WeightTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(name, style: LitType.body(16, Lit.ink, FontWeight.w700)),
                   Text(
-                    row.name,
-                    style: LitType.body(16, Lit.ink, FontWeight.w700),
-                  ),
-                  Text(
-                    row.fromDefaults
-                        ? '${row.summary} · app guesses, set yours'
-                        : row.summary,
+                    fromDefaults
+                        ? '$summary · app guesses, set yours'
+                        : summary,
                     style: LitType.body(
                       14,
-                      row.fromDefaults ? Lit.inkQuiet : Lit.inkSecondary,
+                      fromDefaults ? Lit.inkQuiet : Lit.inkSecondary,
                     ),
                   ),
                 ],

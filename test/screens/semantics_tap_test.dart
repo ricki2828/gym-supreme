@@ -88,6 +88,38 @@ void main() {
       onStartingWeights: noop,
       onSave: noop,
     ),
+    // 0.3 P1: bar and plates rows, the pairs editor, the plate line.
+    'gym setup (bar and plates)': GymSetupScreen(
+      gyms: const [condo],
+      currentGymId: 'condo',
+      kit: {...condo.kit, 'barbell', 'plates'},
+      equipment: equipmentFixture,
+      presets: const [],
+      plateRows: const [
+        PlateRow(id: 'barbell', name: 'Barbell bar', summary: '20 kg'),
+        PlateRow(id: 'plates', name: 'Plates', summary: '2 × 20 kg a side'),
+      ],
+      onPickGym: noop1,
+      onAddGym: noop,
+      onToggle: noop1,
+      onEditPlates: noop1,
+      onSave: noop,
+    ),
+    'plate pairs': const PlatePairsScreen(pairsG: [5000, 20000, 20000]),
+    'live (plate line)': LiveScreen(
+      view: liveView(
+        unit: LoadUnit.kg,
+        name: 'Barbell bench press',
+        loadG: 62500,
+        targetLoadG: 62500,
+        plateLine: 'Per side 20 + 1.25',
+      ),
+      onReps: noop1,
+      onLoad: noop1,
+      onDone: noop,
+      onRestDelta: noop1,
+      onFinish: noop,
+    ),
     'starting weights': StartingWeightsScreen(
       rows: const [
         StartingWeightRow(
