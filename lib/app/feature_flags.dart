@@ -14,6 +14,12 @@ abstract final class Features {
   static bool get ghost => _on('ghost');
   static bool get rotation => _on('rotation');
   static bool get plateMath => _on('plates');
+
+  /// 0.3 native cuts. Kotlin reads the same GS_FEATURES (from Gradle's
+  /// dart-defines, `android/app/build.gradle.kts`) into `BuildConfig`; these
+  /// Dart getters exist so both sides log and test the same names.
+  static bool get lockDone => _on('lockdone');
+  static bool get health => _on('health');
 }
 
 /// One startup log line (`GymSupreme/features ghost=1 ...`); the CI emulator
@@ -21,4 +27,5 @@ abstract final class Features {
 String featuresLogLine() =>
     'GymSupreme/features timers=${Features.timers ? 1 : 0} '
     'ghost=${Features.ghost ? 1 : 0} rotation=${Features.rotation ? 1 : 0} '
-    'plates=${Features.plateMath ? 1 : 0}';
+    'plates=${Features.plateMath ? 1 : 0} '
+    'lockdone=${Features.lockDone ? 1 : 0} health=${Features.health ? 1 : 0}';

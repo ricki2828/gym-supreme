@@ -1,8 +1,23 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Native feature flags (0.3 plan, cut N0). The value is GS_FEATURES as Dart sees it: Flutter
+// hands Gradle its --dart-define list as -Pdart-defines=<base64("KEY=VALUE")>,... so the
+// native and Dart flags of one APK cannot disagree. Plain ./gradlew runs (lint, unit tests)
+// have no dart-defines: "" = all off. The last GS_FEATURES define wins, as in Dart.
+val gsFeatures: String =
+    (project.findProperty("dart-defines") as String?)
+        ?.split(',')
+        ?.filter { it.isNotBlank() }
+        ?.map { String(Base64.getDecoder().decode(it), Charsets.UTF_8) }
+        ?.lastOrNull { it.startsWith("GS_FEATURES=") }
+        ?.removePrefix("GS_FEATURES=")
+        ?: ""
 
 android {
     // Permanent ids (plan 6.5): namespace and applicationId app.gymsupreme.
@@ -23,6 +38,12 @@ android {
         // installs over the last. Split APKs add 1000 * ABI code.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Read by workout/Features.kt; quotes and backslashes escaped for the Java literal.
+        buildConfigField("String", "GS_FEATURES", "\"${gsFeatures.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     lint {
