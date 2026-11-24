@@ -1372,8 +1372,8 @@ class _WorkoutDetailFlowState extends State<WorkoutDetailFlow> {
         eng.WorkoutEdit.setValues(setId, loadG: loadG, reps: reps),
       ]);
       _saved();
-    } on ArgumentError catch (e) {
-      _say('Could not save: ${e.message}');
+    } on Object catch (e) {
+      _say('Could not save: ${_failure(e)}.');
     }
   }
 
@@ -1381,10 +1381,13 @@ class _WorkoutDetailFlowState extends State<WorkoutDetailFlow> {
     try {
       _deps.engine.editWorkout(widget.uuid, [eng.WorkoutEdit.removeSet(setId)]);
       _saved();
-    } on ArgumentError catch (e) {
-      _say('Could not remove: ${e.message}');
+    } on Object catch (e) {
+      _say('Could not remove: ${_failure(e)}.');
     }
   }
+
+  static String _failure(Object e) =>
+      e is ArgumentError ? '${e.message}' : _reason(e);
 
   void _delete() {
     final messenger = ScaffoldMessenger.of(context);

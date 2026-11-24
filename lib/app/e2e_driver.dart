@@ -272,6 +272,9 @@ class E2eDriver {
     _log('export', {
       'format': m['export_format'],
       'workouts': (m['workouts'] as List).length,
+      'workout_uuids': [
+        for (final w in m['workouts'] as List) (w as Map)['uuid'],
+      ],
       'deleted': m['deleted_workout_uuids'],
     });
   }

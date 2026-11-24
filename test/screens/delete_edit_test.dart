@@ -9,6 +9,7 @@ import 'package:gym_supreme/app/feature_flags.dart';
 import 'package:gym_supreme/screens/flows/flows.dart';
 import 'package:gym_supreme/screens/history_screen.dart';
 import 'package:gym_supreme/screens/live_controller.dart';
+import 'package:gym_supreme/screens/view_models.dart';
 import 'package:gym_supreme/screens/workout_detail_screen.dart';
 
 import 'fixtures.dart';
@@ -344,6 +345,59 @@ void main() {
       await tapKey(tester, 'remove.confirm');
       expect(engine.history(), isEmpty);
       expect(find.text('UNDO'), findsOneWidget);
+    });
+
+    // 1 done + 2 skipped: the last LOGGED set offers Delete; a skipped set
+    // does not (a logged one is left).
+    testWidgets('remove counts logged sets only: skipped ones do not', (
+      tester,
+    ) async {
+      phone(tester);
+      final removed = <String>[];
+      var deleted = 0;
+      final view = WorkoutDetailView(
+        uuid: 'u',
+        type: null,
+        startedAt: DateTime(2026, 11, 24),
+        gymName: 'Condo',
+        durationS: 600,
+        volumeKg: 100,
+        lifts: const [
+          DetailLift(
+            name: 'Cable fly',
+            unit: LoadUnit.kg,
+            sets: [
+              DetailSet(setId: 'a', loadG: 15000, reps: 12),
+              DetailSet(setId: 'b', loadG: null, reps: null, skipped: true),
+              DetailSet(setId: 'c', loadG: null, reps: null, skipped: true),
+            ],
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WorkoutDetailScreen(
+            view: view,
+            onDelete: () => deleted++,
+            onEditSet: (_, _, _) {},
+            onRemoveSet: removed.add,
+          ),
+        ),
+      );
+      // A skipped set: a plain remove (a logged set is left).
+      await tapKey(tester, 'set.b');
+      await tapKey(tester, 'edit.remove');
+      expect(find.text('Remove set 2?'), findsOneWidget);
+      await tapKey(tester, 'remove.confirm');
+      expect(removed, ['b']);
+      expect(deleted, 0);
+      // The one logged set: Delete is offered.
+      await tapKey(tester, 'set.a');
+      await tapKey(tester, 'edit.remove');
+      expect(find.text('Delete this workout?'), findsOneWidget);
+      await tapKey(tester, 'remove.confirm');
+      expect(removed, ['b']);
+      expect(deleted, 1);
     });
 
     testWidgets('sheet and dialogs fit at 320x580 with 1.3x text', (

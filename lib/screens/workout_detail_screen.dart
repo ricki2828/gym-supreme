@@ -216,16 +216,18 @@ class WorkoutDetailScreen extends StatelessWidget {
     int index,
   ) async {
     final s = lift.sets[index];
-    // The last set: offer Delete (a workout with no sets is not worth keeping).
-    final only = view.storedSetCount == 1 && onDelete != null;
+    // Removing the last LOGGED set (skipped sets do not count) would leave a
+    // workout with nothing logged: offer Delete instead.
+    final loggedLeft = view.setCount - (s.skipped ? 0 : 1);
+    final only = loggedLeft == 0 && onDelete != null;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(only ? 'Delete this workout?' : 'Remove set ${index + 1}?'),
         content: Text(
           only
-              ? 'It is the only set, so removing it would leave an empty '
-                    'workout. You can undo for 10 seconds.'
+              ? 'It is the last logged set, so removing it would leave a '
+                    'workout with nothing logged. You can undo for 10 seconds.'
               : '${lift.name}, ${_setText(s, lift.unit)}. The later sets of '
                     'this lift renumber.',
         ),

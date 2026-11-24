@@ -278,8 +278,11 @@ e2e_wait ok 30
 ex="$(e2e_lines | grep '"step":"export"')"
 has_uuid "$deleted_uuid" "$ex" \
   || { echo "::error::API $sdk: tombstone lost after relaunch: $ex" >&2; exit 1; }
-[ "$(num_of workouts <<< "$ex")" = "$(count_of <<< "$h")" ] \
-  || { echo "::error::API $sdk: export workouts differ from history count: $ex vs $h" >&2; exit 1; }
+# uuids present (history is capped at 20 rows, the export is not): kept is exported, deleted is not
+# among the exported workouts (it is only a tombstone).
+wl="$(sed -n 's/.*"workout_uuids":\(\[[^]]*\]\).*/\1/p' <<< "$ex" | head -1)"
+has_uuid "$kept_uuid" "$wl" && ! has_uuid "$deleted_uuid" "$wl" \
+  || { echo "::error::API $sdk: export workouts wrong (kept missing or deleted present): $ex" >&2; exit 1; }
 fatal_check "$PKG" "after delete relaunch"
 # Rest alert with notifications DENIED (t3x, 0.1.1): plan 6.2 says the service itself buzzes
 # and plays the tone, so a refused permission must not silence the rest. API 33+ only (below
