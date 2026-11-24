@@ -10,6 +10,7 @@ import 'dart:math';
 
 import 'api.dart';
 import 'catalog.dart';
+import 'cut2/plates.dart';
 import 'cut2/rotation.dart';
 import 'cut2/rotation_store.dart';
 import 'import.dart';
@@ -663,20 +664,15 @@ class GymEngine implements GymApi {
       return LoadSteps(unit, const []);
     }
     final g = store.gym(gymId);
-    final kit = g?.equipmentIds ?? const <String>{};
-    final have = {...kit, bodyweight};
-    final set = e.equipmentSets.firstWhere(
-      have.containsAll,
-      orElse: () => e.equipmentSets.first,
-    );
+    final set = _equipmentSetAt(e, g);
     final loads = <int>{};
     for (final id in set) {
       final eq = catalog.equipmentById(id);
       if (eq == null) continue;
       final item = g?.kit[id];
       if (eq.load == 'barbell') {
-        final plates = g?.kit['plates']?.weightsG ?? const <int>[];
-        loads.addAll(_barbellLoads(plates));
+        final bar = _barSetupOf(g, id);
+        loads.addAll(_barbellLoads(bar));
       } else if (eq.load == e.load) {
         final w = item?.weightsG ?? const <int>[];
         loads.addAll(w.isNotEmpty ? w : (defaultWeightsG[eq.load] ?? const []));
@@ -686,20 +682,57 @@ class GymEngine implements GymApi {
     return LoadSteps(unit, loads.toList()..sort());
   }
 
-  /// 20 kg bar plus pairs of plates, up to two pairs of each size. Without a
-  /// plate list: 20-140 kg in 2.5 kg steps.
-  List<int> _barbellLoads(List<int> plates) {
-    const bar = 20000;
-    if (plates.isEmpty) {
-      return [for (var g = bar; g <= 140000; g += 2500) g];
+  /// The equipment set this gym can load the exercise with (the first it has
+  /// all of, else the first listed).
+  Set<String> _equipmentSetAt(Exercise e, Gym? g) {
+    final have = {...?g?.equipmentIds, bodyweight};
+    return e.equipmentSets.firstWhere(
+      have.containsAll,
+      orElse: () => e.equipmentSets.first,
+    );
+  }
+
+  /// The bar item [barId] (`barbell`, `ez-bar`, `trap-bar`) with this gym's
+  /// plates. Bar weight: the item's first weight, else the standard 20 kg
+  /// bar. Plate pairs: the multiplicity of each size in the `plates` item;
+  /// null (unlimited standard plates) when none are listed.
+  BarSetup _barSetupOf(Gym? g, String barId) {
+    final w = g?.kit[barId]?.weightsG ?? const <int>[];
+    final plates = g?.kit['plates']?.weightsG ?? const <int>[];
+    Map<int, int>? pairs;
+    if (plates.isNotEmpty) {
+      pairs = {};
+      for (final p in plates) {
+        if (p > 0) pairs[p] = (pairs[p] ?? 0) + 1;
+      }
     }
-    var sums = <int>{0};
-    for (final p in plates) {
-      sums = {
-        for (final s in sums) ...[s, s + 2 * p, s + 4 * p],
-      };
+    return BarSetup(
+      barG: w.isNotEmpty && w.first > 0 ? w.first : standardBarG,
+      pairs: pairs,
+    );
+  }
+
+  /// Every total the bar makes from its plates, ascending. Without a plate
+  /// list: the bar up to 140 kg in 2.5 kg steps (a pair of 1.25s).
+  List<int> _barbellLoads(BarSetup bar) {
+    final pairs = bar.pairs;
+    if (pairs == null) {
+      return [for (var g = bar.barG; g <= 140000; g += 2500) g];
     }
-    return [for (final s in sums) bar + s];
+    return barSteps(barG: bar.barG, pairs: pairs);
+  }
+
+  @override
+  BarSetup? barSetup({required String gymId, required String exerciseId}) {
+    final e = catalog.exercise(exerciseId);
+    if (e == null || e.load != 'barbell') return null;
+    final g = store.gym(gymId);
+    for (final id in _equipmentSetAt(e, g)) {
+      if (catalog.equipmentById(id)?.load == 'barbell') {
+        return _barSetupOf(g, id);
+      }
+    }
+    return null;
   }
 
   @override

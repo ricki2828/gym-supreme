@@ -87,6 +87,7 @@ LiveView? liveViewOf(
   eng.LoadSteps? steps,
   eng.LastTime? Function(String exerciseId)? lastTime,
   int? Function(String exerciseId)? startingWeight,
+  String? Function(String exerciseId, int loadG)? plateLine,
 }) {
   final type = workoutTypeOf(s.typeId);
   final pausedNow = s.state == eng.SessionState.paused && s.pausedAtMs != null
@@ -196,6 +197,7 @@ LiveView? liveViewOf(
     timerBlock: set.block != null,
     setId: set.setId,
     blockTitle: c2.TimerSession.blockOf(s, set.setId)?.title,
+    plateLine: load == null ? null : plateLine?.call(ex.exerciseId, load),
   );
 }
 

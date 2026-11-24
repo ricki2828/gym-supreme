@@ -247,3 +247,194 @@ class _WeightListScreenState extends State<WeightListScreen> {
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
   );
 }
+
+/// One bar or the plates at a gym, for the setup list (0.3 P1). Not a
+/// [WeightRow]: a bar is one weight and plates are counted in pairs.
+class PlateRow {
+  const PlateRow({
+    required this.id,
+    required this.name,
+    required this.summary,
+    this.fromDefaults = false,
+  });
+  final String id;
+  final String name;
+
+  /// "20 kg bar", "2 × 20 · 1 × 10 kg a side".
+  final String summary;
+
+  /// He has not said: the app uses a standard bar and unlimited plates.
+  final bool fromDefaults;
+}
+
+/// Plate sizes the pairs editor offers, in grams, ascending. A size he
+/// already stored that is not here is shown too.
+const List<int> plateChoicesG = [1250, 2500, 5000, 10000, 15000, 20000, 25000];
+
+/// Most pairs of one size the editor counts.
+const int maxPlatePairs = 10;
+
+/// How many pairs of each size the gym has (0.3 P1). Returns the list the
+/// engine stores for kit id `plates`: one entry per pair, ascending, so a
+/// size twice is two pairs. An empty list means "not said": standard plates.
+class PlatePairsScreen extends StatefulWidget {
+  const PlatePairsScreen({super.key, required this.pairsG});
+
+  /// The stored list (one entry per pair).
+  final List<int> pairsG;
+
+  @override
+  State<PlatePairsScreen> createState() => _PlatePairsScreenState();
+}
+
+class _PlatePairsScreenState extends State<PlatePairsScreen> {
+  final Map<int, int> _n = {};
+
+  @override
+  void initState() {
+    super.initState();
+    for (final g in widget.pairsG) {
+      _n[g] = (_n[g] ?? 0) + 1;
+    }
+  }
+
+  List<int> get _sizes => {...plateChoicesG, ..._n.keys}.toList()..sort();
+
+  List<int> get _list => [
+    for (final s in _sizes)
+      for (var i = 0; i < (_n[s] ?? 0); i++) s,
+  ];
+
+  void _step(int size, int d) => setState(() {
+    final v = ((_n[size] ?? 0) + d).clamp(0, maxPlatePairs);
+    if (v == 0) {
+      _n.remove(size);
+    } else {
+      _n[size] = v;
+    }
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final total = _list.length;
+    return Scaffold(
+      backgroundColor: Lit.ground,
+      appBar: AppBar(
+        backgroundColor: Lit.ground,
+        foregroundColor: Lit.ink,
+        title: Text('PLATES', style: LitType.display(30)),
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                children: [
+                  Text(
+                    'How many pairs of each plate the rack has. Barbell loads '
+                    'only use what you set.',
+                    style: LitType.body(15, Lit.inkSecondary),
+                  ),
+                  const SizedBox(height: 10),
+                  for (final s in _sizes)
+                    _PairRow(
+                      size: s,
+                      pairs: _n[s] ?? 0,
+                      onMinus: () => _step(s, -1),
+                      onPlus: () => _step(s, 1),
+                    ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: BigButton(
+                label: total == 0 ? 'SAVE · STANDARD' : 'SAVE · $total PAIRS',
+                colour: Lit.ink,
+                ink: Colors.white,
+                height: 60,
+                fontSize: 32,
+                onTap: () => Navigator.of(context).pop(_list),
+                semanticLabel: total == 0
+                    ? 'Save, no plates listed so standard plates'
+                    : 'Save $total pairs of plates',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PairRow extends StatelessWidget {
+  const _PairRow({
+    required this.size,
+    required this.pairs,
+    required this.onMinus,
+    required this.onPlus,
+  });
+  final int size;
+  final int pairs;
+  final VoidCallback onMinus;
+  final VoidCallback onPlus;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = '${kg(size)} kg';
+    return Container(
+      constraints: const BoxConstraints(minHeight: 56),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Lit.hair)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              name,
+              style: LitType.body(18, Lit.ink, FontWeight.w700),
+            ),
+          ),
+          IconButton(
+            key: Key('plates.minus.$size'),
+            tooltip: 'Fewer $name pairs',
+            onPressed: pairs == 0 ? null : onMinus,
+            icon: const Icon(Icons.remove),
+            iconSize: 28,
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          ),
+          SizedBox(
+            width: 36,
+            child: Text(
+              '$pairs',
+              key: Key('plates.count.$size'),
+              textAlign: TextAlign.center,
+              style: LitType.display(30),
+            ),
+          ),
+          IconButton(
+            key: Key('plates.plus.$size'),
+            tooltip: 'More $name pairs',
+            onPressed: pairs >= maxPlatePairs ? null : onPlus,
+            icon: const Icon(Icons.add),
+            iconSize: 28,
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "2 × 20 · 1 × 10 kg a side" from the stored pair list, largest first.
+String platePairsSummary(List<int> pairsG) {
+  if (pairsG.isEmpty) return 'standard plates';
+  final n = <int, int>{};
+  for (final g in pairsG) {
+    n[g] = (n[g] ?? 0) + 1;
+  }
+  final sizes = n.keys.toList()..sort((a, b) => b.compareTo(a));
+  final parts = [for (final s in sizes) '${n[s]} × ${kg(s)}'];
+  return '${parts.join(' · ')} kg a side';
+}

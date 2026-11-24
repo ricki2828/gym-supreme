@@ -18,7 +18,9 @@ LiveView liveView({
   int doneSets = 0,
   int leftSets = 0,
   int? startingWeightG,
+  String? plateLine,
 }) => LiveView(
+  plateLine: plateLine,
   startingWeightG: startingWeightG,
   undoLabel: undoLabel,
   canSwap: canSwap,
