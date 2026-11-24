@@ -176,7 +176,7 @@ else
 fi
 adb shell input keyevent KEYCODE_SLEEP
 lock_lines() { svc_lines | grep -o '{"event":"lock_action"[^}]*}' || true; }
-for i in $(seq 1 30); do [ "$(lock_lines | wc -l)" -ge 3 ] && break; sleep 1; done
+for i in $(seq 1 45); do [ "$(lock_lines | wc -l)" -ge 3 ] && break; sleep 1; done
 lock_lines | sed 's/^/L1 action: /'
 [ "$(lock_lines | wc -l)" -eq 3 ] || { echo "::error::L1: expected 3 lock_action lines (first, double, stale)" >&2; svc_lines | tail -n 15 >&2; exit 1; }
 if [ "$lockdone" = 1 ]; then

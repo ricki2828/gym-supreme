@@ -96,10 +96,26 @@ object SessionSelfTest {
         }
         line.put("from_notification", done != null).put("ok", true)
         val main = Handler(Looper.getMainLooper())
+        val live = LiveSession.get(context)
+        val startRev = live.headRev()
         main.postDelayed({
             send(context, pi, "first")
             send(context, pi, "double")
-            main.postDelayed({ send(context, pi, "stale") }, 1_500)
+            // Broadcast delivery to a backgrounded app can lag by seconds (seen on API 33 CI):
+            // send the stale tap only once the first one has been applied, plus well over the
+            // debounce, so it can only be refused for its rev.
+            var waited = 0L
+            lateinit var stale: Runnable
+            stale = Runnable {
+                val moved = live.headRev() != startRev
+                if (moved || waited >= STALE_WAIT_CAP_MS) {
+                    main.postDelayed({ send(context, pi, "stale") }, WorkoutActionReceiver.DEBOUNCE_MS + 900)
+                } else {
+                    waited += 250
+                    main.postDelayed(stale, 250)
+                }
+            }
+            main.postDelayed(stale, 250)
         }, FIRE_DELAY_MS)
         (context as? Activity)?.finishAndRemoveTask()
     }
@@ -116,6 +132,7 @@ object SessionSelfTest {
     }
 
     private const val FIRE_DELAY_MS = 5_000L
+    private const val STALE_WAIT_CAP_MS = 20_000L
 
     private fun set(id: String, ordinal: Int, done: Boolean, now: Long): Map<String, Any?> = linkedMapOf(
         "set_id" to id,

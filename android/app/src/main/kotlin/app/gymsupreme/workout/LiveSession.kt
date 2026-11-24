@@ -95,6 +95,9 @@ class LiveSession private constructor(private val context: Context) {
         return r.head.rev
     }
 
+    /** The journal head's rev, or null (self-test). */
+    fun headRev(): Long? = current()?.rev
+
     data class LockOutcome(val outcome: String, val newRev: Long? = null) {
         val applied get() = outcome == "applied"
     }
