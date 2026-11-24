@@ -22,6 +22,12 @@ flag_on() { # same rule as lib/app/feature_flags.dart and core/flags/FeatureSet.
   return 1
 }
 timers=0; flag_on timers && timers=1
+# Pull requests always build with timers (tools/ci_features.sh): never smoke flag-off by accident.
+if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ "$timers" != 1 ]; then
+  echo "::error::pull request build without timers (GS_FEATURES='${GS_FEATURES:-}')" >&2; exit 1
+fi
+nfeat="$(timeout 30 adb logcat -d -s GymSupreme/features:I | grep -o 'native .*' | tail -1 || true)"
+echo "T1 features: GS_FEATURES='${GS_FEATURES:-}' timers=$timers, last native line: ${nfeat:-none in buffer}"
 svc_lines() { timeout 30 adb logcat -d -s GymSupreme/service:I || true; }
 wait_for() { # wait_for <grep -E pattern> <seconds>: prints the newest matching line
   local i out
@@ -40,6 +46,7 @@ restore() {
 }
 trap restore EXIT
 
+if [ "$sdk" -ge 33 ]; then adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS || true; fi
 adb logcat -c || true
 adb shell am start -W -n "$PKG/app.gymsupreme.MainActivity" --es gym_selftest_session "emom:$ROUNDS:$PERIOD:$LEAD" > /dev/null
 st="$(wait_for '"event":"selftest_session".*"step":"emom:' 40)" || { echo "::error::T1: emom step did not run" >&2; svc_lines | tail -n 20 >&2; exit 1; }
@@ -85,6 +92,10 @@ else
   cue_lines | python3 "$(dirname "$0")/emom_check.py" "$ROUNDS" "API $sdk"
 fi
 
+# Clean up as the session smoke does: kill, relaunch, finish + delete the selftest journal.
+adb shell am force-stop "$PKG"
+sleep 2
+launch "$PKG" || { echo "::error::T1: relaunch for clean-up failed" >&2; exit 1; }
 adb shell am start -W -n "$PKG/app.gymsupreme.MainActivity" --es gym_selftest_session finish > /dev/null
 fin="$(wait_for '"event":"selftest_session".*"step":"finish".*"finished":true,"deleted":true' 30)" || {
   echo "::error::T1: finish + delete after the emom run failed" >&2; svc_lines | grep -E 'selftest_session|journal' | tail -n 10 >&2; exit 1; }
