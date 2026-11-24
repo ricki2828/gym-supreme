@@ -43,7 +43,12 @@ class LiveView {
     this.canSwap = false,
     this.doneSets = 0,
     this.leftSets = 0,
+    this.plateLine,
   });
+
+  /// Per-side plates for the current barbell load ("Per side 20 + 1.25"), or
+  /// null: not a barbell lift, or plate math is off (0.3 P1).
+  final String? plateLine;
 
   final WorkoutType? type;
   final String exerciseName;
@@ -444,6 +449,14 @@ class LiveScreen extends StatelessWidget {
                                 }
                               },
                       ),
+                      if (view.plateLine != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          view.plateLine!,
+                          key: const Key('live.plates'),
+                          style: LitType.body(18, ink, FontWeight.w800),
+                        ),
+                      ],
                     ],
                     const SizedBox(height: 10),
                     Text(
@@ -1060,6 +1073,14 @@ class _RestScreen extends StatelessWidget {
               style: LitType.display(40, ink),
             ),
             Text(next.toUpperCase(), style: LitType.display(40, ink)),
+            if (view.plateLine != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                view.plateLine!,
+                key: const Key('rest.plates'),
+                style: LitType.body(18, ink, FontWeight.w800),
+              ),
+            ],
             const SizedBox(height: 20),
             Row(
               children: [

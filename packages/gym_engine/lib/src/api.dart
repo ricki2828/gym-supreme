@@ -148,6 +148,20 @@ class LoadSteps {
   }
 }
 
+/// How a barbell lift is loaded at a gym (0.3 P1): the bar and the plate
+/// pairs it really has. Every load in [LoadSteps] for the lift is makeable
+/// from this.
+class BarSetup {
+  const BarSetup({required this.barG, this.pairs});
+
+  /// The bar's own weight, grams.
+  final int barG;
+
+  /// Plate size (grams) to pairs on hand; null = unlimited standard plates
+  /// (the gym has not said what it has).
+  final Map<int, int>? pairs;
+}
+
 /// What he did last time with this exercise at this gym.
 class LastTime {
   const LastTime({
@@ -388,6 +402,10 @@ abstract interface class GymApi {
   // Live logging helpers (item 4).
   LoadSteps loadSteps({required String gymId, required String exerciseId});
   LastTime? lastTime({required String gymId, required String exerciseId});
+
+  /// The bar and plates behind a barbell lift's loads; null for any other
+  /// lift (0.3 P1).
+  BarSetup? barSetup({required String gymId, required String exerciseId});
 
   // Starting weights (0.3 S1): typed once per lift, used only while the lift
   // has no logged history. Never history: no workout, PB or streak.

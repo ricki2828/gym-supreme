@@ -25,8 +25,11 @@ class KitItem {
   final bool confirmed;
 
   /// The loads this gym actually has, ascending, in grams: dumbbell pairs
-  /// (per hand), stack pins, or plate sizes. Empty means "not known yet"
-  /// (the engine then falls back to [defaultWeightsG]).
+  /// (per hand), stack pins, or (kit id `plates`) one entry per PAIR of
+  /// plates, so a size repeated is that many pairs. On a bar item (`barbell`,
+  /// `ez-bar`, `trap-bar`) the first entry is the bar's own weight. Empty
+  /// means "not known yet" (the engine then falls back to [defaultWeightsG]
+  /// or the standard 20 kg bar).
   final List<int> weightsG;
 
   KitItem copyWith({KitSource? source, bool? confirmed, List<int>? weightsG}) =>
@@ -105,7 +108,10 @@ class Gym {
 
   Gym withWeights(String equipmentId, List<int> weightsG) {
     final item = kit[equipmentId] ?? KitItem(equipmentId: equipmentId);
-    final sorted = {...weightsG}.toList()..sort();
+    // Plates keep repeats: a size twice is two pairs.
+    final sorted =
+        (equipmentId == 'plates' ? weightsG : {...weightsG}.toList()).toList()
+          ..sort();
     return copyWith(
       kit: {
         ...kit,
