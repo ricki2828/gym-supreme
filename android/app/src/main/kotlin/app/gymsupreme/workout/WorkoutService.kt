@@ -19,6 +19,8 @@ import app.gymsupreme.core.ble.HrSummary
 import app.gymsupreme.core.journal.SnapshotView
 import app.gymsupreme.core.rest.RestSpec
 import app.gymsupreme.core.rest.RestTracker
+import app.gymsupreme.core.timer.BlockScheduler
+import app.gymsupreme.core.timer.FiredKeys
 import app.gymsupreme.core.timer.Cue
 import app.gymsupreme.core.timer.CueClock
 import app.gymsupreme.core.timer.CueKind
@@ -60,6 +62,7 @@ class WorkoutService : Service() {
     private var maxLateMs = 0L
     private var audibleFired = 0
     private var audibleTotal = 0
+    @Volatile
     private var stopping = false
 
     // Session mode (cut 1): the rest alert from Dart's snapshots, one bounded wake lock per rest.
@@ -69,6 +72,21 @@ class WorkoutService : Service() {
     @Volatile
     private var restRunnable: Runnable? = null
     private var restArmedAt: Long? = null
+
+    // Timer blocks (0.3 cut T1): the snapshot's compiled cues, run on the cue thread only.
+    private var fired: FiredFileStore? = null
+    @Volatile
+    private var blocks: BlockScheduler? = null
+    private val blockLockGuard = Any()
+    private var blockLock: PowerManager.WakeLock? = null
+    private var blockLockUntil = 0L
+    private val blockTotals = HashMap<String, Int>()
+    private val blockTick = Runnable { onBlockTick() }
+    private var ignoredBlock: String? = null
+
+    /** The next timer cue (label, elapsedRealtime) for the notification; written on the cue thread. */
+    @Volatile
+    private var nextCue: Pair<String, Long>? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -355,7 +373,16 @@ class WorkoutService : Service() {
         val h = Handler(th.looper)
         cues = h
         alerter = Alerter(this, h)
-        tracker = RestTracker()
+        // Flag `timers` off: no fired.txt at all, rests dedupe in memory as before T1.
+        val store = if (Features.timers) FiredFileStore.get(this) else null
+        view?.workoutUuid?.let { store?.bind(it) }
+        fired = store
+        // A rest that buzzed before a process death does not buzz again on resume (T1, durable).
+        tracker = if (store != null) RestTracker(firedBefore = { store.contains(FiredKeys.rest(it)) }) else RestTracker()
+        blocks = store?.let { BlockScheduler(it) }
+        blockTotals.clear()
+        nextCue = null
+        ignoredBlock = null
         if (view != null) applyView(view) else refreshNotification()
     }
 
@@ -363,7 +390,9 @@ class WorkoutService : Service() {
     fun applyView(view: SnapshotView) {
         if (status.mode != MODE_SESSION || stopping) return
         sessionView = view
+        view.workoutUuid?.let { fired?.bind(it) }
         update { it.copy(title = view.current?.exerciseName ?: "All sets logged", fired = view.setsDone, total = view.setsTotal) }
+        applyBlocks(view)
         val t = tracker ?: return
         val action = if (view.paused) t.clear() else t.onSnapshot(view.rest, System.currentTimeMillis(), SystemClock.elapsedRealtime())
         when (action) {
@@ -423,6 +452,12 @@ class WorkoutService : Service() {
             return
         }
         val late = now - scheduled
+        // T1: committed before the buzz, so a resume after process death never buzzes it again.
+        try {
+            fired?.add(FiredKeys.rest(spec.id))
+        } catch (e: Exception) {
+            SpikeLog.write(this, SpikeLog.line("fired_store_error").put("message", "${e.javaClass.simpleName}: ${e.message}"))
+        }
         val r = alerter?.fire(long = true)
         val next = sessionView?.current
         val posted = notification.cue(if (next != null) "Rest over: ${next.exerciseName}, set ${next.setNumber}" else "Rest over")
@@ -452,7 +487,7 @@ class WorkoutService : Service() {
             ),
         )
         main.post {
-            tracker?.onFired(spec.key)
+            tracker?.onFired(spec.id)
             // Only clear what this fire owned: a +15 s change may have armed a new rest meanwhile.
             // A resume-grace fire (run == null) owns nothing armed: leave a rest armed since alone.
             if ((run == null && restRunnable == null) || (run != null && restRunnable === run)) {
@@ -464,6 +499,147 @@ class WorkoutService : Service() {
             update { it.copy(lastCue = "rest ${spec.key}", lastLateMs = late) }
             refreshNotification()
         }
+    }
+
+    // ---- timer blocks (0.3 cut T1) ----
+
+    /**
+     * Main thread: hand the snapshot's started blocks to the scheduler on the cue thread. Flag off:
+     * a started block is logged once and nothing arms. A pause never gets here with a block
+     * running (it stops the service), but the scheduler cancels on it anyway.
+     */
+    private fun applyBlocks(view: SnapshotView) {
+        if (view.badBlocks > 0) SpikeLog.write(this, SpikeLog.line("timer_block_bad").put("count", view.badBlocks).put("rev", view.rev))
+        if (!Features.timers) {
+            val b = view.blocks.firstOrNull()
+            val id = b?.let { "${it.setId}|${it.run}|${it.startedAtWallMs}" }
+            if (b != null && id != ignoredBlock) {
+                ignoredBlock = id
+                SpikeLog.write(this, SpikeLog.line("timer_ignored").put("reason", "flag_off").put("set_id", b.setId).put("run", b.run).put("cues", b.cues.size))
+            }
+            return
+        }
+        val h = cues ?: return
+        h.post { applyBlocksOnCueThread(view) }
+    }
+
+    private fun applyBlocksOnCueThread(view: SnapshotView) {
+        val s = blocks ?: return
+        val changes = s.onSnapshot(view.blocks, view.paused, System.currentTimeMillis(), SystemClock.elapsedRealtime())
+        for (c in changes) {
+            when (c) {
+                is BlockScheduler.Change.Kept -> SpikeLog.write(this, SpikeLog.line("timer_kept").put("set_id", c.setId).put("run", c.run).put("rev", view.rev))
+                is BlockScheduler.Change.Cancelled -> SpikeLog.write(this, SpikeLog.line("timer_cancelled").put("set_id", c.setId).put("run", c.run).put("why", c.why).put("rev", view.rev))
+                is BlockScheduler.Change.Armed -> {
+                    val total = (c.spec.cues.maxOfOrNull { it.index } ?: -1) + 1
+                    val key = "${c.spec.setId}|${c.spec.run}"
+                    val of = maxOf(blockTotals[key] ?: 0, total)
+                    blockTotals[key] = of
+                    CueLog.armed(this, c.spec.setId, c.spec.run, of)
+                    val now = SystemClock.elapsedRealtime()
+                    SpikeLog.write(
+                        this,
+                        SpikeLog.line("timer_armed").put("set_id", c.spec.setId).put("run", c.spec.run).put("rev", view.rev)
+                            .put("started_at_wall_ms", c.spec.startedAtWallMs).put("t0_elapsed_ms", c.t0)
+                            .put("cues", c.spec.cues.size).put("of", of).put("already_fired", c.alreadyFired).put("overdue", c.overdue)
+                            .put("first_in_ms", c.spec.cues.minOfOrNull { it.atMs }?.let { c.t0 + it - now }),
+                    )
+                }
+            }
+        }
+        onBlockTick()
+    }
+
+    /** Cue thread: fire what is due, then sleep until the next cue under a wake lock bounded to the block. */
+    private fun onBlockTick() {
+        val s = blocks ?: return
+        cues?.removeCallbacks(blockTick)
+        for (d in s.due(SystemClock.elapsedRealtime())) fireBlockCue(d)
+        val next = s.nextAt()
+        val now = SystemClock.elapsedRealtime()
+        if (next == null) {
+            nextCue = null
+            releaseBlockLock("no_cues")
+        } else {
+            holdBlockLock(now, s.lastAt() ?: next)
+            nextCue = s.peek()?.let { it.first.label to it.second }
+            cues?.postDelayed(blockTick, (next - now).coerceAtLeast(0))
+        }
+        main.post { refreshNotification() }
+    }
+
+    /** R4: a partial wake lock bounded to the block (last cue + margin), so cues fire with the screen off. */
+    private fun holdBlockLock(now: Long, lastAt: Long) {
+        // Under the same monitor as releaseBlockLock, and stopping is set before stop releases: a
+        // tick racing stopWorkout either acquires first (stop releases it) or sees stopping.
+        synchronized(blockLockGuard) {
+            if (stopping) return
+            val until = lastAt + WAKE_MARGIN_MS
+            val l = blockLock ?: (getSystemService(Context.POWER_SERVICE) as PowerManager)
+                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "gymsupreme:cues").also {
+                    it.setReferenceCounted(false)
+                    blockLock = it
+                }
+            if (!l.isHeld || until > blockLockUntil) {
+                l.acquire((until - now).coerceAtLeast(WAKE_MARGIN_MS))
+                blockLockUntil = until
+            }
+        }
+    }
+
+    private fun releaseBlockLock(why: String) {
+        synchronized(blockLockGuard) {
+            val l = blockLock ?: return
+            blockLock = null
+            blockLockUntil = 0
+            if (l.isHeld) {
+                l.release()
+                SpikeLog.write(this, SpikeLog.line("timer_wake_lock_released").put("why", why))
+            }
+        }
+    }
+
+    /** Cue thread. The key is already committed by the scheduler: buzz (unless missed), count, log. */
+    private fun fireBlockCue(d: BlockScheduler.Due) {
+        val now = SystemClock.elapsedRealtime()
+        val r = if (d.missed) null else alerter?.fire(long = d.cue.kind == "block_end")
+        val posted = if (d.missed) "none" else notification.cue(d.cue.label.ifEmpty { "Timer" })
+        if (d.missed) {
+            NativeCounters.add(this, NativeCounters.TIMER_CUES_MISSED)
+        } else {
+            NativeCounters.add(this, NativeCounters.TIMER_CUES_FIRED)
+            if (d.lateMs > NativeCounters.LATE_MS) NativeCounters.add(this, NativeCounters.TIMER_CUES_LATE)
+            NativeCounters.max(this, NativeCounters.TIMER_CUE_MAX_LATE_MS, d.lateMs)
+            if (r == null || !(r.audio.startsWith("ok") || r.audio == "skipped:media_volume_0")) NativeCounters.add(this, NativeCounters.TIMER_CUES_AUDIO_FAILED)
+        }
+        CueLog.cue(this, d.setId, d.run, d.cue.index, d.lateMs, d.missed)
+        update { it.copy(lastCue = d.cue.label, lastLateMs = d.lateMs) }
+        SpikeLog.write(
+            this,
+            DeviceState.addTo(
+                this,
+                SpikeLog.line("cue")
+                    .put("mode", MODE_SESSION)
+                    .put("set_id", d.setId)
+                    .put("run", d.run)
+                    .put("index", d.cue.index)
+                    .put("n", d.cue.index + 1)
+                    .put("of", blockTotals["${d.setId}|${d.run}"])
+                    .put("kind", d.cue.kind)
+                    .put("label", d.cue.label)
+                    .put("missed", d.missed)
+                    .put("scheduled_elapsed_ms", d.scheduledAt)
+                    .put("fired_elapsed_ms", now)
+                    .put("late_ms", d.lateMs)
+                    .put("audio", r?.audio)
+                    .put("audio_method", r?.audioMethod)
+                    .put("focus", r?.focus)
+                    .put("vibrate", r?.vibrate)
+                    .put("notification", posted)
+                    .put("service_type", status.serviceType)
+                    .put("wake_lock_held", blockLock?.isHeld == true),
+            ),
+        )
     }
 
     /** Pause or finish from [LiveSession]: stop the service; the journal stays until Dart deletes it. */
@@ -494,6 +670,10 @@ class WorkoutService : Service() {
         main.removeCallbacksAndMessages(null)
         cancelRest("stop")
         tracker = null
+        blocks = null
+        fired = null
+        nextCue = null
+        releaseBlockLock("stop")
         sessionView = null
         releaseWakeLock("stop")
         stopStrap()
@@ -549,6 +729,13 @@ class WorkoutService : Service() {
             else -> c.exerciseName
         }
         var text = if (c == null) "${v?.setsDone ?: 0} sets" else "Set ${c.setNumber} of ${c.setCount}  ·  ${v?.doneLine() ?: ""}"
+        // T1: a running timer block counts down to its next cue.
+        val cue = nextCue
+        var countdown = restEndWall
+        if (cue != null && restEndWall == null) {
+            text = "Next: ${cue.first}"
+            countdown = System.currentTimeMillis() + (cue.second - SystemClock.elapsedRealtime())
+        }
         val lock = if (Features.lockDone && v != null && v.rev >= 0) {
             WorkoutNotification.Lock(v.rev, v.currentSetId, doneAndPlus = c != null && v.lockEligible, skipRest = v.rest != null && c != null && restArmedAt != null)
         } else {
@@ -556,7 +743,7 @@ class WorkoutService : Service() {
         }
         // The cold-start line already says where to set the weight.
         if (lock != null && c != null && v?.lockEligible != true && v?.doneLine()?.endsWith("in the app") != true) text += "  ·  Log it in the app"
-        return WorkoutNotification.Content(title, text, restEndWall, stopAction = false, lock = lock)
+        return WorkoutNotification.Content(title, text, countdown, stopAction = false, lock = lock)
     }
 
     private fun notificationId() = if (mode == MODE_SESSION) WorkoutNotification.SESSION_ID else WorkoutNotification.NOTIFICATION_ID

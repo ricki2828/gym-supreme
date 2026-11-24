@@ -127,6 +127,26 @@ void main() {
     expect(r.corruptLines, 0);
   });
 
+  test('timer-block vectors match the Dart transitions today (0.3 T1)', () {
+    // android/core BlockSchedulerTest replays them through the native cue
+    // scheduler; this side proves they are what TimerSession produces now.
+    final v = gen.timerVectors();
+    final onDisk = dir.listSync().whereType<File>().where(
+      (f) => f.uri.pathSegments.last.startsWith('timer_v1_'),
+    );
+    expect(onDisk.length, v.length, reason: 'stale or missing vector files');
+    for (final e in v.entries) {
+      final f = File('${dir.path}/${e.key}.json');
+      expect(f.readAsStringSync(), '${e.value}\n', reason: e.key);
+      final steps = (jsonDecode(e.value) as Map)['steps'] as List;
+      expect(steps, isNotEmpty);
+      for (final st in steps) {
+        final line = jsonEncode((st as Map)['snapshot']);
+        expect(SessionSnapshot.decode(line).encode(), line, reason: e.key);
+      }
+    }
+  });
+
   test('fixture states are what their names say', () {
     SessionSnapshot read(String n) => SessionSnapshot.decode(
       File('${dir.path}/snapshot_v1_$n.json').readAsStringSync().trim(),
