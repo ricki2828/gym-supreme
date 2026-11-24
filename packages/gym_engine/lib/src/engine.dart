@@ -1115,12 +1115,6 @@ class GymEngine implements GymApi {
     'app_version': w.appVersion,
     'swaps': w.swaps,
     'edited_at_ms': w.editedAtMs,
-    // HR samples as [t_ms, bpm] pairs; the key is left out when there are
-    // none (additive within format 2; import reads it when present).
-    if (store.hrSamples(w.uuid) case final hr when hr.isNotEmpty)
-      'hr': [
-        for (final h in hr) [h.tMs, h.bpm],
-      ],
     'sets': [
       for (final s in w.sets)
         {

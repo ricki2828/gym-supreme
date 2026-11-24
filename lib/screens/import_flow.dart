@@ -53,6 +53,9 @@ Future<eng.ImportCounts?> runImport(
   } on eng.ImportRefused catch (e) {
     await _message(context, 'Nothing imported', e.message);
     return null;
+  } on Object catch (e) {
+    await _message(context, 'Nothing imported', 'Could not read it ($e).');
+    return null;
   }
   if (!context.mounted) return null;
   if (p.isNoOp) {
@@ -125,7 +128,7 @@ List<String> importLines(eng.ImportCounts c, {required bool applied}) {
     if (c.hrSamplesAdded > 0)
       'Heart rate: ${n(c.hrSamplesAdded, 'sample', 'samples')}.'
     else
-      'Heart rate: none to add.',
+      'Heart rate: not in exports, so not restored.',
     if (c.deletedInFile > 0)
       '${n(c.deletedInFile, 'workout', 'workouts')} deleted on the other '
           'phone: not imported.',

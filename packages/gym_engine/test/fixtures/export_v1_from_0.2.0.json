@@ -1,0 +1,283 @@
+{
+ "export_format": 1,
+ "schema_version": 1,
+ "snapshot_schema": 1,
+ "app_version": "0.2.0+20",
+ "exported_at_ms": 1763600000000,
+ "counters": {
+  "sessions_total": 3,
+  "sessions_last_14_days": 3,
+  "first_session_at_ms": 1763200000000,
+  "done_sets": 3,
+  "tap_unchanged_sets": 3,
+  "cold_start_sets": 0,
+  "median_swaps_per_session": 1.0,
+  "one_tap_rate": 1.0,
+  "one_tap_rate_incl_cold": 1.0,
+  "app_versions": {
+   "0.2.0+20": 3
+  },
+  "native": {}
+ },
+ "settings": {
+  "bodyweight_g": 81000,
+  "default_minutes": 45,
+  "rest_compound_s": 150,
+  "rest_isolation_s": 75
+ },
+ "gyms": [
+  {
+   "id": "34146aa3-7995-4bb1-82b3-2e7bc0bd1ea5",
+   "name": "Condo",
+   "preset_id": "condo",
+   "created_at_ms": 1763600000000,
+   "kit": [
+    {
+     "equipment_id": "adjustable-bench",
+     "source": "preset",
+     "confirmed": false,
+     "weights_g": []
+    },
+    {
+     "equipment_id": "cable-stack",
+     "source": "preset",
+     "confirmed": false,
+     "weights_g": []
+    },
+    {
+     "equipment_id": "dumbbells",
+     "source": "preset",
+     "confirmed": false,
+     "weights_g": []
+    },
+    {
+     "equipment_id": "leg-extension",
+     "source": "preset",
+     "confirmed": false,
+     "weights_g": []
+    },
+    {
+     "equipment_id": "overhead-cable-bench",
+     "source": "preset",
+     "confirmed": false,
+     "weights_g": []
+    }
+   ]
+  }
+ ],
+ "workouts": [
+  {
+   "uuid": "v1-workout-0",
+   "gym_id": "34146aa3-7995-4bb1-82b3-2e7bc0bd1ea5",
+   "type_id": "push",
+   "muscles": [
+    "chest"
+   ],
+   "started_at_ms": 1763200000000,
+   "tz_offset_min": 480,
+   "ended_at_ms": 1763202400000,
+   "paused_ms": 60000,
+   "app_version": "0.2.0+20",
+   "swaps": 0,
+   "sets": [
+    {
+     "set_id": "v1-0-0",
+     "exercise_id": "dumbbell-bench-press",
+     "exercise_name": "dumbbell-bench-press",
+     "exercise_position": 0,
+     "set_ordinal": 1,
+     "kind": "reps",
+     "load_g": 20000,
+     "reps": 10,
+     "completion": "tap_unchanged",
+     "skipped": false,
+     "source": "app",
+     "started_at_ms": 1763200060000,
+     "ended_at_ms": 1763200105000,
+     "offset_ms": 105000,
+     "block": null
+    },
+    {
+     "set_id": "v1-0-1",
+     "exercise_id": "dumbbell-bench-press",
+     "exercise_name": "dumbbell-bench-press",
+     "exercise_position": 0,
+     "set_ordinal": 2,
+     "kind": "reps",
+     "load_g": null,
+     "reps": null,
+     "completion": null,
+     "skipped": true,
+     "source": "app",
+     "started_at_ms": null,
+     "ended_at_ms": null,
+     "offset_ms": null,
+     "block": null
+    },
+    {
+     "set_id": "v1-0-2",
+     "exercise_id": "plank",
+     "exercise_name": "Plank",
+     "exercise_position": 1,
+     "set_ordinal": 1,
+     "kind": "timed",
+     "load_g": null,
+     "reps": null,
+     "completion": "cold_start",
+     "skipped": false,
+     "source": "app",
+     "started_at_ms": 1763200300000,
+     "ended_at_ms": 1763200360000,
+     "offset_ms": 360000,
+     "block": {
+      "type": "emom",
+      "rounds": 3,
+      "work_s": 20
+     }
+    }
+   ]
+  },
+  {
+   "uuid": "v1-workout-1",
+   "gym_id": "34146aa3-7995-4bb1-82b3-2e7bc0bd1ea5",
+   "type_id": "pull",
+   "muscles": [
+    "lats"
+   ],
+   "started_at_ms": 1763372800000,
+   "tz_offset_min": 480,
+   "ended_at_ms": 1763375200000,
+   "paused_ms": 60000,
+   "app_version": "0.2.0+20",
+   "swaps": 1,
+   "sets": [
+    {
+     "set_id": "v1-1-0",
+     "exercise_id": "one-arm-dumbbell-row",
+     "exercise_name": "one-arm-dumbbell-row",
+     "exercise_position": 0,
+     "set_ordinal": 1,
+     "kind": "reps",
+     "load_g": 22000,
+     "reps": 10,
+     "completion": "tap_unchanged",
+     "skipped": false,
+     "source": "app",
+     "started_at_ms": 1763372860000,
+     "ended_at_ms": 1763372905000,
+     "offset_ms": 105000,
+     "block": null
+    },
+    {
+     "set_id": "v1-1-1",
+     "exercise_id": "one-arm-dumbbell-row",
+     "exercise_name": "one-arm-dumbbell-row",
+     "exercise_position": 0,
+     "set_ordinal": 2,
+     "kind": "reps",
+     "load_g": null,
+     "reps": null,
+     "completion": null,
+     "skipped": true,
+     "source": "app",
+     "started_at_ms": null,
+     "ended_at_ms": null,
+     "offset_ms": null,
+     "block": null
+    },
+    {
+     "set_id": "v1-1-2",
+     "exercise_id": "plank",
+     "exercise_name": "Plank",
+     "exercise_position": 1,
+     "set_ordinal": 1,
+     "kind": "timed",
+     "load_g": null,
+     "reps": null,
+     "completion": "cold_start",
+     "skipped": false,
+     "source": "app",
+     "started_at_ms": 1763373100000,
+     "ended_at_ms": 1763373160000,
+     "offset_ms": 360000,
+     "block": {
+      "type": "emom",
+      "rounds": 3,
+      "work_s": 20
+     }
+    }
+   ]
+  },
+  {
+   "uuid": "v1-workout-2",
+   "gym_id": "34146aa3-7995-4bb1-82b3-2e7bc0bd1ea5",
+   "type_id": "push",
+   "muscles": [
+    "chest"
+   ],
+   "started_at_ms": 1763545600000,
+   "tz_offset_min": 480,
+   "ended_at_ms": 1763548000000,
+   "paused_ms": 60000,
+   "app_version": "0.2.0+20",
+   "swaps": 2,
+   "sets": [
+    {
+     "set_id": "v1-2-0",
+     "exercise_id": "dumbbell-bench-press",
+     "exercise_name": "dumbbell-bench-press",
+     "exercise_position": 0,
+     "set_ordinal": 1,
+     "kind": "reps",
+     "load_g": 24000,
+     "reps": 10,
+     "completion": "tap_unchanged",
+     "skipped": false,
+     "source": "app",
+     "started_at_ms": 1763545660000,
+     "ended_at_ms": 1763545705000,
+     "offset_ms": 105000,
+     "block": null
+    },
+    {
+     "set_id": "v1-2-1",
+     "exercise_id": "dumbbell-bench-press",
+     "exercise_name": "dumbbell-bench-press",
+     "exercise_position": 0,
+     "set_ordinal": 2,
+     "kind": "reps",
+     "load_g": null,
+     "reps": null,
+     "completion": null,
+     "skipped": true,
+     "source": "app",
+     "started_at_ms": null,
+     "ended_at_ms": null,
+     "offset_ms": null,
+     "block": null
+    },
+    {
+     "set_id": "v1-2-2",
+     "exercise_id": "plank",
+     "exercise_name": "Plank",
+     "exercise_position": 1,
+     "set_ordinal": 1,
+     "kind": "timed",
+     "load_g": null,
+     "reps": null,
+     "completion": "cold_start",
+     "skipped": false,
+     "source": "app",
+     "started_at_ms": 1763545900000,
+     "ended_at_ms": 1763545960000,
+     "offset_ms": 360000,
+     "block": {
+      "type": "emom",
+      "rounds": 3,
+      "work_s": 20
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -437,7 +437,9 @@ abstract interface class GymApi {
   /// uuid: a stored uuid, deleted or not, is skipped and left as it is.
   /// Unknown gym ids are added with their kit; known ones are kept as they
   /// are here. Settings are filled in only while this phone has the
-  /// defaults. HR samples in the file are added with their workout.
+  /// defaults. The export carries no HR (a 1 Hz strap would outgrow the
+  /// 8 MiB picker cap in months); an optional per-workout `hr` list of
+  /// `[t_ms, bpm]` is read when present.
   /// Refuses a newer export format, database or snapshot schema, and any
   /// malformed or truncated file.
   ImportCounts importBundle(String text);

@@ -2,6 +2,7 @@
 // Every test runs on both stores; SQLite-only checks are marked. The
 // fixture (six workouts, two gyms) comes from delete_edit_test.dart.
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:gym_engine/gym_engine.dart';
 import 'package:gym_engine/sqlite_store.dart';
@@ -148,14 +149,14 @@ void cases(HistoryStore Function() make) {
     expect(c.workoutsAdded, 6);
     expect(c.skippedExisting + c.skippedDeleted, 0);
     expect(c.gymsAdded, 2);
-    expect(c.hrSamplesAdded, 6);
+    expect(c.hrSamplesAdded, 0, reason: 'the export carries no HR');
     expect(c.settingsRestored, isTrue);
     expect(view(dst, src.g1, src.g2), view(src.engine, src.g1, src.g2));
     // Nothing excluded here (no deletes, settings filled): the whole
     // export matches.
     expect(comparable(dst), comparable(src.engine));
     expect(dst.store.workout('w5')!.editedAtMs, src.w('w5').editedAtMs);
-    expect(dst.store.hrSamples('w1').map((h) => h.bpm), [120]);
+    expect(dst.store.hrSamples('w1'), isEmpty);
   });
 
   test('re-import is a no-op', () {
@@ -268,6 +269,37 @@ void cases(HistoryStore Function() make) {
     expect(dst.store.workout('w5')!.editedAtMs, isNull);
   });
 
+  test('a real 0.2.0 export (format 1) imports whole', () {
+    // test/fixtures/export_v1_from_0.2.0.json was written once by the
+    // v0.2.0-dogfood engine (the tag's packages/gym_engine, GymEngine.export).
+    final file = File('test/fixtures/export_v1_from_0.2.0.json')
+        .readAsStringSync();
+    final j = decode(file);
+    expect(j['export_format'], 1);
+    final dst = engineOn(make(), now: () => j['exported_at_ms']! as int);
+    final c = dst.importBundle(file);
+    expect(c.exportFormat, 1);
+    expect(c.workoutsAdded, 3);
+    expect(c.gymsAdded, 1);
+    expect(c.settingsRestored, isTrue);
+    expect(dst.store.settings().bodyweightG, 81000);
+    final out = comparable(dst);
+    // Same workouts, sets, gyms and settings as the 0.2.0 file; only the
+    // format-2 additions differ.
+    expect(out['workouts'], [
+      for (final w in (j['workouts'] as List).cast<Map>())
+        {...w, 'edited_at_ms': null},
+    ]);
+    expect(out['gyms'], j['gyms']);
+    expect(out['settings'], j['settings']);
+    final c1 = (j['counters'] as Map)..remove('native');
+    final c2 = (out['counters'] as Map)
+      ..remove('native')
+      ..remove('workouts_deleted');
+    expect(c2, c1);
+    expect(dst.importBundle(file).workoutsAdded, 0);
+  });
+
   group('refused, nothing written', () {
     late String file;
     late GymEngine dst;
@@ -369,6 +401,17 @@ void cases(HistoryStore Function() make) {
       );
     });
 
+    test('settings with a zero or negative value', () {
+      refused(
+        edit((j) => (j['settings'] as Map)['default_minutes'] = 0),
+        contains('settings'),
+      );
+      refused(
+        edit((j) => (j['settings'] as Map)['rest_compound_s'] = -5),
+        contains('settings'),
+      );
+    });
+
     test('duplicates inside the file', () {
       refused(
         edit((j) {
@@ -442,24 +485,25 @@ void cases(HistoryStore Function() make) {
   });
 
   group('HR samples', () {
-    test('exported with their workout and imported with it', () {
+    test('not exported (size: a 1 Hz strap would outgrow the picker cap)', () {
       final src = source();
-      src.store.upsertWorkout(
-        src.w('w6'),
-        hr: [
-          for (var i = 0; i < 5; i++)
-            HrSample(d.monday + 10000 + i * 1000, 90 + i),
-        ],
-      );
+      expect(src.store.hrSamples('w6'), isNotEmpty);
       final j = decode(src.engine.export(appVersion: 'x').json);
+      for (final w in (j['workouts'] as List).cast<Map>()) {
+        expect(w.containsKey('hr'), isFalse);
+      }
+    });
+
+    test('a file with a per-workout hr list imports it', () {
+      final j = decode(source().engine.export(appVersion: 'x').json);
       final w6 = (j['workouts'] as List).cast<Map>().last;
-      expect((w6['hr'] as List).length, 6);
+      w6['hr'] = [
+        for (var i = 0; i < 5; i++) [d.monday + 10000 + i * 1000, 90 + i],
+        [d.monday + 10000, 99], // same t_ms again: the first one is kept
+      ];
       final dst = engineOn(make());
-      expect(dst.importBundle(jsonEncode(j)).hrSamplesAdded, 11);
-      expect(
-        dst.store.hrSamples('w6').map((h) => [h.tMs, h.bpm]),
-        src.store.hrSamples('w6').map((h) => [h.tMs, h.bpm]),
-      );
+      expect(dst.importBundle(jsonEncode(j)).hrSamplesAdded, 5);
+      expect(dst.store.hrSamples('w6').map((h) => h.bpm), [90, 91, 92, 93, 94]);
     });
 
     test('a skipped workout keeps its local HR untouched', () {
@@ -480,17 +524,6 @@ void cases(HistoryStore Function() make) {
       expect(c.skippedExisting, 1);
       expect(c.hrSamplesAdded, 5);
       expect(dst.store.hrSamples('w1').map((h) => h.bpm), [60]);
-    });
-
-    test('a workout without HR exports no hr key', () {
-      final dst = engineOn(make());
-      dst.store.upsertWorkout(
-        d.rec('a', 'gx', 'push', d.monday, [d.done(d.bench, 20000, 10)]),
-      );
-      final w = (decode(dst.export(appVersion: 'x').json)['workouts'] as List)
-          .cast<Map>()
-          .single;
-      expect(w.containsKey('hr'), isFalse);
     });
   });
 

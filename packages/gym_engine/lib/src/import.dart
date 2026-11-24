@@ -60,7 +60,8 @@ class ImportCounts {
   /// Gym ids already here: name and kit on this phone kept.
   final int gymsKept;
 
-  /// HR samples of the added workouts (exports from 0.3 on carry them).
+  /// HR samples of the added workouts. Exports carry none today; a file
+  /// with a per-workout `hr` list (`[t_ms, bpm]` pairs) is read.
   final int hrSamplesAdded;
 
   /// True when this phone still had default settings and the file's were
@@ -182,6 +183,12 @@ ImportBundle parseImportBundle(String text) {
         restCompoundS: s.intOr(m, 'rest_compound_s', 120),
         restIsolationS: s.intOr(m, 'rest_isolation_s', 75),
       );
+      if ((settings.bodyweightG ?? 1) <= 0 ||
+          settings.defaultMinutes <= 0 ||
+          settings.restCompoundS < 0 ||
+          settings.restIsolationS < 0) {
+        throw const _Bad('settings hold a zero or negative value');
+      }
     }
     final deleted = root['deleted_workout_uuids'];
     var deletedInFile = 0;

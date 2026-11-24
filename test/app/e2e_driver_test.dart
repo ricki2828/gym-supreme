@@ -250,6 +250,40 @@ void main() {
     expect(again['added'], 0);
     expect(again['skipped_existing'], 2);
     expect(again['digest'], dump['digest']);
+    // Tombstone: delete one here, import again: it stays deleted.
+    lines.clear();
+    await E2eDriver(sb, out: lines.add).run('delete_one:t');
+    final del = lines.map(step).firstWhere((m) => m['step'] == 'delete_one');
+    expect(del['count'], 1);
+    lines.clear();
+    await E2eDriver(sb, out: lines.add).run('import.$b64:u');
+    final third = lines.map(step).firstWhere((m) => m['step'] == 'import');
+    expect(third['added'], 0);
+    expect(third['skipped_deleted'], 1);
+    expect(third['skipped_existing'], 1);
+    expect(third['count'], 1);
+    expect(third['digest'], del['digest']);
+    expect(
+      sb.engine.history().map((h) => h.uuid),
+      isNot(contains(del['deleted'])),
+    );
+  });
+
+  test('an error line puts the error first and cuts a long command', () async {
+    final b = SqliteStore.inMemory();
+    addTearDown(b.close);
+    final lines = <String>[];
+    await E2eDriver(
+      services(b, AlertingStubPort()),
+      out: lines.add,
+    ).run('import.${'A' * 5000}:e');
+    final m = step(lines.single);
+    expect(m['step'], 'error');
+    expect(
+      m.keys.toList().indexOf('error'),
+      lessThan(m.keys.toList().indexOf('command')),
+    );
+    expect((m['command'] as String).length, lessThan(50));
   });
 
   test('history lists stored workouts for the restore drill', () async {

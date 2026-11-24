@@ -35,6 +35,8 @@ import 'services.dart';
 ///   script backs out of it and checks the native and Dart result (0.3 I1).
 /// - `export_dump`: the JSON export, gzip + base64, in numbered `chunk`
 ///   lines, with the history digest (import drill, 0.3 I1).
+/// - `delete_one`: deletes the newest history row (import drill: the
+///   re-import must skip it as deleted here).
 /// - `import.<base64 gzip export>`: preview + import of that bundle, then
 ///   persist and log the counts and the history digest (import drill).
 /// - `history`: list stored workouts and whether a journal is pending
@@ -97,6 +99,8 @@ class E2eDriver {
           await _pick();
         case 'export_dump':
           _exportDump();
+        case 'delete_one':
+          _deleteOne();
         case _ when name.startsWith('import.'):
           _import(name.substring('import.'.length));
         case 'history':
@@ -105,7 +109,12 @@ class E2eDriver {
           _log('unknown', {'command': name});
       }
     } on Object catch (e) {
-      _log('error', {'command': name, 'error': '$e'});
+      // Error first and the command cut short: an import command carries the
+      // whole bundle, and logcat truncates long lines.
+      _log('error', {
+        'error': '$e',
+        'command': name.length > 40 ? '${name.substring(0, 40)}...' : name,
+      });
     }
   }
 
@@ -303,6 +312,16 @@ class E2eDriver {
         'data': b64.substring(i * size, end > b64.length ? b64.length : end),
       });
     }
+    _log('ok');
+  }
+
+  void _deleteOne() {
+    final rows = s.engine.history(limit: 1);
+    if (rows.isEmpty) throw StateError('no workout to delete');
+    final d = s.engine.deleteWorkout(rows.first.uuid);
+    if (d == null) throw StateError('deleteWorkout returned null');
+    s.persist();
+    _log('delete_one', {'deleted': rows.first.uuid, ..._digest()});
     _log('ok');
   }
 
