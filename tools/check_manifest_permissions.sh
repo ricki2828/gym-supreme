@@ -46,8 +46,20 @@ extra="$(comm -23 <(echo "$perms") <(printf '%s\n%s\n' "$allowed" "$optional" | 
 missing="$(comm -13 <(echo "$perms") <(sort <<< "$allowed"))"
 [ -z "$extra" ] || { echo "::error::permission(s) not on the allowlist: $(echo $extra)"; exit 1; }
 [ -z "$missing" ] || { echo "::error::required permission(s) missing: $(echo $missing)"; exit 1; }
+# H1: connect-client's exported bind service ships only with the health flag (the main manifest
+# removes it; src/health/AndroidManifest.xml puts it back). Its attributes are printed.
+xml="$("$BT/aapt2" dump xmltree --file AndroidManifest.xml "$APK")"
+tmpx="$(mktemp)"; printf '%s\n' "$xml" > "$tmpx"
+python3 "$(dirname "$0")/manifest_health_report.py" "$tmpx"
+rm -f "$tmpx"
+svc="$(grep -c 'androidx.health.platform.client.impl.sdkservice.HealthDataSdkService' <<< "$xml" || true)"
+if health_on; then
+  [ "$svc" -ge 1 ] || { echo "::error::health flag on but HealthDataSdkService is missing"; exit 1; }
+else
+  [ "$svc" -eq 0 ] || { echo "::error::health flag off but HealthDataSdkService is in the manifest"; exit 1; }
+fi
 # neverForLocation = 0x10000 on uses-permission BLUETOOTH_SCAN.
-"$BT/aapt2" dump xmltree --file AndroidManifest.xml "$APK" | python3 -c '
+printf '%s\n' "$xml" | python3 -c '
 import re, sys
 blocks = re.split(r"\n\s*E: ", sys.stdin.read())
 scan = [b for b in blocks if b.startswith("uses-permission") and "android.permission.BLUETOOTH_SCAN\"" in b]

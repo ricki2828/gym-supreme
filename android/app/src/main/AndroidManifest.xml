@@ -56,6 +56,13 @@
         <receiver
             android:name=".workout.WorkoutActionReceiver"
             android:exported="false" />
+        <!-- connect-client (H1) merges an exported bind service into every build. Removed here, so
+             a build without the `health` flag ships no Health Connect component; the dogfood
+             overlay src/health/AndroidManifest.xml declares it again (tools:node="replace") when
+             the flag is on. tools/check_manifest_permissions.sh checks both ways. -->
+        <service
+            android:name="androidx.health.platform.client.impl.sdkservice.HealthDataSdkService"
+            tools:node="remove" />
         <!-- Serves only the shared spike log, read-only, per-URI grant. -->
         <provider
             android:name=".workout.SpikeLogProvider"

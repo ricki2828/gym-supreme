@@ -35,7 +35,15 @@ def main() -> int:
         if "health" in attrs.lower():
             path = "/".join(n for _, n in stack)
             values = re.findall(r'="([^"]*)"', attrs)
-            found.append(f"{path}: {', '.join(values)}")
+            # Every own attribute as name=value (booleans such as exported/enabled included).
+            pairs = []
+            for a in own:
+                m2 = re.match(r'A: (?:\S*:)?([A-Za-z_]+)(?:\(0x[0-9a-f]+\))?=(.*?)(?: \(Raw: .*)?$', a)
+                if m2:
+                    v = m2.group(2)
+                    v = {"(type 0x12)0xffffffff": "true", "(type 0x12)0x0": "false"}.get(v, v.strip('"'))
+                    pairs.append(f"{m2.group(1)}={v}")
+            found.append(f"{path}: {' '.join(pairs) if pairs else ', '.join(values)}")
             if name.startswith("uses-permission"):
                 perms += [v for v in values if "health" in v.lower()]
         i = j
