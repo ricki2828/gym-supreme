@@ -578,6 +578,7 @@ class SqliteStore implements HistoryStore {
       r['uuid'] as String,
   ];
 
+  /// Unfiltered on purpose (deleted workouts keep HR for undo).
   @override
   List<HrSample> hrSamples(String uuid) => [
     for (final r in db.select(

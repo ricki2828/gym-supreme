@@ -690,11 +690,15 @@ class GymEngine implements GymApi {
 
   // ----------------------------------------------------- finish, resume
 
+  /// Stores a finished workout once. A uuid already stored (deleted ones
+  /// included) is left alone: a Finish retry after a failed journal delete
+  /// must not overwrite sets edited in history or resurrect a delete.
   @override
   void saveFinished(SessionSnapshot snapshot, {List<HrSample> hr = const []}) {
     if (!snapshot.finished) {
       throw ArgumentError('saveFinished needs a finished snapshot');
     }
+    if (store.hasWorkout(snapshot.workoutUuid)) return;
     store.upsertWorkout(
       snapshot.toRecord(),
       snapshotJson: snapshot.encode(),
@@ -723,6 +727,10 @@ class GymEngine implements GymApi {
   }
 
   // ------------------------------------------------- summary, history
+
+  @override
+  WorkoutSummary? summaryOrNull(String workoutUuid) =>
+      store.workout(workoutUuid) == null ? null : summary(workoutUuid);
 
   @override
   WorkoutSummary summary(String workoutUuid) {
@@ -921,15 +929,37 @@ class GymEngine implements GymApi {
     if (w == null) return null;
     final at = _now();
     if (!store.deleteWorkout(uuid, at)) return null;
+    // Two writes, not one transaction (HistoryStore has no transaction hook
+    // and MemoryStore cannot roll back). The delete is what matters: a
+    // rotation failure is cosmetic (he can tap the right row) and never
+    // undoes it.
     Rotation? before;
-    if (rotation) before = rotationAfterDelete(store, uuid, w.typeId);
+    if (rotation) {
+      try {
+        before = rotationAfterDelete(store, uuid, w.typeId);
+      } on Object {
+        before = null;
+      }
+    }
     return DeletedWorkout(uuid: uuid, deletedAtMs: at, rotationBefore: before);
   }
 
   @override
   bool undoDelete(String uuid, {Rotation? rotationBefore}) {
     if (!store.restoreWorkout(uuid)) return false;
-    if (rotationBefore != null) saveRotation(store, rotationBefore);
+    if (rotationBefore == null) return true;
+    try {
+      // Put the rotation back only if it is still what the delete left
+      // (pointer on this type). Anything he changed since is kept.
+      final type = store.workout(uuid)?.typeId;
+      if (type != null &&
+          rotationBefore.order.contains(type) &&
+          loadRotation(store) == rotationBefore.pointAt(type)) {
+        saveRotation(store, rotationBefore);
+      }
+    } on Object {
+      // Cosmetic: the workout is back; the pointer stays where it is.
+    }
     return true;
   }
 

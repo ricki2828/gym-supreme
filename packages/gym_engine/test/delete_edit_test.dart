@@ -147,53 +147,67 @@ void main() {
 
   group('sqlite only', sqliteOnly);
 
-  test('guard: no workout SQL reader outside the two filtered readers', () {
+  test('guard: workout / set_row SQL only in the allowed store members', () {
     // Soft delete is one filter in SqliteStore.workouts()/workout(). A new
     // reader that skips it would leak deleted workouts into a stat.
-    final sql = RegExp(r'\b(FROM|JOIN)\s+workout\b');
-    const allowed = {
-      'workouts', // filtered reader
-      'workout', // filtered reader
-      'hasWorkout', // unfiltered on purpose: recovery
-      'deletedWorkoutUuids', // tombstones only
-      '_workoutCount', // backup guard counts tombstones (E2)
+    RegExp sql(String table) => RegExp('\\b(FROM|JOIN)\\s+$table\\b');
+    final allowed = {
+      'workout': {
+        'workouts', // filtered reader
+        'workout', // filtered reader
+        'hasWorkout', // unfiltered on purpose: recovery
+        'deletedWorkoutUuids', // tombstones only
+        '_workoutCount', // backup guard counts tombstones (E2)
+      },
+      'set_row': {'workouts', 'workout', 'upsertWorkout'},
     };
-    final hits = <String>[];
-    final store = File('lib/src/sqlite_store.dart').readAsLinesSync();
-    String? member;
-    final decl = RegExp(
-      r'^  (?:static |@override\s*)?[\w<>?,\s]*?\b(\w+)\s*[(=]',
-    );
-    for (final line in store) {
-      if (line.startsWith('  ') &&
-          !line.startsWith('   ') &&
-          !line.trimLeft().startsWith('//') &&
-          !line.trimLeft().startsWith('@')) {
-        final m = decl.firstMatch(line);
-        if (m != null) member = m.group(1);
+    // Split sqlite_store.dart into members (2-space declarations; column-0
+    // lines start a top-level one) and join each member's adjacent string
+    // literals, so `'... FROM '` + `'workout ...'` on two lines still counts.
+    final members = <String, StringBuffer>{};
+    var member = '<top>';
+    final decl = RegExp(r'^  (?:static )?[\w<>?,\s]*?\b(\w+)\s*[(=]');
+    final top = RegExp(r'^[\w].*?\b(\w+)\s*[(=]');
+    for (final line in File('lib/src/sqlite_store.dart').readAsLinesSync()) {
+      final t = line.trimLeft();
+      if (!t.startsWith('//') && !t.startsWith('@')) {
+        final m = line.startsWith('  ') && !line.startsWith('   ')
+            ? decl.firstMatch(line)
+            : top.firstMatch(line);
+        if (m != null) member = m.group(1)!;
       }
-      if (sql.hasMatch(line) && !allowed.contains(member)) {
-        hits.add('sqlite_store.dart $member: ${line.trim()}');
+      (members[member] ??= StringBuffer()).writeln(line);
+    }
+    String joined(String text) => text
+        .replaceAll(RegExp(r"'\s*\n\s*'"), '')
+        .replaceAll(RegExp(r'\s+'), ' ');
+    final hits = <String>[];
+    var seen = 0;
+    for (final e in members.entries) {
+      final text = joined(e.value.toString());
+      for (final table in allowed.keys) {
+        if (!sql(table).hasMatch(text)) continue;
+        seen++;
+        if (!allowed[table]!.contains(e.key)) {
+          hits.add('sqlite_store.dart ${e.key}: $table');
+        }
       }
     }
-    // Nothing else in the engine, the app or Kotlin reads the table.
-    final roots = ['lib', '../../lib', '../../android', '../../tools'];
-    for (final root in roots) {
+    // Nothing else in the engine, the app or Kotlin reads either table.
+    for (final root in ['lib', '../../lib', '../../android', '../../tools']) {
       final dir = Directory(root);
       if (!dir.existsSync()) continue;
       for (final f in dir.listSync(recursive: true).whereType<File>()) {
         if (!RegExp(r'\.(dart|kt|java|py|sh)$').hasMatch(f.path)) continue;
         if (f.path.endsWith('sqlite_store.dart')) continue;
-        final text = f.readAsStringSync();
-        if (sql.hasMatch(text)) hits.add(f.path);
+        final text = joined(f.readAsStringSync());
+        for (final table in allowed.keys) {
+          if (sql(table).hasMatch(text)) hits.add('${f.path}: $table');
+        }
       }
     }
     expect(hits, isEmpty);
-    expect(
-      store.where(sql.hasMatch).length,
-      greaterThanOrEqualTo(4),
-      reason: 'the guard must still see the known readers',
-    );
+    expect(seen, greaterThanOrEqualTo(7), reason: 'guard sees the readers');
   });
 }
 
@@ -702,6 +716,21 @@ void stats(HistoryStore Function() make) {
       }
     });
 
+    test('R4b undo keeps a rotation change he made after the delete', () {
+      final r = rig();
+      finish(r, 'w6');
+      final d = r.engine.deleteWorkout('w6', rotation: true)!;
+      expect(rot(r).nextId, 'push');
+      saveRotation(r.store, rot(r).pointAt('legs')); // he taps Legs
+      final his = rot(r);
+      expect(
+        r.engine.undoDelete('w6', rotationBefore: d.rotationBefore),
+        isTrue,
+      );
+      expect(rot(r), his);
+      expect(r.uuids(), contains('w6'));
+    });
+
     test('R5b without the flag the rotation is never touched', () {
       final r = rig();
       finish(r, 'w6');
@@ -825,6 +854,59 @@ void stats(HistoryStore Function() make) {
         expect(r.w('w3').editedAtMs, edited.editedAtMs);
       },
     );
+
+    test('X2b a Finish retry (saveFinished again) never overwrites an edit '
+        'or a delete', () {
+      final r = rig();
+      final plan = SessionPlan(
+        gymId: r.g1,
+        typeId: 'push',
+        muscles: const ['chest'],
+        estimatedMinutes: 10,
+        uncovered: const [],
+        items: const [
+          PlannedItem(
+            exerciseId: bench,
+            name: bench,
+            unit: LoadUnit.ea,
+            sets: [
+              PlannedSet(loadG: 20000, reps: 10),
+              PlannedSet(loadG: 20000, reps: 10),
+            ],
+            repLo: 8,
+            repHi: 12,
+            restS: 60,
+            reason: '',
+            primary: ['chest'],
+          ),
+        ],
+      );
+      var s = Session.start(plan, nowMs: r.now, tzOffsetMin: 480);
+      for (final x in [...s.exercises.first.sets]) {
+        s = Session.done(s, x.setId, nowMs: r.now += min);
+      }
+      s = Session.finish(s, nowMs: r.now += min);
+      final u = s.workoutUuid;
+      r.engine.saveFinished(s);
+      final first = r.w(u).sets.first.setId;
+      final last = r.w(u).sets.last.setId;
+      final edited = r.engine.editWorkout(u, [
+        WorkoutEdit.setValues(first, loadG: 18000, reps: 7),
+        WorkoutEdit.removeSet(last),
+      ]);
+      String sets(WorkoutRecord w) => [
+        for (final x in w.sets)
+          '${x.setId}#${x.setOrdinal}:${x.loadG}x${x.reps}',
+      ].join(' ');
+      r.engine.saveFinished(s); // the retry
+      expect(sets(r.w(u)), sets(edited));
+      expect(sets(r.w(u)), '$first#1:18000x7');
+      expect(r.w(u).editedAtMs, edited.editedAtMs);
+      r.engine.deleteWorkout(u);
+      r.engine.saveFinished(s);
+      expect(r.store.workout(u), isNull);
+      expect(r.store.deletedWorkoutUuids(), [u]);
+    });
   });
 
   group('edit rules (ED)', () {
@@ -934,6 +1016,30 @@ void sqliteOnly() {
   setUp(() => dir = Directory.systemTemp.createTempSync('gs-d1'));
   tearDown(() => dir.deleteSync(recursive: true));
 
+  test('a rotation write error never fails the delete or the undo', () {
+    final store = _FailingRotationStore();
+    final r = Rig(store);
+    rotationAfterFinish(store, 'push', workoutUuid: 'w6');
+    store.fail = true;
+    final d = r.engine.deleteWorkout('w6', rotation: true)!;
+    expect(d.rotationBefore, isNull);
+    expect(store.workout('w6'), isNull);
+    expect(store.deletedWorkoutUuids(), ['w6']);
+    expect(
+      r.engine.undoDelete('w6', rotationBefore: Rotation.defaults()),
+      isTrue,
+    );
+    expect(store.workout('w6'), isNotNull);
+  });
+
+  test('summaryOrNull: null for unknown and deleted, else the summary', () {
+    final r = Rig(MemoryStore());
+    expect(r.engine.summaryOrNull('nope'), isNull);
+    expect(r.engine.summaryOrNull('w6')!.uuid, 'w6');
+    r.engine.deleteWorkout('w6');
+    expect(r.engine.summaryOrNull('w6'), isNull);
+  });
+
   test('ED1 snapshot_json is the as-finished copy after an edit', () {
     final store = SqliteStore.inMemory();
     final r = Rig(store);
@@ -984,4 +1090,15 @@ void sqliteOnly() {
     expect(b.deletedWorkoutUuids(), ['w6']);
     b.close();
   });
+}
+
+/// Throws on rotation writes once [fail] is set (fix 1 of the Opus review).
+class _FailingRotationStore extends MemoryStore {
+  bool fail = false;
+
+  @override
+  void saveSetting(String key, String json) {
+    if (fail && key == rotationSettingKey) throw StateError('disk full');
+    super.saveSetting(key, json);
+  }
 }

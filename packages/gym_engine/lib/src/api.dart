@@ -394,19 +394,26 @@ abstract interface class GymApi {
 
   // Post-workout and history (items 6, 7).
   WorkoutSummary summary(String workoutUuid);
+
+  /// [summary], or null when the uuid is unknown or deleted (0.2.1: a
+  /// screen still open on a workout he just deleted).
+  WorkoutSummary? summaryOrNull(String workoutUuid);
   List<HistoryRow> history({int limit, int offset});
   Counters counters();
 
   // Delete and edit history (0.2.1 D1).
   /// Soft-deletes a stored workout: every stat, history, ghost and export
   /// leaves it out from now on; its rows stay for undo. With [rotation]
-  /// (`Features.rotation`), applies `rotationAfterDelete`. Null when the
-  /// uuid is unknown or already deleted (nothing changes).
+  /// (`Features.rotation`), applies `rotationAfterDelete`; if that throws,
+  /// the delete stands and `rotationBefore` is null. Null when the uuid is
+  /// unknown or already deleted (nothing changes).
   DeletedWorkout? deleteWorkout(String uuid, {bool rotation});
 
   /// Undoes [deleteWorkout]. [rotationBefore] (from its result) is saved
-  /// back as the rotation. False when the uuid is not deleted (nothing
-  /// changes, the rotation included).
+  /// back only while the rotation is still what the delete left; a change he
+  /// made since is kept. False when the uuid is not deleted (nothing
+  /// changes, the rotation included). A rotation error never fails the
+  /// restore.
   bool undoDelete(String uuid, {Rotation? rotationBefore});
 
   /// Applies [edits] in order, all or nothing, and stamps `edited_at_ms`.

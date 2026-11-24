@@ -34,7 +34,8 @@ abstract interface class HistoryStore {
   /// history": use [workout] for that.
   bool hasWorkout(String uuid);
 
-  /// HR samples stored with a workout (R2), by time.
+  /// HR samples stored with a workout (R2), by time. Unfiltered on purpose:
+  /// a deleted workout keeps its samples so undo restores them.
   List<HrSample> hrSamples(String uuid);
 
   /// The workout, or null when unknown or deleted.

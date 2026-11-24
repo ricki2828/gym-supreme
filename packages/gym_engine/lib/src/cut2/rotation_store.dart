@@ -86,6 +86,10 @@ Rotation? rotationAfterDelete(
   }
   final before = loadRotation(store);
   final i = before.order.indexOf(typeId);
+  // Known and accepted (plan rule): two of the same type in a row (push,
+  // push) then deleting the second points back at push, though the first
+  // push still stands. We cannot tell that apart from "untouched since"
+  // without a history of pointer moves; he can tap the right row.
   if (i < 0 || before.next != (i + 1) % before.order.length) return null;
   final after = before.pointAt(typeId);
   if (after == before) return null; // a one-type rotation: nothing to move
