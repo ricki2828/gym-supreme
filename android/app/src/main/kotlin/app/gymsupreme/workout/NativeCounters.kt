@@ -22,9 +22,17 @@ object NativeCounters {
     /** deleteJournal refused or failed (code in the log): a stored workout whose journal stays blocks every Start. */
     const val JOURNAL_DELETE_FAILED = "journal_delete_failed"
 
+    /** Timer-block cues (0.3 cut T1), every block: played, played > [LATE_MS] late, overdue and not played, tone failed. */
+    const val TIMER_CUES_FIRED = "timer_cues_fired"
+    const val TIMER_CUES_LATE = "timer_cues_late"
+    const val TIMER_CUES_MISSED = "timer_cues_missed"
+    const val TIMER_CUE_MAX_LATE_MS = "timer_cue_max_late_ms"
+    const val TIMER_CUES_AUDIO_FAILED = "timer_cues_audio_failed"
+
     val KEYS = listOf(
         JOURNALS_LOST, JOURNAL_CORRUPT_LINES, JOURNAL_TORN_TAILS, REST_ALERTS_FIRED, REST_ALERTS_LATE,
         REST_ALERTS_MISSED, REST_ALERT_MAX_LATE_MS, REST_ALERTS_AUDIO_FAILED, JOURNAL_DELETE_FAILED,
+        TIMER_CUES_FIRED, TIMER_CUES_LATE, TIMER_CUES_MISSED, TIMER_CUE_MAX_LATE_MS, TIMER_CUES_AUDIO_FAILED,
     )
 
     private fun prefs(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

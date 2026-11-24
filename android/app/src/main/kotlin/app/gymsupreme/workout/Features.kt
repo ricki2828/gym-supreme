@@ -16,6 +16,9 @@ object Features {
     /** Lock-screen Done / +1 rep / Skip rest on the session notification (cut L1). */
     val lockDone: Boolean get() = set.on("lockdone")
 
+    /** Timer blocks: the service runs the snapshot's cues (cut T1). Off: a started block is logged and ignored. */
+    val timers: Boolean get() = set.on("timers")
+
     /** Health Connect write of finished sessions (cut H1). */
     val health: Boolean get() = set.on("health")
 
