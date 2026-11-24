@@ -9,6 +9,20 @@ import '../app/feature_flags.dart';
 import '../app/workout_port.dart';
 import 'engine_adapter.dart';
 import 'live_screen.dart';
+import 'screen_awake.dart';
+
+/// Why [LiveController.swapCurrent] did what it did.
+enum SwapResult {
+  /// The exercise was swapped and saved.
+  swapped,
+
+  /// Nothing was swapped because the session moved on under the sheet: the
+  /// exercise changed (a Done or lock-screen Done) or a set of it is logged.
+  moved,
+
+  /// Saving failed ([LiveController.lastError] says why; the banner shows).
+  failed,
+}
 
 /// Runs one live workout: gym_engine's Session transitions in Dart, each new
 /// snapshot sent whole to the WorkoutService through [WorkoutPort], which
@@ -25,6 +39,7 @@ class LiveController extends ChangeNotifier {
     this.appVersion = '',
     this.tick = const Duration(seconds: 1),
     this.store,
+    this.awake,
     this.plateMath = false,
   }) {
     _foreign = port.snapshots.listen(_onSnapshot, onError: (Object _) {});
@@ -35,6 +50,19 @@ class LiveController extends ChangeNotifier {
 
   /// History for the cut-2 ghost and rotation; null hides both.
   final eng.HistoryStore? store;
+
+  /// Screen stays on while a session runs (0.3 X1): on at [start] and
+  /// [resume], off at pause, finish, discard and dispose. Null = untouched.
+  final ScreenAwake? awake;
+  bool _awakeOn = false;
+
+  void _keepAwake(bool on) {
+    final a = awake;
+    if (a == null || _awakeOn == on) return;
+    _awakeOn = on;
+    // Cosmetic: a failed call never blocks logging.
+    unawaited(a.set(on).catchError((Object _) {}));
+  }
 
   final eng.GymApi engine;
   final WorkoutPort port;
@@ -76,12 +104,14 @@ class LiveController extends ChangeNotifier {
     );
     await port.startSession(s.encode());
     _set(s);
+    _keepAwake(true);
   });
 
   /// Resumes a pending journal (found on open; plan 7). The service accepts a
   /// submit against the journal head and runs again.
   Future<void> resume(eng.SessionSnapshot pending) => _enqueue(() async {
     _s = pending;
+    _keepAwake(true);
     // TimerSession.resume re-anchors a paused timer block; with no block it
     // is byte-identical to Session.resume.
     final next = c2.TimerSession.resume(pending, nowMs: nowMs());
@@ -263,8 +293,11 @@ class LiveController extends ChangeNotifier {
   /// logged; the engine refuses otherwise). Counts toward the swaps metric.
   /// [replacingId]: the exercise the swap sheet was opened for. If a Done
   /// (or a lock-screen Done) moved the session on meanwhile, nothing is
-  /// swapped rather than the next exercise. Returns whether it swapped.
-  Future<bool> swapCurrent(eng.PlannedItem item, {String? replacingId}) async {
+  /// swapped rather than the next exercise. See [SwapResult].
+  Future<SwapResult> swapCurrent(
+    eng.PlannedItem item, {
+    String? replacingId,
+  }) async {
     var swapped = false;
     await _transition((s) {
       final c = s.current;
@@ -277,7 +310,12 @@ class LiveController extends ChangeNotifier {
       swapped = !identical(next, s);
       return next;
     });
-    return swapped && lastError == null;
+    // Only an attempted submit can fail; a stale error from an earlier tap
+    // must not turn "the session moved on" into "failed".
+    // A quiet stale-rev catch-up (a lock-screen tap won) dropped the swap:
+    // the session moved on under the sheet, not a save failure.
+    if (!swapped || _caughtUp) return SwapResult.moved;
+    return lastError == null ? SwapResult.swapped : SwapResult.failed;
   }
 
   /// One path for skip (and undo): the TimerSession versions stop or re-arm a
@@ -448,6 +486,7 @@ class LiveController extends ChangeNotifier {
     )) {
       return false;
     }
+    _keepAwake(false);
     try {
       await port.pauseSession();
     } on Object catch (e) {
@@ -504,6 +543,7 @@ class LiveController extends ChangeNotifier {
       }
       discardedUuid = s.workoutUuid;
       lastError = null;
+      _keepAwake(false);
       _s = null;
       _syncTimer();
       notifyListeners();
@@ -556,6 +596,7 @@ class LiveController extends ChangeNotifier {
     }
     finishedUuid = done.workoutUuid;
     lastError = null;
+    _keepAwake(false);
     _set(done);
   }
 
@@ -651,7 +692,7 @@ class LiveController extends ChangeNotifier {
     if (identical(n0, s0)) return true;
     if (await _submit(n0, quietCollision: false)) return true;
     final s1 = _s;
-    if (lastError is! StaleRevException ||
+    if (!_caughtUp ||
         s1 == null ||
         finishedUuid != null ||
         s1.finished ||
@@ -662,7 +703,7 @@ class LiveController extends ChangeNotifier {
     final n1 = f(s1);
     if (identical(n1, s1)) return true;
     if (await _submit(n1, quietCollision: false)) return true;
-    if (lastError is StaleRevException) {
+    if (_caughtUp) {
       lastError = WorkoutPortException(
         'changed_elsewhere',
         'the workout changed on the lock screen while saving; try again',
@@ -672,16 +713,23 @@ class LiveController extends ChangeNotifier {
     return false;
   }
 
-  /// True when the service accepted [next]. [quietCollision]: a stale rev
-  /// that resyncs onto a newer head of this workout (a lock-screen tap won)
-  /// clears [lastError] - right for set-level taps (Done, +/-, skip), which
-  /// are simply dropped; lifecycle intents keep it ([_submitLifecycle]).
+  /// The last [_submit] hit a stale rev and [_resync] caught up with a newer
+  /// head of this workout (a lock-screen tap won).
+  bool _caughtUp = false;
+
+  /// True when the service accepted [next]. A stale rev that resyncs onto a
+  /// newer head of this workout (a lock-screen tap won) clears [lastError]
+  /// either way and sets [_caughtUp], so [_submitLifecycle] can retry without
+  /// a banner flash. [quietCollision]: a head that finished elsewhere clears
+  /// it too (set-level taps are simply dropped); lifecycle intents keep that
+  /// 'finished' error.
   Future<bool> _submit(
     eng.SessionSnapshot next, {
     bool quietCollision = true,
   }) async {
     final base = _s!;
     if (identical(next, base)) return true;
+    _caughtUp = false;
     try {
       await port.submitSnapshot(next.encode(), base.rev);
       lastError = null;
@@ -721,11 +769,14 @@ class LiveController extends ChangeNotifier {
       // A higher rev of this workout is another writer's tap (0.3 L1: the
       // lock screen) that landed first: the view catches up and this tap is
       // dropped, which is not an error to show.
-      if (quietCollision &&
-          head.workoutUuid == base.workoutUuid &&
-          head.rev > base.rev) {
-        lastError = null;
-      }
+      final caughtUp =
+          head.workoutUuid == base.workoutUuid && head.rev > base.rev;
+      _caughtUp = caughtUp;
+      // The stale_rev is resolved by the catch-up, so it is gone before the
+      // head is shown: a retry that follows (lifecycle intents) must not
+      // flash a banner in between (0.3 L1/R1 P3). A head finished elsewhere
+      // keeps its 'finished' error for a lifecycle intent.
+      if (caughtUp && (quietCollision || !head.finished)) lastError = null;
       // Show the head first: if completing it fails, the view is "all
       // done" (Finish retries) rather than the stale active base.
       _set(head);
@@ -809,6 +860,7 @@ class LiveController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _keepAwake(false);
     _disposed = true;
     unawaited(_foreign?.cancel());
     _timer?.cancel();

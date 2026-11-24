@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_engine/gym_engine.dart' as eng;
 import 'package:gym_supreme/app/workout_port.dart';
+import 'package:gym_supreme/screens/engine_adapter.dart';
 import 'package:gym_supreme/screens/flows/flows.dart';
 import 'package:gym_supreme/screens/live_controller.dart';
 import 'package:gym_supreme/screens/live_screen.dart';
@@ -95,21 +96,29 @@ void main() {
         if (x.state == eng.SetState.done) x,
   ].length;
 
-  test('a lock-screen Done is adopted; the next tap builds on it', () async {
-    final c = await started();
-    final moved = await lockDone();
-    await pumpEventQueue();
-    expect(c.snapshot!.rev, moved.rev);
-    expect(c.lastError, isNull);
-    expect(doneSets(c.snapshot!), 2);
-    // +1 rep in the app now applies to the set after the lock-screen one.
-    final next = c.snapshot!.currentSet!;
-    await c.reps(1);
-    expect(c.lastError, isNull, reason: 'not dropped as stale');
-    expect(port.rev, moved.rev + 1);
-    expect(c.snapshot!.currentSet!.setId, next.setId);
-    expect(c.snapshot!.currentSet!.targetReps, (next.targetReps ?? 0) + 1);
-  });
+  test(
+    'a swap dropped by a lock-screen collision says moved, not swapped',
+    () async {
+      final c = controller();
+      await c.start(
+        engine.suggest(
+          gymId: gymId,
+          muscleIds: const ['chest', 'front-delts', 'side-delts', 'triceps'],
+          typeId: 'push',
+        ),
+      );
+      final s0 = c.snapshot!;
+      final cur = s0.exercises.first;
+      final kit = engine.gym(gymId)!.equipmentIds;
+      final opt = swapCandidates(catalog, s0, cur.exerciseId, kit).first;
+      port.collisions = 1; // a lock-screen Done lands first
+      final r = await c.swapCurrent(swapItem(opt, cur));
+      expect(r, SwapResult.moved, reason: 'the tap was dropped, not applied');
+      expect(c.lastError, isNull, reason: 'a quiet collision shows no banner');
+      expect(c.snapshot!.exercises.first.exerciseId, cur.exerciseId);
+      expect(doneSets(c.snapshot!), 1, reason: 'the lock-screen Done is kept');
+    },
+  );
 
   test('a tap queued before the adopt is dropped once, never applied on a '
       'stale base', () async {
@@ -272,6 +281,25 @@ void main() {
     final stored = store.workout(uuid!)!;
     expect(stored.doneSets, hasLength(2), reason: 'one in the app, one locked');
     expect(await port.readPendingJournal(), isNull);
+  });
+
+  test('a colliding Finish never shows a stale-rev error on the way', () async {
+    final c = await started();
+    final seen = <Object?>[];
+    c.addListener(() => seen.add(c.lastError));
+    port.collisions = 1;
+    expect(await c.finish(), isNotNull);
+    expect(seen, isNotEmpty, reason: 'the catch-up notified');
+    expect(seen.whereType<Object>(), isEmpty, reason: 'no banner flash');
+  });
+
+  test('a colliding Pause never shows a stale-rev error on the way', () async {
+    final c = await started();
+    final seen = <Object?>[];
+    c.addListener(() => seen.add(c.lastError));
+    port.collisions = 1;
+    expect(await c.pause(), isTrue);
+    expect(seen.whereType<Object>(), isEmpty, reason: 'no banner flash');
   });
 
   test('Finish colliding twice says so and works on the next tap', () async {

@@ -420,14 +420,16 @@ class Session {
       ? s
       : s.copyWith(rev: s.rev + 1, rest: null, setReadyAtMs: nowMs);
 
-  /// Changes the running rest's end, e.g. +30 s (min: now).
+  /// Changes the running rest's end, e.g. +30 s (min: now). A rest that has
+  /// already ended is left alone: re-arming it would fire a fresh alert (new
+  /// end, new id) straight away for a rest he already heard end.
   static SessionSnapshot extendRest(
     SessionSnapshot s,
     int deltaMs, {
     required int nowMs,
   }) {
     final r = s.rest;
-    if (s.finished || r == null) return s;
+    if (s.finished || r == null || r.endsAtWallMs <= nowMs) return s;
     final end = max(nowMs, r.endsAtWallMs + deltaMs);
     return s.copyWith(
       rev: s.rev + 1,

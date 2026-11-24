@@ -79,6 +79,8 @@ class GymSetupScreen extends StatelessWidget {
     this.onToggle,
     this.onEditWeights,
     this.onStartingWeights,
+    this.onRename,
+    this.onDelete,
     this.onSave,
   });
 
@@ -114,6 +116,13 @@ class GymSetupScreen extends StatelessWidget {
   /// Opens the starting weights (0.3 S1). Null hides the entry (first run:
   /// the gym is not saved yet).
   final VoidCallback? onStartingWeights;
+
+  /// Rename the current gym. Null hides it.
+  final VoidCallback? onRename;
+
+  /// Delete the current gym (its workouts stay in history). Null hides it:
+  /// first run, an unsaved gym, or the only gym there is.
+  final VoidCallback? onDelete;
   final VoidCallback? onSave;
 
   @override
@@ -161,6 +170,33 @@ class GymSetupScreen extends StatelessWidget {
                     onPick: onPickGym,
                     onAdd: onAddGym,
                   ),
+                  if (onRename != null || onDelete != null)
+                    Wrap(
+                      children: [
+                        if (onRename != null)
+                          TextButton.icon(
+                            key: const Key('gym.rename'),
+                            onPressed: onRename,
+                            icon: const Icon(Icons.edit, size: 18),
+                            label: const Text('Rename'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Lit.ink,
+                              minimumSize: const Size(48, 48),
+                            ),
+                          ),
+                        if (onDelete != null)
+                          TextButton.icon(
+                            key: const Key('gym.delete'),
+                            onPressed: onDelete,
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                            label: const Text('Delete gym'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: const Color(0xFFB3261E),
+                              minimumSize: const Size(48, 48),
+                            ),
+                          ),
+                      ],
+                    ),
                   if (presets.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     _PresetBanner(presets: presets, onPreset: onPreset),

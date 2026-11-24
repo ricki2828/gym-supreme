@@ -11,6 +11,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.os.Bundle
 import android.util.Log
+import android.view.WindowManager
 import app.gymsupreme.platform.GymHostApi
 import app.gymsupreme.platform.FlutterError
 import app.gymsupreme.platform.HostInfo
@@ -45,6 +46,16 @@ class MainActivity : FlutterActivity() {
         launchCommand = null
         if (c != null) SpikeLog.write(this, SpikeLog.line("launch_command_taken").put("command", c))
         return c
+    }
+
+    /** Keep the screen on while a workout is logged (0.3 X1). Window flag, so it ends with the window. */
+    fun setKeepScreenOn(on: Boolean) {
+        if (on) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        SpikeLog.write(this, SpikeLog.line("keep_screen_on").put("on", on))
     }
 
     /** The one in-flight requestNotificationPermission call (Dart awaits it). */
@@ -273,6 +284,8 @@ private class HostApiImpl(private val activity: MainActivity) : GymHostApi {
         activity.requestNotificationPermission(callback)
 
     override fun pickImportFile(callback: (Result<String?>) -> Unit) = activity.pickImportFile(callback)
+
+    override fun setKeepScreenOn(on: Boolean) = activity.setKeepScreenOn(on)
 
     override fun openNotificationSettings() {
         val i = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
