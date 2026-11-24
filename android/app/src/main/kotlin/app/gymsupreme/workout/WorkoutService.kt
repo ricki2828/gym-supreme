@@ -550,7 +550,7 @@ class WorkoutService : Service() {
         }
         var text = if (c == null) "${v?.setsDone ?: 0} sets" else "Set ${c.setNumber} of ${c.setCount}  ·  ${v?.doneLine() ?: ""}"
         val lock = if (Features.lockDone && v != null && v.rev >= 0) {
-            WorkoutNotification.Lock(v.rev, v.currentSetId, doneAndPlus = c != null && v.lockEligible, skipRest = v.rest != null && c != null)
+            WorkoutNotification.Lock(v.rev, v.currentSetId, doneAndPlus = c != null && v.lockEligible, skipRest = v.rest != null && c != null && restArmedAt != null)
         } else {
             null
         }
@@ -560,6 +560,9 @@ class WorkoutService : Service() {
     }
 
     private fun notificationId() = if (mode == MODE_SESSION) WorkoutNotification.SESSION_ID else WorkoutNotification.NOTIFICATION_ID
+
+    /** Re-posts the notification (a stale lock-screen tap: its last update may have been dropped). */
+    fun repostNotification() = refreshNotification()
 
     private fun refreshNotification() {
         if (status.running) notification.update(content(), notificationId())

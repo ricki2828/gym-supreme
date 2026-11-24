@@ -658,6 +658,7 @@ class LiveController extends ChangeNotifier {
             await _complete(head);
           } on Object catch (e) {
             // Shown as all done; Finish retries (as in _resync).
+            if (_disposed) return;
             lastError = e;
             notifyListeners();
           }

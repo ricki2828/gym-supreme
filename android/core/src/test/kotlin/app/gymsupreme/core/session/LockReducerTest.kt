@@ -79,6 +79,9 @@ class LockReducerTest {
         assertEquals(LockReducer.Result.NoOp("not_eligible"), LockReducer.apply(fixture("resting"), LockReducer.Action.DONE, "$uuid:3", now))
         assertEquals(LockReducer.Result.NoOp("not_eligible"), LockReducer.apply(fixture("resting"), LockReducer.Action.PLUS_REP, "$uuid:3", now))
         assertEquals(LockReducer.Result.NoOp("no_rest"), LockReducer.apply(fixture("mid_set"), LockReducer.Action.SKIP_REST, null, now))
+        // resting: the rest from set :1 ends at t0 + 380 s.
+        assertEquals(LockReducer.Result.NoOp("rest_over"), LockReducer.apply(fixture("resting"), LockReducer.Action.SKIP_REST, null, 1795400380000))
+        assertIs<LockReducer.Result.Applied>(LockReducer.apply(fixture("resting"), LockReducer.Action.SKIP_REST, null, 1795400379999))
     }
 
     @Test
@@ -90,6 +93,7 @@ class LockReducerTest {
         assertEquals(false, LockReducer.eligible(ex, LinkedHashMap(set).also { it["kind"] = "timed" }))
         assertEquals(false, LockReducer.eligible(ex, LinkedHashMap(set).also { it["block"] = linkedMapOf<String, Any?>("type" to "emom") }))
         assertEquals(false, LockReducer.eligible(ex, LinkedHashMap(set).also { it["target_reps"] = null }))
+        assertEquals(false, LockReducer.eligible(LinkedHashMap(ex).also { it["load_kind"] = "machine" }, LinkedHashMap(set).also { it["target_load_g"] = null }))
         val bodyweight = LinkedHashMap(ex).also { it["load_kind"] = "bodyweight" }
         assertTrue(LockReducer.eligible(bodyweight, LinkedHashMap(set).also { it["target_load_g"] = null }))
     }

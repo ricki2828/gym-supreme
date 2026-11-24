@@ -48,6 +48,9 @@ class WorkoutActionReceiver : BroadcastReceiver() {
                         lastAcceptedAt = now
                         line.put("new_rev", r.newRev)
                     }
+                    // Android drops notification updates past a few a second: if the buttons
+                    // still carry an old rev, post the current one so the next tap works.
+                    if (r.outcome == "stale_rev") s?.repostNotification()
                     r.outcome
                 }
             }

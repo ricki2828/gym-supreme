@@ -41,12 +41,13 @@ object LockReducer {
     /**
      * Whether Done / +1 rep may be offered for [set] of [exercise]: a reps set without a timer
      * block whose Done would log a concrete value (reps known; a weight known unless the lift
-     * is bodyweight or another unloaded kind).
+     * is bodyweight).
      */
     fun eligible(exercise: Map<String, Any?>, set: Map<String, Any?>): Boolean {
         if (set["kind"] != "reps" || set["block"] != null) return false
         if (set["target_reps"] == null) return false
-        if (exercise["load_kind"] in LOADED && set["target_load_g"] == null) return false
+        // A null load is only a real value for bodyweight (the notification shows a weight otherwise).
+        if (exercise["load_kind"] != "bodyweight" && set["target_load_g"] == null) return false
         return true
     }
 
@@ -126,7 +127,10 @@ object LockReducer {
     }
 
     private fun skipRest(s: Map<String, Any?>, now: Long): Result {
-        if (s["rest"] == null) return Result.NoOp("no_rest")
+        val rest = s["rest"] as Map<*, *>? ?: return Result.NoOp("no_rest")
+        // Kotlin-only: a rest already over has nothing to skip (a late tap would only move
+        // set_ready_at_ms and shorten the next set's recorded start).
+        if ((rest["ends_at_wall_ms"] as Long) <= now) return Result.NoOp("rest_over")
         val next = LinkedHashMap(s)
         next["rev"] = (s["rev"] as Long) + 1
         next["rest"] = null

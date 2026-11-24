@@ -160,6 +160,10 @@ sfg="$(adb shell dumpsys activity services "$PKG" | tr -d '\r' | grep -E 'isFore
 # tap) and once more after the notification moved on (stale). lockdone on: exactly one set is
 # logged, with Flutter gone. lockdone off: no buttons, and the receiver ignores the intent.
 lockdone=0; flag_on lockdone && lockdone=1
+# Pull requests always build with lockdone (tools/ci_features.sh): never smoke flag-off by accident.
+if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && { [ "$lockdone" != 1 ] || ! grep -q " lockdone=1" <<< " ${nfeat#native }"; }; then
+  echo "::error::pull request build without lockdone on the native line: $nfeat" >&2; exit 1
+fi
 session_step lock_fire
 lf="$(wait_for '"event":"selftest_session".*"step":"lock_fire"' 30)" || { echo "L1: lock_fire step did not run" >&2; svc_lines | tail -n 10 >&2; exit 1; }
 echo "L1 lock_fire: $lf"
