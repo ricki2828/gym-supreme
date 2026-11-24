@@ -76,6 +76,7 @@ class DiagnosticsPanel extends StatelessWidget {
     this.device,
     this.onExportJson,
     this.onExportCsv,
+    this.onImport,
     this.onOpenNotificationSettings,
     this.onOpenSpike,
   });
@@ -85,6 +86,9 @@ class DiagnosticsPanel extends StatelessWidget {
   final DeviceView? device;
   final VoidCallback? onExportJson;
   final VoidCallback? onExportCsv;
+
+  /// Import a JSON export (0.3 I1); null hides the entry.
+  final VoidCallback? onImport;
   final VoidCallback? onOpenNotificationSettings;
 
   /// The phase-0 spike checklist; null hides the entry.
@@ -211,6 +215,33 @@ class DiagnosticsPanel extends StatelessWidget {
             ),
           ],
         ),
+        if (onImport != null) ...[
+          const SizedBox(height: 22),
+          _Section('Import'),
+          Text(
+            'Adds the workouts from a JSON export that are not on this '
+            'phone. Workouts already here, or deleted here, are left as they '
+            'are, and so are your gyms and settings. You see the counts '
+            'before anything changes.',
+            style: LitType.body(14, Lit.inkSecondary),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton(
+            key: const Key('diagnostics.import'),
+            onPressed: onImport,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(56),
+              side: const BorderSide(color: Lit.ink, width: 2),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            child: Text(
+              'Import a JSON export',
+              style: LitType.body(16, Lit.ink, FontWeight.w700),
+            ),
+          ),
+        ],
         if (onOpenSpike != null) ...[
           const SizedBox(height: 22),
           _Section('Phone checks'),

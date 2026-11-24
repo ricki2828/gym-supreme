@@ -12,6 +12,7 @@ import 'api.dart';
 import 'catalog.dart';
 import 'cut2/rotation.dart';
 import 'cut2/rotation_store.dart';
+import 'import.dart';
 import 'model.dart';
 import 'snapshot.dart';
 import 'store.dart';
@@ -1178,6 +1179,80 @@ class GymEngine implements GymApi {
       }
     }
     return b.toString();
+  }
+
+  // ---------------------------------------------------------- import
+
+  @override
+  ImportCounts previewImport(String text) =>
+      _import(parseImportBundle(text), write: false);
+
+  @override
+  ImportCounts importBundle(String text) {
+    final bundle = parseImportBundle(text);
+    try {
+      return store.transaction(() => _import(bundle, write: true));
+    } on ImportRefused {
+      rethrow;
+    } on Object catch (e) {
+      // e.g. a set id that clashes with a set already stored: the
+      // transaction rolled back, so nothing was written.
+      throw ImportRefused('Import failed and nothing was written ($e).');
+    }
+  }
+
+  /// Counts (and with [write], applies) [b] against the store. Workouts:
+  /// insert unknown uuids; skip stored ones, deleted ones included, so a
+  /// tombstone is never resurrected and an edited workout never reverts.
+  /// Gyms: insert unknown ids with their kit; never touch a gym already
+  /// here. Settings: applied only while this phone still has the defaults
+  /// (a fresh install), so his own choices are never replaced. Rotation and
+  /// the file's `deleted_workout_uuids` are not imported.
+  ImportCounts _import(ImportBundle b, {required bool write}) {
+    final deleted = store.deletedWorkoutUuids().toSet();
+    var added = 0, existing = 0, wasDeleted = 0, hr = 0, clamped = 0;
+    for (final w in b.workouts) {
+      final uuid = w.record.uuid;
+      if (deleted.contains(uuid)) {
+        wasDeleted++;
+      } else if (store.hasWorkout(uuid)) {
+        existing++;
+      } else {
+        added++;
+        hr += w.hr.length;
+        if (w.endClamped) clamped++;
+        if (write) store.upsertWorkout(w.record, hr: w.hr);
+      }
+    }
+    var gymsAdded = 0, gymsKept = 0;
+    for (final g in b.gyms) {
+      if (store.gym(g.id) != null) {
+        gymsKept++;
+      } else {
+        gymsAdded++;
+        if (write) store.upsertGym(g);
+      }
+    }
+    final defaults = jsonEncode(const Settings().toJson());
+    final fileSettings = b.settings;
+    final restore =
+        fileSettings != null &&
+        jsonEncode(store.settings().toJson()) == defaults &&
+        jsonEncode(fileSettings.toJson()) != defaults;
+    if (write && restore) store.saveSettings(fileSettings);
+    return ImportCounts(
+      exportFormat: b.exportFormat,
+      workoutsInFile: b.workouts.length,
+      workoutsAdded: added,
+      skippedExisting: existing,
+      skippedDeleted: wasDeleted,
+      gymsAdded: gymsAdded,
+      gymsKept: gymsKept,
+      hrSamplesAdded: hr,
+      settingsRestored: restore,
+      deletedInFile: b.deletedInFile,
+      endsClamped: clamped,
+    );
   }
 
   // ---------------------------------------------------------- helpers

@@ -58,6 +58,11 @@ abstract interface class HistoryStore {
 
   /// Database schema version (`user_version`); 0 for the memory store.
   int get schemaVersion;
+
+  /// Runs [body] as one all-or-nothing write (import, I1): if it throws,
+  /// nothing it wrote stays and the error is rethrown. Store writes made
+  /// inside join it.
+  T transaction<T>(T Function() body);
 }
 
 class MemoryStore implements HistoryStore {
@@ -174,4 +179,43 @@ class MemoryStore implements HistoryStore {
 
   @override
   int get schemaVersion => 0;
+
+  int _txDepth = 0;
+
+  @override
+  T transaction<T>(T Function() body) {
+    if (_txDepth > 0) return body();
+    final gyms = Map.of(_gyms);
+    final workouts = Map.of(_workouts);
+    final deleted = Map.of(_deleted);
+    final hr = {
+      for (final e in hrByWorkout.entries) e.key: [...e.value],
+    };
+    final settings = _settings;
+    final raw = Map.of(_raw);
+    _txDepth++;
+    try {
+      return body();
+    } catch (_) {
+      _gyms
+        ..clear()
+        ..addAll(gyms);
+      _workouts
+        ..clear()
+        ..addAll(workouts);
+      _deleted
+        ..clear()
+        ..addAll(deleted);
+      hrByWorkout
+        ..clear()
+        ..addAll(hr);
+      _settings = settings;
+      _raw
+        ..clear()
+        ..addAll(raw);
+      rethrow;
+    } finally {
+      _txDepth--;
+    }
+  }
 }

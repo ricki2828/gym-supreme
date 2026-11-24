@@ -80,7 +80,9 @@ class GymRoot extends StatefulWidget {
   final GymDeps deps;
 
   /// Dogfood/debug only; null hides the entry.
-  final VoidCallback? onOpenDiagnostics;
+  /// Opens Diagnostics and completes when he comes back. Today rebuilds
+  /// then: an import there may have added workouts and gyms (0.3 I1).
+  final Future<void> Function()? onOpenDiagnostics;
 
   @override
   State<GymRoot> createState() => _GymRootState();
@@ -339,7 +341,12 @@ class _GymRootState extends State<GymRoot> {
         onHistoryChanged: () {
           if (mounted) setState(() {});
         },
-        onOpenDiagnostics: widget.onOpenDiagnostics,
+        onOpenDiagnostics: widget.onOpenDiagnostics == null
+            ? null
+            : () async {
+                await widget.onOpenDiagnostics!();
+                if (mounted) setState(() {});
+              },
         recoveryError: _recoveryError,
         notificationsOff: _notificationsOff,
         onOpenNotificationSettings: widget.deps.notifications == null

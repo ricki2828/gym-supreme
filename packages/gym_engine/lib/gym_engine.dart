@@ -7,6 +7,12 @@ export 'src/api.dart';
 export 'src/catalog.dart';
 export 'src/coverage.dart';
 export 'src/engine.dart';
+export 'src/import.dart'
+    show
+        ImportCounts,
+        ImportRefused,
+        importMaxExportFormat,
+        importMaxSchemaVersion;
 export 'src/model.dart';
 export 'src/session.dart';
 export 'src/snapshot.dart';
