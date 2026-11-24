@@ -15,6 +15,8 @@ void main() {
     expect(Features.ghost, _want('ghost'));
     expect(Features.rotation, _want('rotation'));
     expect(Features.plateMath, _want('plates'));
+    expect(Features.lockDone, _want('lockdone'));
+    expect(Features.health, _want('health'));
     if (_features == 'all') {
       // Direct check, independent of the parser copy above.
       expect([
@@ -22,6 +24,8 @@ void main() {
         Features.ghost,
         Features.rotation,
         Features.plateMath,
+        Features.lockDone,
+        Features.health,
       ], everyElement(isTrue));
     }
     if (_features.isEmpty) {
@@ -30,7 +34,26 @@ void main() {
         Features.ghost,
         Features.rotation,
         Features.plateMath,
+        Features.lockDone,
+        Features.health,
       ], everyElement(isFalse));
     }
+  });
+
+  test('the startup line names every flag in the order the smoke reads', () {
+    // tools/emulator_smoke.sh compares this line with the native one
+    // (android/app/.../workout/Features.kt): same names, same order.
+    final names = RegExp(r' (\w+)=[01]')
+        .allMatches(featuresLogLine())
+        .map((m) => m.group(1))
+        .toList();
+    expect(names, [
+      'timers',
+      'ghost',
+      'rotation',
+      'plates',
+      'lockdone',
+      'health',
+    ]);
   });
 }
