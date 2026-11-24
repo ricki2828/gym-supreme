@@ -114,6 +114,16 @@ enum HealthAvailability {
   flagOff,
 }
 
+/// What a workout counts as in Health Connect.
+enum HealthExerciseKind {
+  /// Push, Pull, Legs, Core and mixed picks: `EXERCISE_TYPE_STRENGTH_TRAINING`.
+  strength,
+  /// The Engine type (EMOM, AMRAP, intervals):
+  /// `EXERCISE_TYPE_HIGH_INTENSITY_INTERVAL_TRAINING`, so it never counts
+  /// toward Body Age's strength factor.
+  conditioning,
+}
+
 enum HealthOutcome {
   /// Written or deleted.
   ok,
@@ -250,7 +260,7 @@ class HealthStatus {
   int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
 }
 
-/// One finished workout as a Health Connect strength-training session.
+/// One finished workout as a Health Connect exercise session.
 class HealthSession {
   HealthSession({
     required this.clientRecordId,
@@ -259,6 +269,7 @@ class HealthSession {
     required this.startEpochMs,
     required this.endEpochMs,
     required this.utcOffsetSeconds,
+    required this.kind,
   });
 
   /// The workout uuid: writing it again replaces the record (upsert).
@@ -277,6 +288,8 @@ class HealthSession {
   /// The workout's own UTC offset (tz_offset_min * 60).
   int utcOffsetSeconds;
 
+  HealthExerciseKind kind;
+
   List<Object?> _toList() {
     return <Object?>[
       clientRecordId,
@@ -285,6 +298,7 @@ class HealthSession {
       startEpochMs,
       endEpochMs,
       utcOffsetSeconds,
+      kind,
     ];
   }
 
@@ -300,6 +314,7 @@ class HealthSession {
       startEpochMs: result[3]! as int,
       endEpochMs: result[4]! as int,
       utcOffsetSeconds: result[5]! as int,
+      kind: result[6]! as HealthExerciseKind,
     );
   }
 
@@ -312,7 +327,7 @@ class HealthSession {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(clientRecordId, other.clientRecordId) && _deepEquals(version, other.version) && _deepEquals(title, other.title) && _deepEquals(startEpochMs, other.startEpochMs) && _deepEquals(endEpochMs, other.endEpochMs) && _deepEquals(utcOffsetSeconds, other.utcOffsetSeconds);
+    return _deepEquals(clientRecordId, other.clientRecordId) && _deepEquals(version, other.version) && _deepEquals(title, other.title) && _deepEquals(startEpochMs, other.startEpochMs) && _deepEquals(endEpochMs, other.endEpochMs) && _deepEquals(utcOffsetSeconds, other.utcOffsetSeconds) && _deepEquals(kind, other.kind);
   }
 
   @override
@@ -382,20 +397,23 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is HealthAvailability) {
       buffer.putUint8(129);
       writeValue(buffer, value.index);
-    }    else if (value is HealthOutcome) {
+    }    else if (value is HealthExerciseKind) {
       buffer.putUint8(130);
       writeValue(buffer, value.index);
-    }    else if (value is HostInfo) {
+    }    else if (value is HealthOutcome) {
       buffer.putUint8(131);
-      writeValue(buffer, value.encode());
-    }    else if (value is HealthStatus) {
+      writeValue(buffer, value.index);
+    }    else if (value is HostInfo) {
       buffer.putUint8(132);
       writeValue(buffer, value.encode());
-    }    else if (value is HealthSession) {
+    }    else if (value is HealthStatus) {
       buffer.putUint8(133);
       writeValue(buffer, value.encode());
-    }    else if (value is HealthResult) {
+    }    else if (value is HealthSession) {
       buffer.putUint8(134);
+      writeValue(buffer, value.encode());
+    }    else if (value is HealthResult) {
+      buffer.putUint8(135);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -410,14 +428,17 @@ class _PigeonCodec extends StandardMessageCodec {
         return value == null ? null : HealthAvailability.values[value];
       case 130:
         final value = readValue(buffer) as int?;
-        return value == null ? null : HealthOutcome.values[value];
+        return value == null ? null : HealthExerciseKind.values[value];
       case 131:
-        return HostInfo.decode(readValue(buffer)!);
+        final value = readValue(buffer) as int?;
+        return value == null ? null : HealthOutcome.values[value];
       case 132:
-        return HealthStatus.decode(readValue(buffer)!);
+        return HostInfo.decode(readValue(buffer)!);
       case 133:
-        return HealthSession.decode(readValue(buffer)!);
+        return HealthStatus.decode(readValue(buffer)!);
       case 134:
+        return HealthSession.decode(readValue(buffer)!);
+      case 135:
         return HealthResult.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);

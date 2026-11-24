@@ -1,6 +1,7 @@
 package app.gymsupreme.health
 
 import androidx.health.connect.client.records.ExerciseSessionRecord
+import app.gymsupreme.platform.HealthExerciseKind
 import app.gymsupreme.platform.HealthSession
 import java.time.Instant
 import java.time.ZoneOffset
@@ -19,7 +20,16 @@ class HealthRecordsTest {
         offsetS: Long = 13 * 3600,
         version: Long = 0,
         title: String = "Push",
-    ) = HealthSession(uuid, version, title, start, end, offsetS)
+        kind: HealthExerciseKind = HealthExerciseKind.STRENGTH,
+    ) = HealthSession(uuid, version, title, start, end, offsetS, kind)
+
+    @Test
+    fun `conditioning (Engine) is HIIT, never strength training`() {
+        val r = HealthRecords.toRecord(session(title = "Engine", kind = HealthExerciseKind.CONDITIONING))
+        assertEquals(ExerciseSessionRecord.EXERCISE_TYPE_HIGH_INTENSITY_INTERVAL_TRAINING, r.exerciseType)
+        assertTrue(r.exerciseType != ExerciseSessionRecord.EXERCISE_TYPE_STRENGTH_TRAINING)
+        assertEquals("Engine", r.title)
+    }
 
     @Test
     fun `strength session with the workout's own times, offset and title`() {

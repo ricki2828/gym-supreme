@@ -9,7 +9,9 @@ const String healthDefaultTitle = 'Strength training';
 /// A stored workout as one Health Connect session (0.3 H1). `version` is
 /// `edited_at_ms ?? 0`: an edit raises it, so the rewrite replaces the
 /// record; the same version again is ignored (idempotent backfill). Paused
-/// time stays inside start..end: the store keeps only its total.
+/// time stays inside start..end: the store keeps only its total. The Engine
+/// type (conditioning) is HIIT, never strength: Body Age's strength factor
+/// must count lifting only.
 HealthSession healthSessionOf(eng.WorkoutRecord w) => HealthSession(
   clientRecordId: w.uuid,
   version: w.editedAtMs ?? 0,
@@ -17,7 +19,13 @@ HealthSession healthSessionOf(eng.WorkoutRecord w) => HealthSession(
   startEpochMs: w.startedAtMs,
   endEpochMs: w.endedAtMs,
   utcOffsetSeconds: w.tzOffsetMin * 60,
+  kind: healthKindOf(w.typeId),
 );
+
+/// `engine` is conditioning; every other type, and a mixed pick, is strength.
+HealthExerciseKind healthKindOf(String? typeId) => typeId == 'engine'
+    ? HealthExerciseKind.conditioning
+    : HealthExerciseKind.strength;
 
 /// Keeps Health Connect in step with history (0.3 H1, flag `health`): one
 /// [sync] call after a finish, an edit, a delete and an undo reads the

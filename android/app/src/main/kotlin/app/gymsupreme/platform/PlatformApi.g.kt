@@ -217,6 +217,24 @@ enum class HealthAvailability(val raw: Int) {
   }
 }
 
+/** What a workout counts as in Health Connect. */
+enum class HealthExerciseKind(val raw: Int) {
+  /** Push, Pull, Legs, Core and mixed picks: `EXERCISE_TYPE_STRENGTH_TRAINING`. */
+  STRENGTH(0),
+  /**
+   * The Engine type (EMOM, AMRAP, intervals):
+   * `EXERCISE_TYPE_HIGH_INTENSITY_INTERVAL_TRAINING`, so it never counts
+   * toward Body Age's strength factor.
+   */
+  CONDITIONING(1);
+
+  companion object {
+    fun ofRaw(raw: Int): HealthExerciseKind? {
+      return values().firstOrNull { it.raw == raw }
+    }
+  }
+}
+
 enum class HealthOutcome(val raw: Int) {
   /** Written or deleted. */
   OK(0),
@@ -348,7 +366,7 @@ data class HealthStatus (
 }
 
 /**
- * One finished workout as a Health Connect strength-training session.
+ * One finished workout as a Health Connect exercise session.
  *
  * Generated class from Pigeon that represents data sent in messages.
  */
@@ -364,7 +382,8 @@ data class HealthSession (
   val startEpochMs: Long,
   val endEpochMs: Long,
   /** The workout's own UTC offset (tz_offset_min * 60). */
-  val utcOffsetSeconds: Long
+  val utcOffsetSeconds: Long,
+  val kind: HealthExerciseKind
 )
  {
   companion object {
@@ -375,7 +394,8 @@ data class HealthSession (
       val startEpochMs = pigeonVar_list[3] as Long
       val endEpochMs = pigeonVar_list[4] as Long
       val utcOffsetSeconds = pigeonVar_list[5] as Long
-      return HealthSession(clientRecordId, version, title, startEpochMs, endEpochMs, utcOffsetSeconds)
+      val kind = pigeonVar_list[6] as HealthExerciseKind
+      return HealthSession(clientRecordId, version, title, startEpochMs, endEpochMs, utcOffsetSeconds, kind)
     }
   }
   fun toList(): List<Any?> {
@@ -386,6 +406,7 @@ data class HealthSession (
       startEpochMs,
       endEpochMs,
       utcOffsetSeconds,
+      kind,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -396,7 +417,7 @@ data class HealthSession (
       return true
     }
     val other = other as HealthSession
-    return PlatformApiPigeonUtils.deepEquals(this.clientRecordId, other.clientRecordId) && PlatformApiPigeonUtils.deepEquals(this.version, other.version) && PlatformApiPigeonUtils.deepEquals(this.title, other.title) && PlatformApiPigeonUtils.deepEquals(this.startEpochMs, other.startEpochMs) && PlatformApiPigeonUtils.deepEquals(this.endEpochMs, other.endEpochMs) && PlatformApiPigeonUtils.deepEquals(this.utcOffsetSeconds, other.utcOffsetSeconds)
+    return PlatformApiPigeonUtils.deepEquals(this.clientRecordId, other.clientRecordId) && PlatformApiPigeonUtils.deepEquals(this.version, other.version) && PlatformApiPigeonUtils.deepEquals(this.title, other.title) && PlatformApiPigeonUtils.deepEquals(this.startEpochMs, other.startEpochMs) && PlatformApiPigeonUtils.deepEquals(this.endEpochMs, other.endEpochMs) && PlatformApiPigeonUtils.deepEquals(this.utcOffsetSeconds, other.utcOffsetSeconds) && PlatformApiPigeonUtils.deepEquals(this.kind, other.kind)
   }
 
   override fun hashCode(): Int {
@@ -407,6 +428,7 @@ data class HealthSession (
     result = 31 * result + PlatformApiPigeonUtils.deepHash(this.startEpochMs)
     result = 31 * result + PlatformApiPigeonUtils.deepHash(this.endEpochMs)
     result = 31 * result + PlatformApiPigeonUtils.deepHash(this.utcOffsetSeconds)
+    result = 31 * result + PlatformApiPigeonUtils.deepHash(this.kind)
     return result
   }
 }
@@ -463,25 +485,30 @@ private open class PlatformApiPigeonCodec : StandardMessageCodec() {
       }
       130.toByte() -> {
         return (readValue(buffer) as Long?)?.let {
-          HealthOutcome.ofRaw(it.toInt())
+          HealthExerciseKind.ofRaw(it.toInt())
         }
       }
       131.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let {
-          HostInfo.fromList(it)
+        return (readValue(buffer) as Long?)?.let {
+          HealthOutcome.ofRaw(it.toInt())
         }
       }
       132.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          HealthStatus.fromList(it)
+          HostInfo.fromList(it)
         }
       }
       133.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          HealthSession.fromList(it)
+          HealthStatus.fromList(it)
         }
       }
       134.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          HealthSession.fromList(it)
+        }
+      }
+      135.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           HealthResult.fromList(it)
         }
@@ -495,24 +522,28 @@ private open class PlatformApiPigeonCodec : StandardMessageCodec() {
         stream.write(129)
         writeValue(stream, value.raw.toLong())
       }
-      is HealthOutcome -> {
+      is HealthExerciseKind -> {
         stream.write(130)
         writeValue(stream, value.raw.toLong())
       }
-      is HostInfo -> {
+      is HealthOutcome -> {
         stream.write(131)
-        writeValue(stream, value.toList())
+        writeValue(stream, value.raw.toLong())
       }
-      is HealthStatus -> {
+      is HostInfo -> {
         stream.write(132)
         writeValue(stream, value.toList())
       }
-      is HealthSession -> {
+      is HealthStatus -> {
         stream.write(133)
         writeValue(stream, value.toList())
       }
-      is HealthResult -> {
+      is HealthSession -> {
         stream.write(134)
+        writeValue(stream, value.toList())
+      }
+      is HealthResult -> {
+        stream.write(135)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)

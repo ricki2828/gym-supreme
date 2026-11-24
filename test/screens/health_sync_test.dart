@@ -206,6 +206,18 @@ void main() {
     test('a mixed pick (no type) gets the default title', () {
       expect(healthSessionOf(rec(typeId: null)).title, healthDefaultTitle);
     });
+
+    test('Engine (conditioning) is never written as strength', () {
+      final e = healthSessionOf(rec(typeId: 'engine'));
+      expect(e.kind, HealthExerciseKind.conditioning);
+      expect(e.title, 'Engine');
+      for (final t in ['push', 'pull', 'legs', 'core', null]) {
+        expect(
+          healthSessionOf(rec(typeId: t)).kind,
+          HealthExerciseKind.strength,
+        );
+      }
+    });
   });
 
   group('switch', () {

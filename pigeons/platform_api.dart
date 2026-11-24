@@ -203,7 +203,18 @@ class HealthStatus {
   bool enabled;
 }
 
-/// One finished workout as a Health Connect strength-training session.
+/// What a workout counts as in Health Connect.
+enum HealthExerciseKind {
+  /// Push, Pull, Legs, Core and mixed picks: `EXERCISE_TYPE_STRENGTH_TRAINING`.
+  strength,
+
+  /// The Engine type (EMOM, AMRAP, intervals):
+  /// `EXERCISE_TYPE_HIGH_INTENSITY_INTERVAL_TRAINING`, so it never counts
+  /// toward Body Age's strength factor.
+  conditioning,
+}
+
+/// One finished workout as a Health Connect exercise session.
 class HealthSession {
   HealthSession({
     required this.clientRecordId,
@@ -212,6 +223,7 @@ class HealthSession {
     required this.startEpochMs,
     required this.endEpochMs,
     required this.utcOffsetSeconds,
+    required this.kind,
   });
 
   /// The workout uuid: writing it again replaces the record (upsert).
@@ -226,6 +238,7 @@ class HealthSession {
 
   /// The workout's own UTC offset (tz_offset_min * 60).
   int utcOffsetSeconds;
+  HealthExerciseKind kind;
 }
 
 enum HealthOutcome {
