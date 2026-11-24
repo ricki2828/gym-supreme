@@ -121,6 +121,7 @@ LiveView? liveViewOf(
     }
   }
   final c = s.current;
+  final pending = pendingExercises(s);
   // Finished (even with sets left unlogged) or nothing left: only Finish.
   if (c == null || s.finished) {
     final last = s.exercises.isEmpty ? null : s.exercises.last;
@@ -177,19 +178,9 @@ LiveView? liveViewOf(
     canLoadUp: steps != null && steps.next(load) != null,
     canLoadDown: steps != null && steps.prev(load) != null,
     restS: ex.restS,
-    upNext: [
-      for (final e in s.exercises.skip(c.exercise + 1))
-        PlanItem(
-          exerciseId: e.exerciseId,
-          name: e.name,
-          sets: e.sets.where((x) => x.state == eng.SetState.pending).length,
-          reps: e.sets.isEmpty
-              ? (e.repLo ?? 0)
-              : (e.sets.first.targetReps ?? 0),
-          loadG: e.sets.isEmpty ? null : e.sets.first.targetLoadG,
-          unit: unitOfKind(e.loadKind),
-        ),
-    ],
+    upNext: [for (final i in pending.skip(1)) _queueItem(s.exercises[i])],
+    queue: [for (final i in pending) _queueItem(s.exercises[i])],
+    canDoLater: pending.length > 1 && set.block == null,
     restLeftS: restLeftMs == null || restLeftMs <= 0
         ? null
         : (restLeftMs / 1000).ceil(),
@@ -393,6 +384,31 @@ eng.PlannedItem swapItem(
     restS: replacing.restS,
     reason: 'Swapped in for ${replacing.name}.',
     primary: e.primary,
+  );
+}
+
+/// Indexes (into `s.exercises`) of the exercises that still have a pending
+/// set, in order. The first is the current exercise; logged sets stay inside
+/// their exercise, so an exercise moved later keeps them and resumes at its
+/// next pending set. Done or skipped exercises are not in the list.
+List<int> pendingExercises(eng.SessionSnapshot s) => [
+  for (var i = 0; i < s.exercises.length; i++)
+    if (s.exercises[i].sets.any((x) => x.state == eng.SetState.pending)) i,
+];
+
+/// One pending exercise as a reorder row: its pending sets and next target.
+PlanItem _queueItem(eng.SnapshotExercise e) {
+  final next = e.sets.firstWhere(
+    (x) => x.state == eng.SetState.pending,
+    orElse: () => e.sets.first,
+  );
+  return PlanItem(
+    exerciseId: e.exerciseId,
+    name: e.name,
+    sets: e.sets.where((x) => x.state == eng.SetState.pending).length,
+    reps: e.sets.isEmpty ? (e.repLo ?? 0) : (next.targetReps ?? 0),
+    loadG: e.sets.isEmpty ? null : next.targetLoadG,
+    unit: unitOfKind(e.loadKind),
   );
 }
 

@@ -35,6 +35,8 @@ LiveView liveView({
   lastTime: targetLoadG == null ? null : 'Last time 3 × 10 · 22 kg ea',
   restS: 90,
   upNext: pushPlan.items.sublist(1),
+  queue: pushPlan.items,
+  canDoLater: true,
   elapsedS: 12 * 60 + 40,
   restLeftS: restLeftS,
   allDone: allDone,

@@ -204,7 +204,40 @@ Map<String, (SessionSnapshot, List<Map<String, Object?>>)> lockCases() {
       PlannedSet(loadG: null, reps: 8),
     ]),
   ]);
+  // R1 (0.3.0 live reorder): the app reorders, then the lock screen acts.
+  // The bench set 0 is logged (half done, resting) and the pushdown given a
+  // weight, so its lock Done is offered; then the bench goes "later".
+  final benchHalf = Session.retarget(
+    Session.done(fresh, '$uuid:0', nowMs: t0 + 60000),
+    '$uuid:3',
+    loadG: 30000,
+  );
+  final doLater = Session.reorder(benchHalf, 0, 1);
+  // The pushdown (set 3) given a weight and dragged ahead of the bench.
+  final pulledForward = Session.reorder(
+    Session.retarget(fresh, '$uuid:3', loadG: 30000),
+    1,
+    0,
+  );
   return {
+    // The new current exercise is the pushdown: Done logs ITS set (3), then 4;
+    // the bench comes back at its next pending set (1) and Done logs that.
+    'lockscreen_v1_after_do_later': (
+      doLater,
+      [
+        _step('done', 3, 460000),
+        _step('done', 4, 560000),
+        _step('done', 1, 700000),
+      ],
+    ),
+    'lockscreen_v1_after_drag_to_front': (
+      pulledForward,
+      [
+        _step('done', 3, 95000),
+        _step('done', 4, 230000),
+        _step('done', 0, 380000),
+      ],
+    ),
     'lockscreen_v1_done_first_set': (fresh, [_step('done', 0, 95000)]),
     'lockscreen_v1_done_during_rest': (resting, [_step('done', 2, 270000)]),
     'lockscreen_v1_done_whole_lift': (

@@ -26,6 +26,8 @@ class LiveView {
     required this.targetLoadG,
     required this.restS,
     required this.upNext,
+    this.queue = const [],
+    this.canDoLater = false,
     required this.elapsedS,
     this.lastTime,
     this.canLoadUp = true,
@@ -67,8 +69,16 @@ class LiveView {
   /// Rest after this set, seconds.
   final int restS;
 
-  /// Exercises after the current one, in order (drag to reorder).
+  /// Exercises after the current one that still have sets to do, in order.
   final List<PlanItem> upNext;
+
+  /// Every exercise with sets to do, the current one first: the drag-to-
+  /// reorder list. Logged sets stay with their exercise.
+  final List<PlanItem> queue;
+
+  /// "Do later" is offered: another exercise is waiting, and the current set
+  /// is not a timer block (a block in progress cannot move).
+  final bool canDoLater;
 
   /// Seconds left in the running rest; null = not resting.
   final int? restLeftS;
@@ -157,6 +167,7 @@ class LiveScreen extends StatelessWidget {
     this.onRestDelta,
     this.onSkipRest,
     this.onReorder,
+    this.onDoLater,
     this.onPause,
     this.onFinish,
     this.onDiscard,
@@ -194,8 +205,11 @@ class LiveScreen extends StatelessWidget {
   final ValueChanged<int>? onRestDelta;
   final VoidCallback? onSkipRest;
 
-  /// Indexes within [LiveView.upNext].
+  /// Indexes within [LiveView.queue] (the current exercise is index 0).
   final void Function(int from, int to)? onReorder;
+
+  /// Move the current exercise to just after the next one.
+  final VoidCallback? onDoLater;
   final VoidCallback? onPause;
 
   /// Called after he confirms (with sets left) or straight away (all done).
@@ -323,6 +337,7 @@ class LiveScreen extends StatelessWidget {
         onRestDelta: onRestDelta,
         onSkipRest: onSkipRest,
         onReorder: onReorder,
+        onDoLater: view.canDoLater ? onDoLater : null,
         onUndo: onUndo,
         finishBar: _finishBar(context, Lit.ink, Lit.pull),
       );
@@ -462,16 +477,18 @@ class LiveScreen extends StatelessWidget {
                     onSwap: view.canSwap ? onSwap : null,
                     onAddSet: onAddSet,
                     onSkipSet: onSkipSet,
+                    onDoLater: view.canDoLater ? onDoLater : null,
                   ),
-                  if (view.upNext.isNotEmpty) ...[
+                  if (view.queue.length > 1) ...[
                     const SizedBox(height: 14),
                     Text(
-                      'NEXT UP · DRAG TO REORDER',
+                      'ORDER · DRAG TO REORDER',
                       style: LitType.cap(13, ink),
                     ),
                     const SizedBox(height: 8),
                     PlanList(
-                      items: view.upNext,
+                      items: view.queue,
+                      markFirst: true,
                       onReorder: onReorder,
                       ruleColour: ink.withValues(alpha: 0.25),
                     ),
@@ -563,6 +580,7 @@ class _SetLinks extends StatelessWidget {
     this.onSwap,
     this.onAddSet,
     this.onSkipSet,
+    this.onDoLater,
   });
   final Color ink;
   final String? undoLabel;
@@ -570,6 +588,7 @@ class _SetLinks extends StatelessWidget {
   final VoidCallback? onSwap;
   final VoidCallback? onAddSet;
   final VoidCallback? onSkipSet;
+  final VoidCallback? onDoLater;
 
   Widget _link(
     String text,
@@ -625,6 +644,14 @@ class _SetLinks extends StatelessWidget {
         ),
       if (onSkipSet != null)
         _link('Skip this set', Icons.skip_next, onSkipSet!),
+      if (onDoLater != null)
+        _link(
+          'Do later',
+          Icons.arrow_downward,
+          onDoLater!,
+          key: const Key('live.do_later'),
+          semantic: 'Do this exercise later: move it after the next one',
+        ),
     ],
   );
 }
@@ -958,6 +985,7 @@ class _RestScreen extends StatelessWidget {
     this.onRestDelta,
     this.onSkipRest,
     this.onReorder,
+    this.onDoLater,
     this.onUndo,
     this.finishBar,
   });
@@ -965,6 +993,7 @@ class _RestScreen extends StatelessWidget {
   final ValueChanged<int>? onRestDelta;
   final VoidCallback? onSkipRest;
   final void Function(int from, int to)? onReorder;
+  final VoidCallback? onDoLater;
   final VoidCallback? onUndo;
   final Widget? finishBar;
 
@@ -1044,21 +1073,23 @@ class _RestScreen extends StatelessWidget {
                 ),
               ],
             ),
-            if (view.undoLabel != null && onUndo != null)
+            if ((view.undoLabel != null && onUndo != null) || onDoLater != null)
               Align(
                 alignment: Alignment.centerLeft,
                 child: _SetLinks(
                   ink: ink,
                   undoLabel: view.undoLabel,
                   onUndo: onUndo,
+                  onDoLater: onDoLater,
                 ),
               ),
-            if (view.upNext.isNotEmpty) ...[
+            if (view.queue.length > 1) ...[
               const SizedBox(height: 24),
-              Text('THEN · DRAG TO REORDER', style: LitType.cap(13, ink)),
+              Text('ORDER · DRAG TO REORDER', style: LitType.cap(13, ink)),
               const SizedBox(height: 8),
               PlanList(
-                items: view.upNext,
+                items: view.queue,
+                markFirst: true,
                 onReorder: onReorder,
                 ruleColour: ink.withValues(alpha: 0.25),
               ),
