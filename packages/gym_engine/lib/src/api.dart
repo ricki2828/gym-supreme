@@ -8,6 +8,7 @@
 library;
 
 import 'cut2/rotation.dart';
+import 'import.dart';
 import 'model.dart';
 import 'snapshot.dart';
 
@@ -425,6 +426,21 @@ abstract interface class GymApi {
 
   // Export (item 10).
   ExportFiles export({required String appVersion, Map<String, int> native});
+
+  // Import (0.3 I1).
+  /// What [importBundle] would do with [text], writing nothing (the
+  /// confirm). Throws [ImportRefused] for a file it would refuse.
+  ImportCounts previewImport(String text);
+
+  /// Imports an export bundle (`export_format` 1 or 2) in one transaction:
+  /// all of it or, on [ImportRefused], none of it. Idempotent by workout
+  /// uuid: a stored uuid, deleted or not, is skipped and left as it is.
+  /// Unknown gym ids are added with their kit; known ones are kept as they
+  /// are here. Settings are filled in only while this phone has the
+  /// defaults. HR samples in the file are added with their workout.
+  /// Refuses a newer export format, database or snapshot schema, and any
+  /// malformed or truncated file.
+  ImportCounts importBundle(String text);
 }
 
 /// One heart-rate sample (R2). Not written in cut 1 but the table exists.

@@ -302,8 +302,17 @@ class SqliteStore implements HistoryStore {
   int get schemaVersion =>
       db.select('PRAGMA user_version').first.columnAt(0) as int;
 
+  int _txDepth = 0;
+
+  @override
+  T transaction<T>(T Function() body) => _tx(body);
+
+  /// One write transaction. Nested calls (a store write inside
+  /// [transaction]) join the outer one.
   T _tx<T>(T Function() body) {
+    if (_txDepth > 0) return body();
     db.execute('BEGIN IMMEDIATE');
+    _txDepth++;
     try {
       final r = body();
       db.execute('COMMIT');
@@ -311,6 +320,8 @@ class SqliteStore implements HistoryStore {
     } catch (_) {
       if (!db.autocommit) db.execute('ROLLBACK');
       rethrow;
+    } finally {
+      _txDepth--;
     }
   }
 
