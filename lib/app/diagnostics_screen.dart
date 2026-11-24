@@ -3,6 +3,7 @@ import 'package:gym_engine/gym_engine.dart' as eng;
 
 import '../screens/diagnostics_panel.dart';
 import '../screens/engine_adapter.dart';
+import '../screens/import_flow.dart';
 import '../spike/spike_screen.dart';
 import 'flavor.dart';
 import 'services.dart';
@@ -118,6 +119,28 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
     }
   }
 
+  /// Import (0.3 I1): picker -> counts -> confirm -> one transaction ->
+  /// backup snapshot.
+  Future<void> _import() async {
+    final host = s.host;
+    if (host == null) return;
+    await runImport(
+      context,
+      pick: host.pickImportFile,
+      preview: s.engine.previewImport,
+      apply: s.engine.importBundle,
+      blockedReason: s.restorePending
+          ? 'Your backup could not be restored yet, so this launch runs on '
+                'a temporary store and an import would be lost. Restart the '
+                'app and try again.'
+          : null,
+      afterImport: () {
+        s.persist(); // the backup snapshot holds the imported history
+        if (mounted) setState(() {});
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -143,6 +166,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       device: _device,
       onExportJson: () => _export(csv: false),
       onExportCsv: () => _export(csv: true),
+      onImport: host == null ? null : _import,
       onOpenNotificationSettings: host == null
           ? null
           : () => host.openNotificationSettings(),
