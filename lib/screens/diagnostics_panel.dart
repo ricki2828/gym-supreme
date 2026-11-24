@@ -430,7 +430,8 @@ class HealthSection extends StatelessWidget {
         Text(
           'Sends each finished workout to Health Connect as a strength '
           'session (type, start and end only), so Body Age counts it. Edits '
-          'and deletes follow. Nothing is read back.',
+          'and deletes follow. Workouts from before the switch, and imported '
+          'ones, go with "Send past workouts". Nothing is read back.',
           style: LitType.body(14, Lit.inkSecondary),
         ),
         SwitchListTile(

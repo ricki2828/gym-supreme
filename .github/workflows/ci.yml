@@ -200,6 +200,15 @@ jobs:
       - run: flutter pub get
       - name: Build debug APK (play flavour, app.gymsupreme.debug)
         run: flutter build apk --debug --flavor play --dart-define=BUILD_SHA=${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Health Connect footprint with the health flag off (H1, report only)
+        # This APK has no GS_FEATURES, so no src/health manifest: whatever Health Connect shows up
+        # here comes from the connect-client library itself (its merged manifest), in every build.
+        run: |
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          APK=build/app/outputs/flutter-apk/app-play-debug.apk
+          "$BT/aapt2" dump xmltree --file AndroidManifest.xml "$APK" > "$RUNNER_TEMP/manifest.txt"
+          python3 tools/manifest_health_report.py "$RUNNER_TEMP/manifest.txt" | tee "$RUNNER_TEMP/hc.txt"
+          { echo "### Health Connect, flag off (play debug APK)"; echo '```'; cat "$RUNNER_TEMP/hc.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - name: Android lint NewApi
         working-directory: android
         run: ./gradlew :app:lintPlayDebug --no-daemon
@@ -284,6 +293,9 @@ jobs:
             label="$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' pubspec.yaml)"
             grep -q "versionName='$label-dogfood'" "$RUNNER_TEMP/pkg.txt" || { echo "::error::versionName is not $label-dogfood"; exit 1; }
             tools/check_manifest_permissions.sh "$APK" "$BT" "$DOGFOOD_PKG"
+            "$BT/aapt2" dump xmltree --file AndroidManifest.xml "$APK" > "$RUNNER_TEMP/manifest-$abi.txt"
+            echo "Health Connect footprint ($abi, GS_FEATURES='${GS_FEATURES:-}'):"
+            python3 tools/manifest_health_report.py "$RUNNER_TEMP/manifest-$abi.txt"
             tools/check_16kb_alignment.sh "$APK" "$BT/zipalign"
           done
           SIZE=$(stat -c %s build/app/outputs/flutter-apk/app-arm64-v8a-dogfood-release.apk)

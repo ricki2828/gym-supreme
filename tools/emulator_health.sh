@@ -43,6 +43,21 @@ e2e_wait() { # e2e_wait <step> <seconds>
 str_of() { sed -n "s/.*\"$1\":\"\([^\"]*\)\".*/\1/p" | head -1 || true; }
 step() { e2e_lines | grep "\"step\":\"$1\"" | tail -1 || true; }
 
+# Startup: HealthApi (and with it the Health Connect client classes) is registered only with the
+# flag on (review P2, PR #61).
+adb shell am force-stop "$PKG"
+adb logcat -c || true
+launch "$PKG" || { echo "::error::API $sdk health: relaunch failed" >&2; exit 1; }
+reg=""
+for i in $(seq 1 20); do
+  reg="$(svc_lines | grep -oE '\{"event":"health_api"[^}]*\}' | tail -1 || true)"
+  [ -n "$reg" ] && break
+  sleep 1
+done
+echo "H1 API $sdk: startup $reg"
+want_reg=false; [ "$health" = 1 ] && want_reg=true
+grep -q "\"registered\":$want_reg" <<< "$reg" || { echo "::error::API $sdk health: HealthApi registered should be $want_reg: $reg" >&2; exit 1; }
+
 if [ "$health" = 1 ] && [ "$sdk" -ge 34 ]; then
   # The permission screen, from the switch (review P1, PR #61: Android 14+ asks via
   # requestPermissions, not the client's androidx contract).

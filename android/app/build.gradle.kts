@@ -21,7 +21,7 @@ val dartDefines: String = (project.findProperty("dart-defines") as String?) ?: "
 val gsFeaturesRaw: String = dartDefines.split(',')
     .filter { it.isNotBlank() }
     .mapNotNull { runCatching { String(Base64.getDecoder().decode(it), Charsets.UTF_8) }.getOrNull() }
-    .firstOrNull { it.startsWith("GS_FEATURES=") }
+    .lastOrNull { it.startsWith("GS_FEATURES=") } // the last define wins, as in DartDefines
     ?.removePrefix("GS_FEATURES=")
     ?: ""
 val healthManifest: Boolean =

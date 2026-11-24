@@ -104,7 +104,8 @@ if [ "$sdk" -ge 33 ]; then
 fi
 e2e_wait ok 30
 e2e_lines | sed 's/^/ask: /'
-e2e_lines | grep '"step":"ask"' | grep -q '"allowed":true' || { echo "::error::API $sdk: the ask did not end allowed" >&2; exit 1; }
+askl="$(e2e_lines | grep '"step":"ask"' || true)"  # captured: grep -q + pipefail SIGPIPE
+grep -q '"allowed":true' <<< "$askl" || { echo "::error::API $sdk: the ask did not end allowed" >&2; exit 1; }
 if [ "$sdk" -lt 33 ] && ask_lines | grep -q '"event":"notif_request_shown"'; then
   echo "::error::API $sdk: a dialog was asked for below Android 13" >&2; exit 1
 fi
@@ -279,7 +280,8 @@ e2e_lines | grep '"step":"restart"' | grep -q '"accepted":true' \
   || { echo "::error::API $sdk: a start after discard was not accepted" >&2; exit 1; }
 discarded_uuid="$(e2e_field uuid <<< "$d")"
 [ -n "$discarded_uuid" ] || { echo "::error::API $sdk: discard: no uuid" >&2; exit 1; }
-svc_lines | grep '"event":"journal_delete"' | grep -F "$discarded_uuid" | grep -q '"ok":true' \
+jdel="$(svc_lines | grep '"event":"journal_delete"' | grep -F "$discarded_uuid" || true)"  # captured: pipefail
+grep -q '"ok":true' <<< "$jdel" \
   || { echo "::error::API $sdk: no journal_delete ok=true for $discarded_uuid" >&2; svc_lines | grep -E 'journal|session_' | tail -n 12 >&2; exit 1; }
 if svc_lines | grep -q '"event":"journal_delete_failed"'; then
   echo "::error::API $sdk: journal_delete_failed during the discard drill" >&2; svc_lines | grep journal_delete >&2; exit 1
@@ -316,7 +318,8 @@ for _ in $(seq 1 20); do [ -n "$(stale_line)" ] && break; sleep 1; done
 # The logcat was cleared just before the command, so any service_started here belongs to it: the
 # queued start must have gone idle (service_idle_start), never begun a session. (session_start is
 # the journal write in LiveSession.start and always fires; service events carry no uuid.)
-if svc_lines | grep -F '"event":"service_started"' | grep -qF '"mode":"session"'; then
+started="$(svc_lines | grep -F '"event":"service_started"' || true)"  # captured: pipefail SIGPIPE
+if grep -qF '"mode":"session"' <<< "$started"; then
   echo "::error::API $sdk: a session service began for the stale start" >&2
   svc_lines | grep -E 'start_ignored|service_|session_' | tail -n 12 >&2; exit 1
 fi

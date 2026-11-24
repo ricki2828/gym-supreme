@@ -95,7 +95,8 @@ class MainActivity : FlutterActivity() {
     }
 
     /** Health Connect's permission screen (0.3 H1): one at a time, answered in onActivityResult. */
-    private val healthContract = PermissionController.createRequestPermissionResultContract()
+    // Lazy: with the flag off no androidx.health class is loaded at all (review P2, PR #61).
+    private val healthContract by lazy { PermissionController.createRequestPermissionResultContract() }
     private var healthCallback: ((Set<String>?) -> Unit)? = null
 
     /** Null to [callback] when a screen is already open; the granted set otherwise (empty on any failure). */
@@ -249,7 +250,12 @@ class MainActivity : FlutterActivity() {
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         GymHostApi.setUp(messenger, HostApiImpl(this))
         WorkoutApi.setUp(messenger, WorkoutApiImpl(this))
-        HealthApi.setUp(messenger, HealthApiImpl(applicationContext) { perms, cb -> requestHealthPermissions(perms, cb) })
+        // Flag off: no HealthApi channel and no Health Connect client classes; Dart never calls it
+        // (AppServices.health is null without the flag).
+        if (Features.health) {
+            HealthApi.setUp(messenger, HealthApiImpl(applicationContext) { perms, cb -> requestHealthPermissions(perms, cb) })
+        }
+        SpikeLog.write(this, SpikeLog.line("health_api").put("registered", Features.health))
         snapshots = SnapshotsStream(this).also { SnapshotsStreamHandler.register(messenger, it) }
         spike = SpikeChannel(this, messenger)
     }
