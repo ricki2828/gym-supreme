@@ -7,6 +7,7 @@ import 'package:gym_engine/gym_engine.dart' as eng;
 
 import '../screens/live_controller.dart';
 import '../screens/notification_access.dart';
+import 'feature_flags.dart';
 import 'services.dart';
 
 /// Phase-1 exit e2e (CI emulator, dogfood/debug only). The real app flow
@@ -25,6 +26,9 @@ import 'services.dart';
 /// - `stale_start`: startSession and a paused submit sent back to back with
 ///   no await between, so the pause reaches the service before its start
 ///   callback ran. The service must go idle for that start (0.2.1 D2).
+/// - `delete`: two quick workouts, the second deleted (0.2.1 D3): it must
+///   leave `history` (not `isStored`, which stays true for deleted ones).
+/// - `export_check`: the export's workout count and tombstones.
 /// - `ask`: the one-time notification ask (0.1.1).
 /// - `history`: list stored workouts and whether a journal is pending
 ///   (restore drill, 0.2; discard check, 0.2.1).
@@ -75,6 +79,11 @@ class E2eDriver {
           await _discard();
         case 'stale_start':
           await _staleStart();
+        case 'delete':
+          await _delete();
+        case 'export_check':
+          _exportCheck();
+          _log('ok');
         case 'ask':
           await _ask();
         case 'history':
@@ -203,13 +212,71 @@ class E2eDriver {
     final pauseF = s.port.submitSnapshot(paused.encode(), started.rev);
     await Future.wait([startF, pauseF]);
     _log('stale_start', {'uuid': started.workoutUuid, 'rev': paused.rev});
-    // The journal holds the paused snapshot and the service never started,
-    // so the delete is accepted (still_running would mean it did start).
+    // Clean-up only. A delete accepted here is weak evidence: it also passes
+    // when the service started and was stopped again in time. The proof that
+    // the queued start went idle is in the smoke: start_ignored stale=true,
+    // no service_started event, no foreground service left.
     await s.port.deleteJournal(started.workoutUuid);
     final journal = await s.port.readPendingJournal();
     _log('stale_cleanup', {'journal_gone': journal == null});
     if (journal != null) throw StateError('journal left behind');
     _log('ok');
+  }
+
+  /// Start, log one set, finish: stored, journal gone. No rest wait.
+  Future<String> _quickWorkout(eng.SessionPlan plan) async {
+    final c = _controller();
+    await c.start(plan);
+    _check(c, 'start');
+    await c.done();
+    _check(c, 'set');
+    final uuid = await c.finish();
+    _check(c, 'finish');
+    if (uuid == null) throw StateError('finish returned no uuid');
+    c.dispose();
+    return uuid;
+  }
+
+  /// Delete drill (0.2.1 D3): history is the truth for "visible", never
+  /// `isStored` (true for deleted workouts so recovery cannot re-save them).
+  Future<void> _delete() async {
+    final plan = s.engine.suggest(
+      gymId: _gymId(),
+      muscleIds: const ['chest'],
+      minutes: 30,
+      seed: 1,
+    );
+    if (plan.items.isEmpty) throw StateError('empty plan');
+    final kept = await _quickWorkout(plan);
+    final gone = await _quickWorkout(plan);
+    final d = s.engine.deleteWorkout(gone, rotation: Features.rotation);
+    if (d == null) throw StateError('deleteWorkout returned null');
+    s.persist();
+    final rows = s.engine.history(limit: 500);
+    _log('delete', {
+      'kept': kept,
+      'deleted': gone,
+      'in_history': rows.any((r) => r.uuid == gone),
+      'kept_in_history': rows.any((r) => r.uuid == kept),
+      'is_stored': s.engine.isStored(gone),
+      'history_count': rows.length,
+    });
+    _exportCheck();
+    _log('ok');
+  }
+
+  /// The export's visible workouts and tombstones (export_format 2).
+  void _exportCheck() {
+    final f = s.engine.export(appVersion: s.appVersion);
+    final m = jsonDecode(f.json) as Map<String, Object?>;
+    _log('export', {
+      'format': m['export_format'],
+      'workouts': (m['workouts'] as List).length,
+      'workout_uuids': [
+        for (final w in m['workouts'] as List) (w as Map)['uuid'],
+      ],
+      'deleted': m['deleted_workout_uuids'],
+    });
   }
 
   Future<void> _resume() async {

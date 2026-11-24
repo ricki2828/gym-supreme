@@ -146,6 +146,10 @@ void main() {
     expect(h['count'], 1);
   });
 
+  // The stub has no service and no queued start callback, so it cannot reach
+  // the race: this only checks the command's steps. The emulator smoke
+  // (start_ignored stale=true, no service_started, no foreground service) is
+  // the proof that the stale-start path works.
   test(
     'stale_start: start + paused submit back to back, then cleaned up',
     () async {
@@ -167,6 +171,35 @@ void main() {
       expect(s.engine.history(limit: 5), isEmpty);
     },
   );
+
+  test('delete: the second workout leaves history and the export keeps '
+      'its tombstone', () async {
+    final store = SqliteStore.inMemory();
+    addTearDown(store.close);
+    final s = services(store, AlertingStubPort());
+    final lines = <String>[];
+    await E2eDriver(s, out: lines.add).run('delete:x');
+    final steps = lines.map(step).map((m) => m['step']).toList();
+    expect(steps, ['delete', 'export', 'ok'], reason: lines.join('\n'));
+    final d = lines.map(step).firstWhere((m) => m['step'] == 'delete');
+    expect(d['in_history'], isFalse);
+    expect(d['kept_in_history'], isTrue);
+    expect(
+      d['is_stored'],
+      isTrue,
+      reason: 'isStored stays true: not "visible"',
+    );
+    expect(d['history_count'], 1);
+    final e = lines.map(step).firstWhere((m) => m['step'] == 'export');
+    expect(e['format'], 2);
+    expect(e['workouts'], 1);
+    expect(e['deleted'], [d['deleted']]);
+    // Another process start: still gone, tombstone kept.
+    lines.clear();
+    await E2eDriver(s, out: lines.add).run('export_check:y');
+    final e2 = lines.map(step).firstWhere((m) => m['step'] == 'export');
+    expect(e2['deleted'], [d['deleted']]);
+  });
 
   test('history lists stored workouts for the restore drill', () async {
     final store = SqliteStore.inMemory();

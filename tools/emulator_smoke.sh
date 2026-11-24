@@ -229,14 +229,61 @@ adb logcat -c || true
 e2e_cmd stale_start
 e2e_wait ok 60
 e2e_lines | sed 's/^/e2e stale_start: /'
-wait_for '"event":"start_ignored".*"stale":true' 20 > /dev/null \
+# Key-order independent: the event and the stale flag are matched on the same line separately.
+stale_line() { svc_lines | grep -F '"event":"start_ignored"' | grep -F '"stale":true' | tail -1; }
+for _ in $(seq 1 20); do [ -n "$(stale_line)" ] && break; sleep 1; done
+[ -n "$(stale_line)" ] \
   || { echo "::error::API $sdk: no start_ignored stale=true after the back-to-back start+pause" >&2; svc_lines | grep -E 'start_ignored|service_|session_|journal' | tail -n 12 >&2; exit 1; }
+# The logcat was cleared just before the command, so any service_started here belongs to it: the
+# queued start must have gone idle (service_idle_start), never begun a session. (session_start is
+# the journal write in LiveSession.start and always fires; service events carry no uuid.)
+if svc_lines | grep -F '"event":"service_started"' | grep -qF '"mode":"session"'; then
+  echo "::error::API $sdk: a session service began for the stale start" >&2
+  svc_lines | grep -E 'start_ignored|service_|session_' | tail -n 12 >&2; exit 1
+fi
 sleep 2
 if adb shell dumpsys activity services "$PKG" | tr -d '\r' | grep -q 'isForeground=true'; then
   echo "::error::API $sdk: a foreground service is running after the stale start" >&2
   adb shell dumpsys activity services "$PKG" | tr -d '\r' | head -n 30 >&2; exit 1
 fi
 fatal_check "$PKG" "e2e stale_start"
+# Delete (0.2.1 D3): two quick workouts, the second deleted. It must leave history (the driver
+# checks history, not isStored, which stays true for deleted workouts), the export must hold its
+# tombstone, and a force-stop + relaunch must not bring it back (recovery must not re-save it).
+has_uuid() { grep -qF "\"$1\"" <<< "$2"; }  # has_uuid <uuid> <json line>
+adb logcat -c || true
+e2e_cmd delete
+e2e_wait ok 120
+e2e_lines | sed 's/^/e2e delete: /'
+dl="$(e2e_lines | grep '"step":"delete"')"
+deleted_uuid="$(e2e_field deleted <<< "$dl")"
+kept_uuid="$(e2e_field kept <<< "$dl")"
+[ -n "$deleted_uuid" ] && [ -n "$kept_uuid" ] || { echo "::error::API $sdk: delete: no uuids: $dl" >&2; exit 1; }
+grep -q '"in_history":false' <<< "$dl" && grep -q '"kept_in_history":true' <<< "$dl" \
+  || { echo "::error::API $sdk: the deleted workout is still in history (or the kept one is gone): $dl" >&2; exit 1; }
+ex="$(e2e_lines | grep '"step":"export"')"
+has_uuid "$deleted_uuid" "$ex" && grep -q '"format":2' <<< "$ex" \
+  || { echo "::error::API $sdk: export lacks the tombstone: $ex" >&2; exit 1; }
+fatal_check "$PKG" "e2e delete"
+adb shell am force-stop "$PKG"
+sleep 2
+adb logcat -c || true
+e2e_cmd history
+e2e_wait ok 30
+h="$(e2e_lines | grep '"step":"history"')"
+has_uuid "$kept_uuid" "$h" && ! has_uuid "$deleted_uuid" "$h" \
+  || { echo "::error::API $sdk: after relaunch history is wrong (deleted back, or kept lost): $h" >&2; exit 1; }
+e2e_cmd export_check
+e2e_wait ok 30
+ex="$(e2e_lines | grep '"step":"export"')"
+has_uuid "$deleted_uuid" "$ex" \
+  || { echo "::error::API $sdk: tombstone lost after relaunch: $ex" >&2; exit 1; }
+# uuids present (history is capped at 20 rows, the export is not): kept is exported, deleted is not
+# among the exported workouts (it is only a tombstone).
+wl="$(sed -n 's/.*"workout_uuids":\(\[[^]]*\]\).*/\1/p' <<< "$ex" | head -1)"
+has_uuid "$kept_uuid" "$wl" && ! has_uuid "$deleted_uuid" "$wl" \
+  || { echo "::error::API $sdk: export workouts wrong (kept missing or deleted present): $ex" >&2; exit 1; }
+fatal_check "$PKG" "after delete relaunch"
 # Rest alert with notifications DENIED (t3x, 0.1.1): plan 6.2 says the service itself buzzes
 # and plays the tone, so a refused permission must not silence the rest. API 33+ only (below
 # 33 the permission does not exist). Revoking kills the app; the e2e run starts it again.
@@ -286,6 +333,12 @@ if [ "$sdk" -eq 34 ]; then
   after="$(uuids_of <<< "$h")"
   echo "restore drill: after $after"
   [ "$after" = "$before" ] || { echo "::error::restore drill: workouts did not come back ($before -> $after)" >&2; exit 1; }
+  # The workout deleted before the backup is still gone after the restore, and still a tombstone.
+  ! has_uuid "$deleted_uuid" "$h" || { echo "::error::restore drill: the deleted workout came back: $h" >&2; exit 1; }
+  e2e_cmd export_check
+  e2e_wait ok 30
+  ex="$(e2e_lines | grep '"step":"export"')"
+  has_uuid "$deleted_uuid" "$ex" || { echo "::error::restore drill: tombstone lost in the restore: $ex" >&2; exit 1; }
   grep -q '"restore_failed":0' <<< "$h" && grep -q '"restore_pending":false' <<< "$h" || { echo "::error::restore drill: restore flagged failure/pending: $h" >&2; exit 1; }
   fatal_check "$PKG" "restore drill"
 fi
