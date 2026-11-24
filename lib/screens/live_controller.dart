@@ -212,25 +212,22 @@ class LiveController extends ChangeNotifier {
     return g;
   }
 
-  /// Set ids whose value he typed; their Done is logged as `typed` (B4).
-  /// Kept in this controller only: after a restart and Resume a typed set
-  /// logs as `adjusted` (a known undercount until the snapshot carries it).
-  final Set<String> _typed = {};
+  // A set whose value he typed carries `entry: typed` in the snapshot (0.3
+  // X1), so its Done is logged as `typed` (B4) after a pause, a restart and
+  // Resume too. Undo clears it (Session.undo restores the plan).
 
   /// A typed rep count (or seconds on a timed set), for the set the number
   /// pad was opened on ([setId]); dropped if that set is no longer pending.
   Future<void> setReps(int reps, {String? setId}) => _onSet(setId, (s, set) {
     if (reps < 1 || reps == set.targetReps) return s;
-    _typed.add(set.setId);
-    return eng.Session.retarget(s, set.setId, reps: reps);
+    return eng.Session.retarget(s, set.setId, reps: reps, typed: true);
   });
 
   /// A typed load in grams. Any value, on the gym's list or not: he logs
   /// what he lifted (P1-2); the list only drives +/- and progression.
   Future<void> setLoad(int grams, {String? setId}) => _onSet(setId, (s, set) {
     if (grams < 0 || grams == set.targetLoadG) return s;
-    _typed.add(set.setId);
-    return eng.Session.retarget(s, set.setId, loadG: grams);
+    return eng.Session.retarget(s, set.setId, loadG: grams, typed: true);
   });
 
   /// Runs [f] on the set [setId] if it is still pending, else on the current
@@ -256,7 +253,7 @@ class LiveController extends ChangeNotifier {
   /// `typed` when he typed this set's value, except a first-time set, which
   /// stays a cold start (the one-tap rate leaves those out).
   eng.Completion? _completionFor(eng.SessionSnapshot s, eng.SnapshotSet set) {
-    if (!_typed.contains(set.setId)) return null;
+    if (set.entry != eng.SetEntry.typed) return null;
     final c = s.current;
     final kind = c == null ? '' : s.exercises[c.exercise].loadKind;
     final loaded = const {'dumbbell', 'stack', 'barbell'}.contains(kind);
@@ -284,7 +281,6 @@ class LiveController extends ChangeNotifier {
   Future<void> undoLast() => _transition((s) {
     final last = lastDoneSet(s);
     if (last == null) return s;
-    _typed.remove(last.setId);
     return c2.TimerSession.undo(s, last.setId);
   });
 

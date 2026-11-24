@@ -22,6 +22,7 @@ void main() {
   late eng.MemoryStore store;
   late eng.GymEngine engine;
   late GymDeps deps;
+  late FlakyPort port;
   late eng.Gym home;
   late eng.Gym away;
   var persists = 0;
@@ -43,9 +44,10 @@ void main() {
     engine.saveGym(away);
     persists = 0;
     saved.clear();
+    port = FlakyPort();
     deps = GymDeps(
       engine: engine,
-      port: FlakyPort(),
+      port: port,
       catalog: catalog,
       appVersion: 'test',
       nowMs: () => now,
@@ -168,6 +170,66 @@ void main() {
     expect(historyRowOf(rows[uuid]!).gymName, 'Deleted gym');
     expect(historyRowOf(rows[other]!).gymName, 'Condo gym');
     expect(store.workout(uuid), isNotNull, reason: 'sets kept');
+  });
+
+  testWidgets('a paused workout at the gym blocks the delete', (tester) async {
+    final c = LiveController(
+      engine: engine,
+      port: port,
+      nowMs: () => now,
+      tzOffsetMin: 480,
+      tick: const Duration(days: 1),
+    );
+    await c.start(
+      engine.suggest(
+        gymId: away.id,
+        muscleIds: const ['chest', 'triceps'],
+        typeId: 'push',
+      ),
+    );
+    expect(await c.pause(), isTrue);
+    final uuid = c.snapshot!.workoutUuid;
+    c.dispose();
+    await pump(tester, away);
+    await tapKey(tester, 'gym.delete');
+    expect(
+      find.textContaining('Finish or discard the paused workout first'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('gym.delete.confirm')), findsNothing);
+    await tapKey(tester, 'gym.delete.blocked');
+    expect(engine.gym(away.id), isNotNull);
+    expect(saved, isEmpty);
+    // Once it is discarded the delete goes ahead.
+    await port.deleteJournal(uuid);
+    await tapKey(tester, 'gym.delete');
+    expect(find.byKey(const Key('gym.delete.confirm')), findsOneWidget);
+    await tapKey(tester, 'gym.delete.confirm');
+    expect(engine.gym(away.id), isNull);
+  });
+
+  testWidgets('a paused workout at ANOTHER gym does not block it', (
+    tester,
+  ) async {
+    final c = LiveController(
+      engine: engine,
+      port: port,
+      nowMs: () => now,
+      tzOffsetMin: 480,
+      tick: const Duration(days: 1),
+    );
+    await c.start(
+      engine.suggest(
+        gymId: home.id,
+        muscleIds: const ['chest', 'triceps'],
+        typeId: 'push',
+      ),
+    );
+    expect(await c.pause(), isTrue);
+    c.dispose();
+    await pump(tester, away);
+    await tapKey(tester, 'gym.delete');
+    expect(find.byKey(const Key('gym.delete.confirm')), findsOneWidget);
   });
 
   testWidgets('Keep it leaves the gym alone', (tester) async {
