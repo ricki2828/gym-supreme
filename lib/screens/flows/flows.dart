@@ -1025,6 +1025,15 @@ class _LiveFlowState extends State<LiveFlow> {
     }
   }
 
+  /// "Up next · Change order": the reorder sheet over the live screen. It
+  /// reads the controller again on every change, so a move shows at once.
+  Future<void> _changeOrder() => showReorderSheet(
+    context,
+    listenable: c,
+    view: c.view,
+    onMove: c.reorderQueue,
+  );
+
   /// Pause, then delete the journal; leaves with no uuid (nothing to
   /// summarise). If the delete fails the workout stays paused and Today
   /// offers it as Resume (the failure is said there).
@@ -1090,6 +1099,8 @@ class _LiveFlowState extends State<LiveFlow> {
             onSkipRest: c.skipRest,
             onReorder: c.reorderQueue,
             onDoLater: c.doLater,
+            onPickNext: c.pickNow,
+            onChangeOrder: _changeOrder,
             onPause: _pause,
             onFinish: _finish,
             onDiscard: c.active ? _discard : null,

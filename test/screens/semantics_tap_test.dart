@@ -102,6 +102,29 @@ void main() {
       onDelete: noop,
       onSave: noop,
     ),
+    // 0.3.1 R2: Change order entry, Do later button, What's next? rows.
+    'set (change order, what\'s next)': LiveScreen(
+      view: liveView(atExerciseEnd: true),
+      onDone: noop,
+      onRestDelta: noop1,
+      onChangeOrder: noop,
+      onDoLater: noop,
+      onPickNext: noop1,
+      onReorder: (_, _) {},
+      onFinish: noop,
+    ),
+    'rest (what\'s next)': LiveScreen(
+      view: liveView(restLeftS: 60, atExerciseEnd: true),
+      onSkipRest: noop,
+      onRestDelta: noop1,
+      onChangeOrder: noop,
+      onPickNext: noop1,
+      onReorder: (_, _) {},
+      onFinish: noop,
+    ),
+    'reorder sheet': Scaffold(
+      body: ReorderSheet(view: liveView(), onMove: (_, _) {}),
+    ),
     'rest (edit the next set)': LiveScreen(
       view: liveView(restLeftS: 60),
       onReps: noop1,

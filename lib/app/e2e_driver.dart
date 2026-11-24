@@ -37,6 +37,9 @@ import 'services.dart';
 /// - `reorder_check`: the journal from `reorder` comes back with the same
 ///   order, the same current exercise and the logged set still inside its
 ///   exercise, then it is discarded.
+/// - `whatsnext`: start, log every set of the first exercise, then pick the
+///   third exercise from "What's next?" (R2, 0.3.1); the smoke kills the app.
+/// - `whatsnext_check`: `reorder_check`'s checks, plus the choice is still on.
 /// - `pick`: opens the import file picker (GymHostApi.pickImportFile); the
 ///   script backs out of it and checks the native and Dart result (0.3 I1).
 /// - `export_dump`: the JSON export, gzip + base64, in numbered `chunk`
@@ -118,6 +121,10 @@ class E2eDriver {
         case 'reorder':
           await _reorder();
         case 'reorder_check':
+          await _reorderCheck();
+        case 'whatsnext':
+          await _whatsNext();
+        case 'whatsnext_check':
           await _reorderCheck();
         case 'pick':
           await _pick();
@@ -528,6 +535,49 @@ class E2eDriver {
     c.dispose();
   }
 
+  /// R2: the last set of exercise 1 is logged, then exercise 3 is picked from
+  /// "What's next?" (the same `pickNow` the rest screen calls). Rest keeps
+  /// running; the new order must survive the kill.
+  Future<void> _whatsNext() async {
+    final plan = s.engine.suggest(
+      gymId: _gymId(),
+      muscleIds: const ['chest', 'front-delts', 'side-delts', 'triceps'],
+      minutes: 60,
+      seed: 1,
+    );
+    if (plan.items.length < 4) throw StateError('need 4 exercises to pick');
+    final c = _controller();
+    await c.start(plan);
+    _check(c, 'start');
+    final first = _currentId(c.snapshot!);
+    var guard = 0;
+    while (_currentId(c.snapshot!) == first && guard++ < 20) {
+      await c.done();
+      _check(c, 'done');
+    }
+    final v = c.view();
+    if (v == null || !v.atExerciseEnd) {
+      throw StateError('no choice offered after the last set');
+    }
+    final before = _ids(c.snapshot!);
+    // Queue: [exercise 2 (the default), exercise 3, ...]; pick exercise 3.
+    await c.pickNow(1);
+    _check(c, 'pick');
+    final after = c.snapshot!;
+    final expected = [before[0], before[2], before[1], ...before.skip(3)];
+    if (_ids(after).join(',') != expected.join(',')) {
+      throw StateError('order ${_ids(after)} is not $expected');
+    }
+    _log('whatsnext', {
+      'before': before,
+      'order': _ids(after),
+      'current': _currentId(after),
+      'done_per': _donePer(after),
+      'rev': after.rev,
+    });
+    c.dispose();
+  }
+
   /// After the kill: the journal has the reordered order, the same current
   /// exercise and the logged set where it was logged. Resumes, then discards
   /// (cleans the journal; the discard path itself is its own smoke step).
@@ -548,6 +598,7 @@ class E2eDriver {
       'done_per': _donePer(now),
       'view_exercise': c.view()?.exerciseName,
       'current_name': now.exercises[now.current!.exercise].name,
+      'at_end': c.view()?.atExerciseEnd,
     });
     if (!await c.discard()) throw StateError('discard failed');
     c.dispose();

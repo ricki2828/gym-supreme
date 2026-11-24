@@ -268,6 +268,31 @@ void main() {
     expect(await port.readPendingJournal(), isNull);
   });
 
+  test('whatsnext: pick exercise 3 after the last set, then the journal '
+      'comes back that way (R2)', () async {
+    final store = SqliteStore.inMemory();
+    addTearDown(store.close);
+    final port = AlertingStubPort();
+    final s = services(store, port);
+    final lines = <String>[];
+    await E2eDriver(s, out: lines.add).run('whatsnext:w');
+    final r = lines.map(step).firstWhere((m) => m['step'] == 'whatsnext');
+    final before = (r['before'] as List).cast<String>();
+    expect(r['order'], [before[0], before[2], before[1], ...before.skip(3)]);
+    expect(r['current'], before[2]);
+    final done = (r['done_per'] as List).cast<int>();
+    expect(done[0], greaterThan(0), reason: 'exercise 1 logged in full');
+    lines.clear();
+    await E2eDriver(s, out: lines.add).run('whatsnext_check:c');
+    final c = lines.map(step).firstWhere((m) => m['step'] == 'reorder_resumed');
+    expect(c['order'], r['order']);
+    expect(c['current'], r['current']);
+    expect(c['done_per'], r['done_per']);
+    expect(c['view_exercise'], c['current_name']);
+    expect(c['at_end'], isTrue, reason: 'the choice is still offered');
+    expect(await port.readPendingJournal(), isNull);
+  });
+
   test('export_dump then import.<bundle> on a fresh store: same digest, '
       'tombstone not resurrected, re-import adds 0', () async {
     final a = SqliteStore.inMemory();

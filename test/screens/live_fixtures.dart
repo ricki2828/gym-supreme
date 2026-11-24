@@ -21,6 +21,8 @@ LiveView liveView({
   WorkoutType type = WorkoutType.push,
   bool timerBlock = false,
   String? plateLine,
+  bool atExerciseEnd = false,
+  bool canDoLater = true,
 }) => LiveView(
   timerBlock: timerBlock,
   plateLine: plateLine,
@@ -43,7 +45,8 @@ LiveView liveView({
   restS: 90,
   upNext: pushPlan.items.sublist(1),
   queue: pushPlan.items,
-  canDoLater: true,
+  canDoLater: canDoLater,
+  atExerciseEnd: atExerciseEnd,
   elapsedS: 12 * 60 + 40,
   restLeftS: restLeftS,
   allDone: allDone,

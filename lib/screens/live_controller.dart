@@ -461,6 +461,13 @@ class LiveController extends ChangeNotifier {
   /// still has sets to do. A no-op with nothing else waiting.
   Future<void> doLater() => reorderQueue(0, 1);
 
+  /// "What's next?" pick: the exercise at [queueIndex] of the pending list
+  /// becomes the first pending one and the rest keep their relative order
+  /// (the same result as "Do later" for index 1). One `Session.reorder`, so
+  /// rev, journal and lock-screen Done follow it. Rest keeps running.
+  Future<void> pickNow(int queueIndex) =>
+      queueIndex <= 0 ? Future<void>.value() : reorderQueue(queueIndex, 0);
+
   bool _currentHasBlock(eng.SessionSnapshot s) => s.currentSet?.block != null;
 
   /// True when the journal holds the paused snapshot (safe to leave). The

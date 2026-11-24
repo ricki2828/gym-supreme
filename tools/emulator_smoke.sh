@@ -403,6 +403,34 @@ rr="$(e2e_lines | grep '"step":"reorder_resumed"')"
 [ "$(e2e_field view_exercise <<< "$rr")" = "$(e2e_field current_name <<< "$rr")" ] \
   || { echo "::error::API $sdk: Resume does not show the current exercise: $rr" >&2; exit 1; }
 fatal_check "$PKG" "e2e reorder"
+# What's next? (R2, 0.3.1): log every set of exercise 1, pick exercise 3 (the rest screen's row),
+# kill the app. The journal must come back with that order, exercise 3 current, exercise 1's sets
+# still logged, and the choice still on.
+adb logcat -c || true
+e2e_cmd whatsnext
+e2e_wait whatsnext 90
+wn="$(e2e_lines | grep '"step":"whatsnext"')"
+adb shell am force-stop "$PKG"
+sleep 2
+adb logcat -c || true
+e2e_cmd whatsnext_check
+e2e_wait ok 60
+e2e_lines | sed 's/^/e2e whatsnext_check: /'
+wr="$(e2e_lines | grep '"step":"reorder_resumed"')"
+[ -n "$wn" ] && [ -n "$wr" ] || { echo "::error::API $sdk: whatsnext steps missing: $wn / $wr" >&2; exit 1; }
+[ "$(list_of before <<< "$wn")" != "$(list_of order <<< "$wn")" ] \
+  || { echo "::error::API $sdk: the pick did not change the order: $wn" >&2; exit 1; }
+[ "$(list_of order <<< "$wn")" = "$(list_of order <<< "$wr")" ] \
+  || { echo "::error::API $sdk: pick order changed across the kill: $wn / $wr" >&2; exit 1; }
+[ "$(list_of done_per <<< "$wn")" = "$(list_of done_per <<< "$wr")" ] \
+  || { echo "::error::API $sdk: logged sets moved across the kill (pick): $wn / $wr" >&2; exit 1; }
+[ "$(e2e_field current <<< "$wn")" = "$(e2e_field current <<< "$wr")" ] \
+  || { echo "::error::API $sdk: current exercise changed across the kill (pick): $wn / $wr" >&2; exit 1; }
+[ "$(e2e_field view_exercise <<< "$wr")" = "$(e2e_field current_name <<< "$wr")" ] \
+  || { echo "::error::API $sdk: Resume does not show the picked exercise: $wr" >&2; exit 1; }
+grep -q '"at_end":true' <<< "$wr" \
+  || { echo "::error::API $sdk: What's next? gone after the kill: $wr" >&2; exit 1; }
+fatal_check "$PKG" "e2e whatsnext"
 # Rest alert with notifications DENIED (t3x, 0.1.1): plan 6.2 says the service itself buzzes
 # and plays the tone, so a refused permission must not silence the rest. API 33+ only (below
 # 33 the permission does not exist). Revoking kills the app; the e2e run starts it again.
