@@ -15,6 +15,7 @@ import app.gymsupreme.platform.FlutterError
 import app.gymsupreme.platform.HostInfo
 import app.gymsupreme.platform.SnapshotsStreamHandler
 import app.gymsupreme.platform.WorkoutApi
+import app.gymsupreme.workout.Features
 import app.gymsupreme.workout.SessionSelfTest
 import app.gymsupreme.workout.SpikeChannel
 import app.gymsupreme.workout.SnapshotsStream
@@ -85,6 +86,7 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         InstallMarker.check(this)
+        Features.logStartup()
         // Not on a recreate (rotation): the intent that asked for the self-test is the same one.
         if (savedInstanceState == null) noteSelftest(intent)
     }

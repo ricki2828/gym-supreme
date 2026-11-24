@@ -20,9 +20,14 @@ echo "$line"
 feat="$(timeout 30 adb logcat -d -s flutter:I | grep -o 'GymSupreme/features.*' | tail -1 || true)"
 [ -n "$feat" ] || { echo "::error::no GymSupreme/features line" >&2; exit 1; }
 echo "$feat"
-for f in timers ghost rotation plates; do
+# Native flags (N0): BuildConfig.GS_FEATURES from the same --dart-define, logged by MainActivity.
+nfeat="$(timeout 30 adb logcat -d -s GymSupreme/features:I | grep -o 'native .*' | tail -1 || true)"
+[ -n "$nfeat" ] || { echo "::error::no native GymSupreme/features line" >&2; exit 1; }
+echo "GymSupreme/features $nfeat"
+for f in timers ghost rotation plates lockdone health; do
   want=0; case ",${GS_FEATURES:-}," in *",$f,"*|*",all,"*) want=1;; esac
   grep -q " $f=$want" <<< " ${feat#GymSupreme/features }" || { echo "::error::feature $f should be $want (GS_FEATURES='${GS_FEATURES:-}'): $feat" >&2; exit 1; }
+  grep -q " $f=$want" <<< " ${nfeat#native }" || { echo "::error::native feature $f should be $want (GS_FEATURES='${GS_FEATURES:-}'): $nfeat" >&2; exit 1; }
 done
 # The bundled SQLite loads (lib/app/db_probe.dart, printed at startup on the flutter tag).
 db="$(timeout 30 adb logcat -d -s flutter:I | grep -E 'GymSupreme/db (ok|FAILED)' | tail -1 || true)"
