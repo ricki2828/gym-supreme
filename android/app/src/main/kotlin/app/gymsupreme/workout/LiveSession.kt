@@ -204,12 +204,15 @@ class LiveSession private constructor(private val context: Context) {
             WorkoutService.cancelPendingStart()
             head = null
             prefs.edit().remove("counted:$uuid").apply()
+            // T1: the workout's fired cues and rests go with its journal.
+            FiredFileStore.get(context).clear(uuid)
         }
         SpikeLog.write(context, SpikeLog.line("journal_delete").put("uuid", uuid).put("ok", ok))
         return ok
     }
 
-    fun counters(): Map<String, Long> = NativeCounters.all(context)
+    /** Native counters plus the last timer block's cue log (T1), for Diagnostics and the export. */
+    fun counters(): Map<String, Long> = NativeCounters.all(context) + (if (Features.timers) CueLog.all(context) else emptyMap())
 
     /** An accepted snapshot: start or update the service from the visible activity, or stop it on pause. */
     private fun apply(snapshot: Map<String, Any?>, line: String) {

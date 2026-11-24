@@ -34,10 +34,31 @@ class RestTrackerTest {
         val t = RestTracker()
         val r1 = RestSpec("set-1", wall + 90_000, 90_000)
         t.onSnapshot(r1, wall, el)
-        t.onFired("set-1")
+        t.onFired(r1.id)
         assertIs<RestTracker.Action.Keep>(t.onSnapshot(r1, wall + 95_000, el + 95_000))
         val r2 = RestSpec("set-2", wall + 300_000, 90_000)
         assertIs<RestTracker.Action.Arm>(t.onSnapshot(r2, wall + 210_000, el + 210_000))
+    }
+
+    @Test
+    fun `done, undo, done again buzzes twice`() {
+        val t = RestTracker()
+        var buzzes = 0
+        // Done set-1: rest armed, it fires.
+        val first = RestSpec("set-1", wall + 90_000, 90_000)
+        assertIs<RestTracker.Action.Arm>(t.onSnapshot(first, wall, el))
+        t.onFired(first.id)
+        buzzes++
+        // Undo: no rest in the snapshot.
+        assertIs<RestTracker.Action.Keep>(t.onSnapshot(null, wall + 100_000, el + 100_000))
+        // Done set-1 again: a new rest with a new end arms and fires.
+        val again = RestSpec("set-1", wall + 200_000, 90_000)
+        assertEquals(RestTracker.Action.Arm(again, el + 200_000), t.onSnapshot(again, wall + 110_000, el + 110_000))
+        t.onFired(again.id)
+        buzzes++
+        assertEquals(2, buzzes)
+        // Re-sending the second snapshot does not re-fire it.
+        assertIs<RestTracker.Action.Keep>(t.onSnapshot(again, wall + 205_000, el + 205_000))
     }
 
     @Test

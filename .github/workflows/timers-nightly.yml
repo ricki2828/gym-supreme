@@ -1,0 +1,122 @@
+name: timers-nightly
+
+# T1 proof ladder step 3 (0.3 plan): a 20-minute EMOM (10 s lead-in, 20 x 60 s, block_end) run by
+# the WorkoutService with the screen off, Flutter detached and the emulator forced into Doze idle.
+# Pass = 20/20 emom_minute + block_end, each once, none missed, every cue within 1000 ms
+# (tools/emulator_emom.sh + tools/emom_check.py). Builds its own dogfood APK with `timers` added
+# (CI_FORCE_TIMERS), whatever the repo variable says. Runs nightly on main, on demand, and on a pull
+# request that changes this proof itself (so the proof runs once before it merges). An emulator
+# pass is necessary, not sufficient: no real Doze, no OEM battery policy (plan section 5, Pixel).
+on:
+  schedule:
+    - cron: '30 17 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/timers-nightly.yml
+      - tools/emulator_emom.sh
+      - tools/emom_check.py
+      - android/core/src/main/kotlin/app/gymsupreme/core/timer/BlockScheduler.kt
+
+concurrency:
+  group: timers-nightly-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  FLUTTER_VERSION: '3.47.5'
+  JAVA_VERSION: '21'
+  DOGFOOD_PKG: app.gymsupreme.dogfood
+  GS_FEATURES: ${{ vars.GS_FEATURES || '' }}
+
+jobs:
+  build:
+    name: dogfood x64 APK with timers
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Effective GS_FEATURES (repo variable + timers)
+        run: |
+          f="$(CI_FORCE_TIMERS=1 tools/ci_features.sh)"
+          echo "GS_FEATURES=$f" >> "$GITHUB_ENV"
+          echo "GS_FEATURES for the timers nightly: '$f' (repo variable: '${GS_FEATURES}')"
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift
+          df -h /
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      - name: Decode dogfood keystore (repo secrets GYM_DOGFOOD_*)
+        env:
+          KS_B64: ${{ secrets.GYM_DOGFOOD_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KS_B64" ]; then echo "::error::GYM_DOGFOOD_KEYSTORE_BASE64 secret missing" >&2; exit 1; fi
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/dogfood.jks"
+          echo "GYM_DOGFOOD_KEYSTORE=$RUNNER_TEMP/dogfood.jks" >> "$GITHUB_ENV"
+      - name: Build dogfood x64 APK
+        env:
+          GYM_DOGFOOD_STORE_PASSWORD: ${{ secrets.GYM_DOGFOOD_STORE_PASSWORD }}
+          GYM_DOGFOOD_KEY_ALIAS: dogfood  # not a secret: a secret value here masks the word in logs
+          GYM_DOGFOOD_KEY_PASSWORD: ${{ secrets.GYM_DOGFOOD_KEY_PASSWORD }}
+        run: |
+          flutter build apk --release --flavor dogfood --split-per-abi \
+            --target-platform android-x64 \
+            --obfuscate --split-debug-info=build/symbols-dogfood \
+            --dart-define=BUILD_SHA=${{ github.event.pull_request.head.sha || github.sha }} \
+            --dart-define=GS_FEATURES="$GS_FEATURES" \
+            --dart-define=APP_VERSION="$(sed -n 's/^version: //p' pubspec.yaml)"
+          ls -la build/app/outputs/flutter-apk/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dogfood-x64-timers
+          path: build/app/outputs/flutter-apk/app-x86_64-dogfood-release.apk
+          retention-days: 3
+
+  emom:
+    name: 20-min screen-off EMOM (API ${{ matrix.api-level }})
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [29, 36]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Effective GS_FEATURES (repo variable + timers)
+        run: echo "GS_FEATURES=$(CI_FORCE_TIMERS=1 tools/ci_features.sh)" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v4
+        with:
+          name: dogfood-x64-timers
+          path: apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - name: Boot, install, 20-minute EMOM with the screen off
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          # The runner executes each script line with sh; emulator_common.sh is bash.
+          script: |
+            bash -c '. tools/emulator_common.sh && boot_wait && adb install -r apk/app-x86_64-dogfood-release.apk && launch "$DOGFOOD_PKG"'
+            tools/emulator_emom.sh "$DOGFOOD_PKG" 20 60000 10000

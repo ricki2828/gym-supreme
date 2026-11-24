@@ -8,6 +8,8 @@ import app.gymsupreme.core.json.str
 import app.gymsupreme.core.json.strOrNull
 import app.gymsupreme.core.rest.RestSpec
 import app.gymsupreme.core.session.LockReducer
+import app.gymsupreme.core.timer.BlockCue
+import app.gymsupreme.core.timer.TimerBlockSpec
 
 /**
  * What the service needs from a snapshot (schema v1, `packages/gym_engine/lib/src/snapshot.dart`,
@@ -28,6 +30,15 @@ data class SnapshotView(
     val currentSetId: String? = null,
     /** Whether Done / +1 rep may be offered for [current] ([LockReducer.eligible]). */
     val lockEligible: Boolean = false,
+    /** The snapshot's workout_uuid (the durable fired-cue store is per workout). */
+    val workoutUuid: String? = null,
+    /**
+     * Started timer blocks on pending sets (cut T1): anchor set and cues left. Any pending set, not
+     * only [current]. Read leniently: a malformed block is left out (and counted in
+     * [badBlocks]) instead of failing the whole view, so the rest alert keeps working.
+     */
+    val blocks: List<TimerBlockSpec> = emptyList(),
+    val badBlocks: Int = 0,
 ) {
     data class Current(
         val exerciseName: String,
@@ -63,11 +74,17 @@ data class SnapshotView(
             var lockEligible = false
             var done = 0
             var total = 0
+            val blocks = ArrayList<TimerBlockSpec>()
+            var badBlocks = 0
             for (e in s.objList("exercises")) {
                 val sets = e.objList("sets")
                 sets.forEachIndexed { i, set ->
                     total++
                     val state = set.strOrNull("state")
+                    if (state == "pending") {
+                        val b = block(set)
+                        if (b === BAD) badBlocks++ else if (b != null) blocks.add(b)
+                    }
                     if (state != "pending") {
                         done++
                     } else if (current == null) {
@@ -86,7 +103,40 @@ data class SnapshotView(
                     }
                 }
             }
-            return SnapshotView(paused, rest, current, done, total, s.longOrNull("rev") ?: -1, currentSetId, lockEligible)
+            return SnapshotView(
+                paused, rest, current, done, total, s.longOrNull("rev") ?: -1, currentSetId, lockEligible,
+                s.strOrNull("workout_uuid"), blocks, badBlocks,
+            )
+        }
+
+        private val BAD = TimerBlockSpec("", -1, 0, emptyList())
+
+        /**
+         * A pending set's started block: null when it has none, is not started (anchor null) or has
+         * no cues left (paused, finished); [BAD] when it is malformed. Every number is an integer
+         * (contract: no floats anywhere).
+         */
+        private fun block(set: Map<String, Any?>): TimerBlockSpec? {
+            val b = set["block"] as? Map<*, *> ?: return null
+            val anchor = b["started_at_wall_ms"] ?: return null
+            val cues = b["cues"] as? List<*> ?: return BAD
+            if (cues.isEmpty()) return null
+            val setId = set["set_id"] as? String ?: return BAD
+            if (anchor !is Long) return BAD
+            val run = when (val r = b["run"]) {
+                null -> 0L
+                is Long -> r
+                else -> return BAD
+            }
+            val out = ArrayList<BlockCue>(cues.size)
+            for (c in cues) {
+                val m = c as? Map<*, *> ?: return BAD
+                val index = m["index"] as? Long ?: return BAD
+                val at = m["at_ms"] as? Long ?: return BAD
+                if (index < 0 || index > Int.MAX_VALUE || at < 0) return BAD
+                out.add(BlockCue(index.toInt(), at, m["kind"] as? String ?: "", m["label"] as? String ?: ""))
+            }
+            return TimerBlockSpec(setId, run, anchor, out)
         }
 
         /** Grams to "22.5 kg" / "20 kg". */
