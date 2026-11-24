@@ -5,9 +5,9 @@ packages/gym_engine/API_CHANGES.md and contracts/CHANGES.md.
 
 ## Unreleased (0.3.1)
 
-- Reordering is easy to find now. The live screen has an "Up next · Change order" button under the
-  exercise name; it opens a list of everything left to do, with the exercise you are on tagged NOW.
-  "Do later" is a proper button.
+- Reordering is easy to find now. Under DONE there are two buttons side by side, "Do later" and
+  "Change order", with a line saying what is up next. "Change order" opens a list of everything left
+  to do, with the exercise you are on tagged NOW.
 - "What's next?" after the last set of an exercise: the rest screen shows the exercise that is up next
   as a big card ("starts when the rest ends", Start now), with the other exercises below to tap if the
   machine is taken. Doing nothing works exactly as before. Tapping one makes it the current exercise;

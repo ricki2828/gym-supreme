@@ -561,7 +561,7 @@ class E2eDriver {
     }
     final before = _ids(c.snapshot!);
     // Queue: [exercise 2 (the default), exercise 3, ...]; pick exercise 3.
-    await c.pickNow(1);
+    await c.pickNow(c.view()!.queue[1].exerciseId);
     _check(c, 'pick');
     final after = c.snapshot!;
     final expected = [before[0], before[2], before[1], ...before.skip(3)];

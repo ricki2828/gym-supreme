@@ -221,7 +221,13 @@ class PlanList extends StatelessWidget {
     this.markFirst = false,
     this.lockFirst = false,
     this.moveMenu = false,
+    this.onMoveItem,
   });
+
+  /// Move up / down from the row menu, by exercise id (live lists): resolved
+  /// by the owner at the moment it runs, not by the index the row had when it
+  /// was drawn. Without it the menu falls back to [onReorder] with indexes.
+  final void Function(String exerciseId, int delta)? onMoveItem;
 
   /// Live lists: a 48 dp handle that starts a drag after a short hold, a
   /// long-press anywhere on the row, and a Move up / Move down menu on every
@@ -318,9 +324,13 @@ class PlanList extends StatelessWidget {
                 key: Key('plan.menu.$i'),
                 padding: EdgeInsets.zero,
                 tooltip: 'Move ${p.name}',
-                enabled: onReorder != null && (canUp || canDown),
+                enabled:
+                    (onReorder != null || onMoveItem != null) &&
+                    (canUp || canDown),
                 icon: Icon(Icons.more_vert, color: fg),
-                onSelected: (d) => onReorder!(i, i + d),
+                onSelected: (d) => onMoveItem != null
+                    ? onMoveItem!(p.exerciseId, d)
+                    : onReorder!(i, i + d),
                 itemBuilder: (_) => [
                   PopupMenuItem(
                     key: Key('plan.up.$i'),

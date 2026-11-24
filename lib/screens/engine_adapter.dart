@@ -130,14 +130,13 @@ LiveView? liveViewOf(
   final c = s.current;
   final pending = pendingExercises(s);
   // At an exercise boundary: the last logged (or skipped) set finished its
-  // exercise and nothing is logged yet in the one now current. Derived from
-  // the snapshot alone, so it survives a pick, a kill and a resume.
+  // exercise and others remain. The new current exercise may itself be part
+  // done (it came back after a Do later). Derived from the snapshot alone, so
+  // it survives a pick, a kill and a resume.
   var atBoundary = false;
   if (last != null && c != null && pending.length > 1) {
     final lastEx = s.exercises.firstWhere((e) => e.sets.contains(last));
-    atBoundary =
-        !lastEx.sets.any((x) => x.state == eng.SetState.pending) &&
-        !s.exercises[c.exercise].anyLogged;
+    atBoundary = !lastEx.sets.any((x) => x.state == eng.SetState.pending);
   }
   // Finished (even with sets left unlogged) or nothing left: only Finish.
   if (c == null || s.finished) {

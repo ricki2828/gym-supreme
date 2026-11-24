@@ -214,6 +214,31 @@ fin="$(wait_for '"event":"selftest_session".*"step":"finish".*"finished":true,"d
 echo "session finish: $fin"
 fatal_check "$PKG" session
 
+# R2 (0.3.1): a lock-screen Done after "What's next?" picked exercise 3. The journal is [a done, c,
+# b] (c picked); the notification's Done must log c's set, with Flutter gone.
+if [ "$lockdone" = 1 ]; then
+  adb logcat -c || true
+  session_step start_pick
+  wait_for '"event":"selftest_session".*"step":"start_pick".*"ok":true' 30 > /dev/null || {
+    echo "::error::R2: start_pick refused" >&2; svc_lines | grep -E 'selftest_session|journal' | tail -n 10 >&2; exit 1; }
+  session_step lock_fire
+  wait_for '"event":"selftest_session".*"step":"lock_fire".*"ok":true' 30 > /dev/null || {
+    echo "::error::R2: lock_fire did not run" >&2; svc_lines | tail -n 10 >&2; exit 1; }
+  for i in $(seq 1 45); do [ "$(lock_lines | grep -c '"outcome":"applied"')" -ge 1 ] && break; sleep 1; done
+  [ "$(lock_lines | grep -c '"outcome":"applied"')" -ge 1 ] || { echo "::error::R2: the lock-screen Done was not applied" >&2; lock_lines >&2; exit 1; }
+  sleep 8   # the double and stale taps settle
+  session_step pending
+  pk="$(wait_for '"event":"selftest_session".*"step":"pending".*"found":true' 30)" || {
+    echo "::error::R2: journal not readable after the pick Done" >&2; exit 1; }
+  echo "R2 lock-screen Done after a pick: $pk"
+  grep -q '"lock_exercise":"selftest-c"' <<< "$pk" \
+    || { echo "::error::R2: the lock-screen Done did not log the picked exercise (selftest-c): $pk" >&2; exit 1; }
+  session_step finish
+  wait_for '"event":"selftest_session".*"step":"finish".*"finished":true,"deleted":true' 30 > /dev/null || {
+    echo "::error::R2: finish + delete failed" >&2; exit 1; }
+  fatal_check "$PKG" "lock-screen Done after a pick"
+fi
+
 # Starting weights (0.3 S1), before the flows below log anything: a 20 kg starting weight on a chest lift
 # with no history must be the planned load and the live set's target; the workout is discarded
 # and the weight cleared, so nothing is left behind for the flows below.

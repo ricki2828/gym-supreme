@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -8,6 +9,7 @@ import 'package:gym_engine/gym_engine.dart' as eng;
 import 'package:gym_supreme/screens/flows/flows.dart';
 import 'package:gym_supreme/screens/live_controller.dart';
 import 'package:gym_supreme/screens/live_screen.dart';
+import 'package:gym_supreme/widgets/lit_widgets.dart';
 
 import 'fixtures.dart';
 import 'flaky_port.dart';
@@ -93,15 +95,20 @@ void main() {
       final ex = c.snapshot!.exercises[c.snapshot!.current!.exercise];
       final left = ex.sets.where((s) => s.state == eng.SetState.pending);
       if (leaveLast && left.length == 1) return;
+      now += 1000; // sets get distinct end times, as they do for real
       await c.done();
     }
   }
+
+  /// "Do this one now" as the screen does it: by the exercise's id.
+  Future<void> pick(int queueIndex) =>
+      c.pickNow(c.view()!.queue[queueIndex].exerciseId);
 
   group('pickNow', () {
     test('pickNow(1) is exactly Do later', () async {
       await startPush();
       final o = order();
-      await c.pickNow(1);
+      await pick(1);
       expect(order(), [o[1], o[0], ...o.skip(2)]);
       expect(cur(), o[1]);
     });
@@ -112,7 +119,7 @@ void main() {
         await startPush();
         final o = order();
         expect(o.length, greaterThanOrEqualTo(4));
-        await c.pickNow(2);
+        await pick(2);
         expect(order(), [o[2], o[0], o[1], ...o.skip(3)]);
         expect(cur(), o[2]);
       },
@@ -124,7 +131,7 @@ void main() {
       final n = o.length;
       // Picking the last one n times rotates the list right, one a tap.
       for (var k = 1; k <= n; k++) {
-        await c.pickNow(n - 1);
+        await pick(n - 1);
         final want = [for (var i = 0; i < n; i++) o[(i - k) % n]];
         expect(order(), want, reason: 'tap $k');
         expect(cur(), want[0]);
@@ -135,8 +142,8 @@ void main() {
     test('pickNow(0) and out of range do nothing, no rev', () async {
       await startPush();
       final rev = c.snapshot!.rev;
-      await c.pickNow(0);
-      await c.pickNow(99);
+      await pick(0);
+      await c.pickNow('no-such-exercise');
       expect(c.snapshot!.rev, rev);
     });
   });
@@ -172,7 +179,7 @@ void main() {
       await finishCurrent();
       expect(c.view()!.atExerciseEnd, isTrue);
       final o = order();
-      await c.pickNow(2);
+      await pick(2);
       expect(c.view()!.atExerciseEnd, isTrue);
       final saved = eng.SessionSnapshot.decode(
         (await port.readPendingJournal())!,
@@ -196,6 +203,110 @@ void main() {
       }
       expect(c.view()!.queue.length, 1);
       expect(c.view()!.atExerciseEnd, isFalse);
+    });
+  });
+
+  group('boundary and identity', () {
+    test('still on when the new current exercise is part done', () async {
+      await startPush();
+      final o = order();
+      await c.load(1);
+      now += 1000;
+      await c.done(); // one set of o0, then it goes later
+      await c.doLater();
+      expect(cur(), o[1]);
+      expect(c.view()!.atExerciseEnd, isFalse, reason: 'mid exercise');
+      await finishCurrent(); // o1 done in full; o0 (part done) is current
+      expect(cur(), o[0]);
+      expect(c.snapshot!.exercises[0].anyLogged, isTrue);
+      final v = c.view()!;
+      expect(v.atExerciseEnd, isTrue, reason: 'an exercise just ended');
+      expect(v.queue.first.exerciseId, o[0]);
+      // Picking the part-done exercise's neighbour keeps the choice on.
+      await pick(1);
+      expect(c.view()!.atExerciseEnd, isTrue);
+      // Logging a set of the new current exercise ends it.
+      await c.done();
+      expect(c.view()!.atExerciseEnd, isFalse);
+    });
+
+    test('a double tap on DO NOW moves once', () async {
+      await startPush();
+      await c.load(1);
+      await finishCurrent();
+      final o = order();
+      final id = c.view()!.queue[2].exerciseId;
+      await Future.wait([c.pickNow(id), c.pickNow(id)]);
+      expect(order(), [o[0], o[3], o[1], o[2], ...o.skip(4)]);
+      expect(cur(), o[3]);
+    });
+
+    test('a lock-screen Done that lands before the pick never moves the '
+        'wrong exercise', () async {
+      await startPush();
+      await c.load(1);
+      await finishCurrent();
+      final o = order();
+      final target = c.view()!.queue[2].exerciseId; // o3
+      final h = eng.SessionSnapshot.decode((await port.readPendingJournal())!);
+      final moved = eng.Session.done(
+        h,
+        h.currentSet!.setId,
+        nowMs: now += 30000,
+        source: eng.SetSource.lockscreen,
+      );
+      port.foreignWrite(moved.encode());
+      // The tap is queued before the adopt is delivered.
+      final tap = c.pickNow(target);
+      await tap;
+      await pumpEventQueue();
+      expect(c.lastError, isNull);
+      final done = [
+        for (final e in c.snapshot!.exercises)
+          e.sets.where((x) => x.state == eng.SetState.done).length,
+      ];
+      expect(done[order().indexOf(o[1])], 1, reason: 'the lock-screen set');
+      if (order().join() != [...o].join()) {
+        // Applied after the adopt: the tapped exercise, nobody else.
+        expect(cur(), target);
+        expect(order().where((e) => e != target).toList(), [
+          for (final e in o)
+            if (e != target) e,
+        ]);
+      }
+    });
+
+    test('the menu moves by id: a step each way nets to zero, a gone id '
+        'does nothing', () async {
+      await startPush();
+      final o = order();
+      await c.moveQueueItem(o[1], 1);
+      expect(order(), [o[0], o[2], o[1], ...o.skip(3)]);
+      await c.moveQueueItem(o[1], -1);
+      expect(order(), o);
+      final rev = c.snapshot!.rev;
+      await c.moveQueueItem('no-such-exercise', 1);
+      await c.moveQueueItem(o.last, 1); // off the end
+      await c.moveQueueItem(o[0], -1); // off the top
+      expect(c.snapshot!.rev, rev);
+    });
+
+    test('a true rest of 0: no rest screen, the choice is on the set screen '
+        'data', () async {
+      await startPush();
+      // The first exercise has no rest at all.
+      final j = jsonDecode(c.snapshot!.encode()) as Map<String, dynamic>;
+      (j['exercises'] as List<dynamic>)[0]['rest_s'] = 0;
+      j['rev'] = c.snapshot!.rev + 1;
+      port.foreignWrite(jsonEncode(j));
+      await pumpEventQueue();
+      expect(c.snapshot!.exercises[0].restS, 0);
+      await c.load(1);
+      await finishCurrent();
+      final v = c.view()!;
+      expect(c.snapshot!.rest, isNull);
+      expect(v.restLeftS, isNull);
+      expect(v.atExerciseEnd, isTrue);
     });
   });
 
@@ -229,7 +340,7 @@ void main() {
       await c.load(1);
       await finishCurrent();
       final o = order();
-      await c.pickNow(2); // queue index 2 = the third remaining exercise
+      await pick(2); // queue index 2 = the third remaining exercise
       final want = c.snapshot!.exercises[c.snapshot!.current!.exercise];
       final h = eng.SessionSnapshot.decode((await port.readPendingJournal())!);
       expect(h.currentSet!.setId, want.sets.first.setId);
@@ -368,6 +479,25 @@ void main() {
       await endLive(tester);
     });
 
+    testWidgets('a true rest of 0: the rows are inline on the set screen', (
+      tester,
+    ) async {
+      await pumpLive(tester);
+      final j = jsonDecode(c.snapshot!.encode()) as Map<String, dynamic>;
+      (j['exercises'] as List<dynamic>)[0]['rest_s'] = 0;
+      j['rev'] = c.snapshot!.rev + 1;
+      port.foreignWrite(jsonEncode(j));
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await c.load(1);
+      await finishCurrent();
+      await tester.pumpAndSettle();
+      expect(find.text('SKIP REST'), findsNothing, reason: 'no rest screen');
+      final o = order();
+      await tapKey(tester, 'whatsnext.pick.1');
+      expect(cur(), o[2]);
+      await endLive(tester);
+    });
+
     testWidgets('Change order sheet: NOW tag, Move down, Move up', (
       tester,
     ) async {
@@ -485,7 +615,7 @@ void main() {
       ) async {
         small(tester, scale: scale);
         var skipped = 0;
-        final picked = <int>[];
+        final picked = <String>[];
         await tester.pumpWidget(
           MaterialApp(
             home: LiveScreen(
@@ -515,7 +645,7 @@ void main() {
         expect(tester.getSize(row).height, greaterThanOrEqualTo(48));
         expect(tester.getRect(row).right, lessThanOrEqualTo(320));
         await tester.tap(row);
-        expect(picked, [2]);
+        expect(picked, [liveView().queue[2].exerciseId]);
         expect(tester.takeException(), isNull);
       });
 
@@ -539,14 +669,15 @@ void main() {
           );
           await tester.pumpAndSettle();
           expect(tester.takeException(), isNull);
+          await reveal(tester, find.byKey(const Key('whatsnext.title')));
+          expect(find.byKey(const Key('whatsnext.title')), findsOneWidget);
           final entry = find.byKey(const Key('live.change_order'));
+          await reveal(tester, entry);
           expect(entry, findsOneWidget);
           expect(tester.getSize(entry).height, greaterThanOrEqualTo(48));
           expect(tester.getRect(entry).right, lessThanOrEqualTo(320));
           await tester.tap(entry);
           expect(order, 1);
-          await reveal(tester, find.byKey(const Key('whatsnext.title')));
-          expect(find.byKey(const Key('whatsnext.title')), findsOneWidget);
           final dl = find.byKey(const Key('live.do_later'));
           await reveal(tester, dl);
           expect(tester.getSize(dl).height, greaterThanOrEqualTo(48));
@@ -589,7 +720,7 @@ void main() {
       tester,
     ) async {
       small(tester, scale: 1.0);
-      final picked = <int>[];
+      final picked = <String>[];
       final moved = <(int, int)>[];
       await tester.pumpWidget(
         MaterialApp(
@@ -613,6 +744,7 @@ void main() {
       await reveal(tester, row);
       await tester.tap(row);
       expect(picked, isEmpty, reason: 'a block cannot move');
+      expect(moved, isEmpty);
       expect(find.textContaining('cannot be moved'), findsWidgets);
     });
 
@@ -647,6 +779,137 @@ void main() {
       await tester.tap(find.byKey(const Key('plan.down.1')));
       await tester.pumpAndSettle();
       expect(moved, [(1, 2)]);
+    });
+
+    // DONE is the one-tap path: it must sit above the pinned Finish bar on a
+    // 393x851 phone with a status bar (48 dp) and a gesture/nav area (34 dp),
+    // without scrolling, at 1.0x and 1.3x text.
+    void phone393(WidgetTester tester, double scale) {
+      tester.view.physicalSize = const Size(393 * 3, 851 * 3);
+      tester.view.devicePixelRatio = 3.0;
+      tester.view.padding = const FakeViewPadding(top: 144, bottom: 102);
+      tester.view.viewPadding = const FakeViewPadding(top: 144, bottom: 102);
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    }
+
+    final doneCases = <String, (LiveView, List<double>)>{
+      'normal': (liveView(), [1.0, 1.3]),
+      'cold start': (liveView(loadG: null, targetLoadG: null), [1.0, 1.3]),
+      'what\'s next, set 1': (liveView(atExerciseEnd: true), [1.0, 1.3]),
+      'three-line name': (
+        liveView(name: 'Single arm standing cable chest press with rotation'),
+        [1.0],
+      ),
+    };
+    for (final e in doneCases.entries) {
+      for (final scale in e.value.$2) {
+        testWidgets('DONE stays above the Finish bar: ${e.key}, 393x851, '
+            'text x$scale', (tester) async {
+          phone393(tester, scale);
+          await tester.pumpWidget(
+            MaterialApp(
+              home: LiveScreen(
+                view: e.value.$1,
+                onDone: () {},
+                onReps: (_) {},
+                onLoad: (_) {},
+                onRestDelta: (_) {},
+                onChangeOrder: () {},
+                onDoLater: () {},
+                onPickNext: (_) {},
+                onReorder: (_, _) {},
+                onFinish: () {},
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          final done = find.ancestor(
+            of: find.text('DONE'),
+            matching: find.byType(BigButton),
+          );
+          final finishTop = tester
+              .getRect(find.byKey(const Key('live.finish')))
+              .top;
+          final r = tester.getRect(done);
+          expect(r.top, greaterThan(48), reason: 'below the status bar');
+          expect(
+            r.bottom,
+            lessThanOrEqualTo(finishTop),
+            reason: 'DONE ${r.bottom} vs Finish bar $finishTop',
+          );
+          expect(r.bottom, lessThanOrEqualTo(851 - 86));
+        });
+      }
+    }
+
+    testWidgets('the Do later and Change order buttons sit below DONE, side '
+        'by side, 48 dp or more', (tester) async {
+      phone393(tester, 1.0);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LiveScreen(
+            view: liveView(),
+            onDone: () {},
+            onChangeOrder: () {},
+            onDoLater: () {},
+            onReorder: (_, _) {},
+            onFinish: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final done = tester.getRect(
+        find.ancestor(of: find.text('DONE'), matching: find.byType(BigButton)),
+      );
+      final later = tester.getRect(find.byKey(const Key('live.do_later')));
+      final order = tester.getRect(find.byKey(const Key('live.change_order')));
+      expect(later.top, greaterThan(done.bottom));
+      expect(order.top, greaterThan(done.bottom));
+      expect(later.top, order.top, reason: 'one row');
+      expect(later.height, greaterThanOrEqualTo(48));
+      expect(order.height, greaterThanOrEqualTo(48));
+      expect(find.byKey(const Key('live.up_next')), findsOneWidget);
+    });
+
+    testWidgets('a press under 120 ms on the handle still scrolls the page', (
+      tester,
+    ) async {
+      phone393(tester, 1.0);
+      final moved = <(int, int)>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LiveScreen(
+            view: liveView(),
+            onDone: () {},
+            onChangeOrder: () {},
+            onDoLater: () {},
+            onReorder: (a, b) => moved.add((a, b)),
+            onMoveItem: (_, _) {},
+            onFinish: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final handle = find.byKey(const Key('plan.handle.2'));
+      await reveal(tester, handle);
+      final scrollable = tester.state<ScrollableState>(
+        find.byType(Scrollable).first,
+      );
+      final before = scrollable.position.pixels;
+      expect(before, greaterThan(0));
+      final g = await tester.startGesture(tester.getCenter(handle));
+      await tester.pump(const Duration(milliseconds: 40));
+      for (var i = 0; i < 12; i++) {
+        await g.moveBy(const Offset(0, 14)); // finger down: page scrolls up
+        await tester.pump(const Duration(milliseconds: 10));
+      }
+      await g.up();
+      await tester.pumpAndSettle();
+      expect(scrollable.position.pixels, lessThan(before), reason: 'scrolled');
+      expect(moved, isEmpty, reason: 'and nothing was dragged');
     });
   });
 }

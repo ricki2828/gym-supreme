@@ -187,6 +187,7 @@ class LiveScreen extends StatelessWidget {
     this.onReorder,
     this.onDoLater,
     this.onPickNext,
+    this.onMoveItem,
     this.onChangeOrder,
     this.onPause,
     this.onFinish,
@@ -233,7 +234,10 @@ class LiveScreen extends StatelessWidget {
 
   /// "What's next?": do the exercise at this [LiveView.queue] index now. It
   /// becomes the first pending one; the others keep their order.
-  final ValueChanged<int>? onPickNext;
+  final ValueChanged<String>? onPickNext;
+
+  /// Move up / down from a row's menu, by exercise id.
+  final void Function(String exerciseId, int delta)? onMoveItem;
 
   /// Opens the reorder sheet (see [showReorderSheet]).
   final VoidCallback? onChangeOrder;
@@ -366,6 +370,7 @@ class LiveScreen extends StatelessWidget {
         onReorder: onReorder,
         onDoLater: view.canDoLater ? onDoLater : null,
         onPickNext: onPickNext,
+        onMoveItem: onMoveItem,
         onChangeOrder: onChangeOrder,
         onUndo: onUndo,
         // Edit the next set while resting (X1): the current set is the next
@@ -413,10 +418,6 @@ class LiveScreen extends StatelessWidget {
                     ),
                     semanticsLabel: view.exerciseName,
                   ),
-                  if (view.queue.length > 1 && onChangeOrder != null) ...[
-                    const SizedBox(height: 8),
-                    _UpNextEntry(view: view, ink: ink, onTap: onChangeOrder!),
-                  ],
                   if (!blockUi) ...[
                     const SizedBox(height: 14),
                     _repsStepper(context, ink: ink, bg: bg, size: 96),
@@ -472,6 +473,16 @@ class LiveScreen extends StatelessWidget {
                     const SizedBox(height: 18),
                     _WhatsNext(view: view, ink: ink, onPick: onPickNext),
                   ],
+                  if (view.queue.length > 1 &&
+                      (onChangeOrder != null || onDoLater != null)) ...[
+                    const SizedBox(height: 12),
+                    _OrderActions(
+                      view: view,
+                      ink: ink,
+                      onChangeOrder: onChangeOrder,
+                      onDoLater: view.canDoLater ? onDoLater : null,
+                    ),
+                  ],
                   _SetLinks(
                     ink: ink,
                     undoLabel: view.undoLabel,
@@ -480,10 +491,6 @@ class LiveScreen extends StatelessWidget {
                     onAddSet: onAddSet,
                     onSkipSet: onSkipSet,
                   ),
-                  if (view.canDoLater && onDoLater != null) ...[
-                    const SizedBox(height: 6),
-                    _DoLaterButton(ink: ink, onTap: onDoLater!),
-                  ],
                   if (view.queue.length > 1) ...[
                     const SizedBox(height: 14),
                     Text(
@@ -497,6 +504,7 @@ class LiveScreen extends StatelessWidget {
                       lockFirst: view.timerBlock,
                       moveMenu: true,
                       onReorder: onReorder,
+                      onMoveItem: onMoveItem,
                       ruleColour: ink.withValues(alpha: 0.25),
                     ),
                   ],
@@ -726,95 +734,98 @@ class _SetLinks extends StatelessWidget {
   );
 }
 
-/// "Up next · Change order": a whole-row button under the exercise name that
-/// opens the reorder sheet. 56 dp, so it is findable and hard to miss.
-class _UpNextEntry extends StatelessWidget {
-  const _UpNextEntry({
+/// Under DONE and the rest panel, never above it (DONE must stay on screen):
+/// a one-line "Up next: name" and two side-by-side buttons, "Do later" and
+/// "Change order", each at least 48 dp tall.
+class _OrderActions extends StatelessWidget {
+  const _OrderActions({
     required this.view,
     required this.ink,
-    required this.onTap,
+    this.onChangeOrder,
+    this.onDoLater,
   });
   final LiveView view;
   final Color ink;
-  final VoidCallback onTap;
+  final VoidCallback? onChangeOrder;
+  final VoidCallback? onDoLater;
 
-  @override
-  Widget build(BuildContext context) {
-    final next = view.queue[1].name;
-    return Semantics(
-      button: true,
-      label: 'Up next: $next. Change order',
-      excludeSemantics: true,
-      onTap: onTap,
-      child: Material(
-        color: ink.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          key: const Key('live.change_order'),
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 56),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 6, 10, 6),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('UP NEXT', style: LitType.cap(11, ink)),
-                        Text(
-                          next,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: LitType.body(15, ink, FontWeight.w800),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(Icons.swap_vert, color: ink, size: 22),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Change order',
-                    style: LitType.body(14, ink, FontWeight.w800),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// "Do later": a real button, at least 48 dp tall.
-class _DoLaterButton extends StatelessWidget {
-  const _DoLaterButton({required this.ink, required this.onTap});
-  final Color ink;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
+  Widget _button(
+    String label,
+    IconData icon,
+    VoidCallback onTap, {
+    required Key key,
+    required String semantic,
+  }) => Semantics(
     button: true,
-    label: 'Do this exercise later: move it after the next one',
+    label: semantic,
     excludeSemantics: true,
     onTap: onTap,
-    child: OutlinedButton.icon(
-      key: const Key('live.do_later'),
+    child: OutlinedButton(
+      key: key,
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
         foregroundColor: ink,
         minimumSize: const Size.fromHeight(52),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         side: BorderSide(color: ink.withValues(alpha: 0.6), width: 1.5),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
-      icon: const Icon(Icons.arrow_downward, size: 18),
-      label: Text('Do later', style: LitType.body(15, ink, FontWeight.w800)),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18),
+            const SizedBox(width: 6),
+            Text(label, style: LitType.body(15, ink, FontWeight.w800)),
+          ],
+        ),
+      ),
     ),
+  );
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (view.queue.length > 1)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text(
+            'Up next: ${view.queue[1].name}',
+            key: const Key('live.up_next'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: LitType.body(14, ink, FontWeight.w700),
+          ),
+        ),
+      Row(
+        children: [
+          if (onDoLater != null)
+            Expanded(
+              child: _button(
+                'Do later',
+                Icons.arrow_downward,
+                onDoLater!,
+                key: const Key('live.do_later'),
+                semantic: 'Do this exercise later: move it after the next one',
+              ),
+            ),
+          if (onDoLater != null && onChangeOrder != null)
+            const SizedBox(width: 8),
+          if (onChangeOrder != null)
+            Expanded(
+              child: _button(
+                'Change order',
+                Icons.swap_vert,
+                onChangeOrder!,
+                key: const Key('live.change_order'),
+                semantic: 'Change order of the exercises still to do',
+              ),
+            ),
+        ],
+      ),
+    ],
   );
 }
 
@@ -843,7 +854,7 @@ class _WhatsNext extends StatelessWidget {
   final bool onRest;
   final bool card;
   final bool rows;
-  final ValueChanged<int>? onPick;
+  final ValueChanged<String>? onPick;
   final VoidCallback? onStartNow;
 
   @override
@@ -884,7 +895,7 @@ class _WhatsNext extends StatelessWidget {
                   semanticsLabel: def.name,
                 ),
                 Text(
-                  prescription(def),
+                  view.blockTitle ?? prescription(def),
                   style: LitType.body(15, Colors.white, FontWeight.w600),
                 ),
                 const SizedBox(height: 12),
@@ -918,7 +929,7 @@ class _WhatsNext extends StatelessWidget {
               key: Key('whatsnext.pick.$i'),
               item: view.queue[i],
               ink: ink,
-              onTap: canPick ? () => onPick!(i) : null,
+              onTap: canPick ? () => onPick!(view.queue[i].exerciseId) : null,
             ),
           if (!view.canDoLater && view.timerBlock)
             Padding(
@@ -999,6 +1010,7 @@ Future<void> showReorderSheet(
   required Listenable listenable,
   required LiveView? Function() view,
   required void Function(int from, int to) onMove,
+  void Function(String exerciseId, int delta)? onMoveItem,
 }) => showModalBottomSheet<void>(
   context: context,
   isScrollControlled: true,
@@ -1006,14 +1018,21 @@ Future<void> showReorderSheet(
   backgroundColor: Lit.ground,
   builder: (ctx) => ListenableBuilder(
     listenable: listenable,
-    builder: (ctx, _) => ReorderSheet(view: view(), onMove: onMove),
+    builder: (ctx, _) =>
+        ReorderSheet(view: view(), onMove: onMove, onMoveItem: onMoveItem),
   ),
 );
 
 class ReorderSheet extends StatelessWidget {
-  const ReorderSheet({super.key, required this.view, required this.onMove});
+  const ReorderSheet({
+    super.key,
+    required this.view,
+    required this.onMove,
+    this.onMoveItem,
+  });
   final LiveView? view;
   final void Function(int from, int to) onMove;
+  final void Function(String exerciseId, int delta)? onMoveItem;
 
   @override
   Widget build(BuildContext context) {
@@ -1072,6 +1091,7 @@ class ReorderSheet extends StatelessWidget {
                 moveMenu: true,
                 maxHeight: listH,
                 onReorder: onMove,
+                onMoveItem: onMoveItem,
                 ruleColour: Lit.ink.withValues(alpha: 0.25),
               ),
           ],
@@ -1412,6 +1432,7 @@ class _RestScreen extends StatelessWidget {
     this.onReorder,
     this.onDoLater,
     this.onPickNext,
+    this.onMoveItem,
     this.onChangeOrder,
     this.onUndo,
     this.finishBar,
@@ -1425,7 +1446,8 @@ class _RestScreen extends StatelessWidget {
   final VoidCallback? onSkipRest;
   final void Function(int from, int to)? onReorder;
   final VoidCallback? onDoLater;
-  final ValueChanged<int>? onPickNext;
+  final ValueChanged<String>? onPickNext;
+  final void Function(String exerciseId, int delta)? onMoveItem;
   final VoidCallback? onChangeOrder;
   final VoidCallback? onUndo;
   final Widget? finishBar;
@@ -1553,13 +1575,15 @@ class _RestScreen extends StatelessWidget {
                   onUndo: onUndo,
                 ),
               ),
-            if (view.queue.length > 1 && onChangeOrder != null) ...[
+            if (view.queue.length > 1 &&
+                (onChangeOrder != null || onDoLater != null)) ...[
               const SizedBox(height: 14),
-              _UpNextEntry(view: view, ink: ink, onTap: onChangeOrder!),
-            ],
-            if (!choose && onDoLater != null) ...[
-              const SizedBox(height: 8),
-              _DoLaterButton(ink: ink, onTap: onDoLater!),
+              _OrderActions(
+                view: view,
+                ink: ink,
+                onChangeOrder: onChangeOrder,
+                onDoLater: choose ? null : onDoLater,
+              ),
             ],
             if (view.queue.length > 1 && !choose) ...[
               const SizedBox(height: 24),
@@ -1574,6 +1598,7 @@ class _RestScreen extends StatelessWidget {
                 lockFirst: view.timerBlock,
                 moveMenu: true,
                 onReorder: onReorder,
+                onMoveItem: onMoveItem,
                 ruleColour: ink.withValues(alpha: 0.25),
               ),
             ],
