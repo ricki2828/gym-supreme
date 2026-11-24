@@ -120,4 +120,37 @@ void main() {
       expect(set(SessionSnapshot.decode(nul), 2).entry, isNull);
     },
   );
+
+  test('lock-screen Done on a typed set logs typed; cold start still wins', () {
+    final typed = Session.retarget(
+      start(),
+      '${gen.uuid}:0',
+      loadG: 24000,
+      typed: true,
+    );
+    final lock = Session.done(
+      typed,
+      '${gen.uuid}:0',
+      nowMs: gen.t0 + 95000,
+      source: SetSource.lockscreen,
+    );
+    expect(set(lock, 0).completion, Completion.typed);
+    expect(set(lock, 0).entry, SetEntry.typed);
+    // An untyped set is still tap_unchanged from the lock screen.
+    final plain = Session.done(
+      start(),
+      '${gen.uuid}:0',
+      nowMs: gen.t0 + 95000,
+      source: SetSource.lockscreen,
+    );
+    expect(set(plain, 0).completion, Completion.tapUnchanged);
+    // The pushdown's first set has no plan load: typed or not, cold start.
+    final cold = Session.done(
+      Session.retarget(start(), '${gen.uuid}:3', loadG: 30000, typed: true),
+      '${gen.uuid}:3',
+      nowMs: gen.t0 + 95000,
+      source: SetSource.lockscreen,
+    );
+    expect(set(cold, 3).completion, Completion.coldStart);
+  });
 }

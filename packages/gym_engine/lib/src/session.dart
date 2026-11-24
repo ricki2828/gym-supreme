@@ -127,7 +127,12 @@ class Session {
         ((loaded && set.planLoadG == null && !_anyLoggedLoad(ex, at.s))
             ? Completion.coldStart
             : source == SetSource.lockscreen
-            ? Completion.tapUnchanged
+            // A set he typed on the number pad stays `typed` when the lock
+            // screen logs it (the one-tap rate measures engine suggestions
+            // only; a first-time set stays cold_start, above).
+            ? (set.entry == SetEntry.typed
+                  ? Completion.typed
+                  : Completion.tapUnchanged)
             : (loadShown && repsShown)
             ? Completion.tapUnchanged
             : Completion.adjusted);
