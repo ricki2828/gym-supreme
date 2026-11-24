@@ -10,6 +10,8 @@ import 'dart:math';
 
 import 'api.dart';
 import 'catalog.dart';
+import 'cut2/rotation.dart';
+import 'cut2/rotation_store.dart';
 import 'model.dart';
 import 'snapshot.dart';
 import 'store.dart';
@@ -76,8 +78,10 @@ bool isFreshPattern(Exercise e, Iterable<Exercise> chosen) {
       same.every((x) => movementVariant(x) != movementVariant(e));
 }
 
-/// Export bundle format version.
-const int exportFormat = 1;
+/// Export bundle format version. 2 (0.2.1): deleted workouts left out,
+/// `deleted_workout_uuids`, per-workout `edited_at_ms`,
+/// `counters.workouts_deleted`.
+const int exportFormat = 2;
 
 class GymEngine implements GymApi {
   GymEngine({
@@ -686,11 +690,15 @@ class GymEngine implements GymApi {
 
   // ----------------------------------------------------- finish, resume
 
+  /// Stores a finished workout once. A uuid already stored (deleted ones
+  /// included) is left alone: a Finish retry after a failed journal delete
+  /// must not overwrite sets edited in history or resurrect a delete.
   @override
   void saveFinished(SessionSnapshot snapshot, {List<HrSample> hr = const []}) {
     if (!snapshot.finished) {
       throw ArgumentError('saveFinished needs a finished snapshot');
     }
+    if (store.hasWorkout(snapshot.workoutUuid)) return;
     store.upsertWorkout(
       snapshot.toRecord(),
       snapshotJson: snapshot.encode(),
@@ -719,6 +727,10 @@ class GymEngine implements GymApi {
   }
 
   // ------------------------------------------------- summary, history
+
+  @override
+  WorkoutSummary? summaryOrNull(String workoutUuid) =>
+      store.workout(workoutUuid) == null ? null : summary(workoutUuid);
 
   @override
   WorkoutSummary summary(String workoutUuid) {
@@ -905,8 +917,142 @@ class GymEngine implements GymApi {
       coldStartSets: cold,
       appVersions: versions,
       medianSwapsPerSession: _median([for (final w in all) w.swaps]),
+      workoutsDeleted: store.deletedWorkoutUuids().length,
     );
   }
+
+  // ------------------------------------------------ delete and edit
+
+  @override
+  DeletedWorkout? deleteWorkout(String uuid, {bool rotation = false}) {
+    final w = store.workout(uuid);
+    if (w == null) return null;
+    final at = _now();
+    if (!store.deleteWorkout(uuid, at)) return null;
+    // Two writes, not one transaction (HistoryStore has no transaction hook
+    // and MemoryStore cannot roll back). The delete is what matters: a
+    // rotation failure is cosmetic (he can tap the right row) and never
+    // undoes it.
+    Rotation? before;
+    if (rotation) {
+      try {
+        before = rotationAfterDelete(store, uuid, w.typeId);
+      } on Object {
+        before = null;
+      }
+    }
+    return DeletedWorkout(uuid: uuid, deletedAtMs: at, rotationBefore: before);
+  }
+
+  @override
+  bool undoDelete(String uuid, {Rotation? rotationBefore}) {
+    if (!store.restoreWorkout(uuid)) return false;
+    if (rotationBefore == null) return true;
+    try {
+      // Put the rotation back only if it is still what the delete left
+      // (pointer on this type). Anything he changed since is kept.
+      final type = store.workout(uuid)?.typeId;
+      if (type != null &&
+          rotationBefore.order.contains(type) &&
+          loadRotation(store) == rotationBefore.pointAt(type)) {
+        saveRotation(store, rotationBefore);
+      }
+    } on Object {
+      // Cosmetic: the workout is back; the pointer stays where it is.
+    }
+    return true;
+  }
+
+  @override
+  WorkoutRecord editWorkout(String uuid, List<WorkoutEdit> edits) {
+    final w = store.workout(uuid);
+    if (w == null) throw ArgumentError('unknown or deleted workout $uuid');
+    if (edits.isEmpty) return w;
+    var sets = [...w.sets];
+    for (final e in edits) {
+      final i = sets.indexWhere((s) => s.setId == e.setId);
+      if (i < 0) throw ArgumentError('unknown set ${e.setId}');
+      final s = sets[i];
+      switch (e) {
+        case SetValuesEdit(:final loadG, :final reps):
+          if (s.kind == SetKind.timed) {
+            throw ArgumentError('timed set ${s.setId}: remove only');
+          }
+          if (s.skipped) {
+            throw ArgumentError('skipped set ${s.setId}: remove only');
+          }
+          if (reps < 1) throw ArgumentError('reps must be >= 1, got $reps');
+          if (loadG != null && loadG < 0) {
+            throw ArgumentError('load must be >= 0, got $loadG');
+          }
+          sets[i] = _setWith(s, loadG: loadG, reps: reps);
+        case RemoveSetEdit():
+          sets.removeAt(i);
+          // Renumber that exercise 1..n by position (session.dart rule);
+          // skipped sets hold a number too.
+          final same = [
+            for (final x in sets)
+              if (x.exerciseId == s.exerciseId &&
+                  x.exercisePosition == s.exercisePosition)
+                x,
+          ]..sort((a, b) => a.setOrdinal.compareTo(b.setOrdinal));
+          final ordinal = {
+            for (var k = 0; k < same.length; k++) same[k].setId: k + 1,
+          };
+          sets = [
+            for (final x in sets)
+              ordinal.containsKey(x.setId)
+                  ? _setWith(
+                      x,
+                      loadG: x.loadG,
+                      reps: x.reps,
+                      setOrdinal: ordinal[x.setId],
+                    )
+                  : x,
+          ];
+      }
+    }
+    final edited = WorkoutRecord(
+      uuid: w.uuid,
+      gymId: w.gymId,
+      typeId: w.typeId,
+      muscles: w.muscles,
+      startedAtMs: w.startedAtMs,
+      tzOffsetMin: w.tzOffsetMin,
+      endedAtMs: w.endedAtMs,
+      pausedMs: w.pausedMs,
+      appVersion: w.appVersion,
+      swaps: w.swaps,
+      sets: sets,
+      editedAtMs: _now(),
+    );
+    // snapshotJson null keeps the as-finished copy; HR is only ever added.
+    store.upsertWorkout(edited);
+    return store.workout(uuid)!;
+  }
+
+  static SetRecord _setWith(
+    SetRecord s, {
+    required int? loadG,
+    required int? reps,
+    int? setOrdinal,
+  }) => SetRecord(
+    setId: s.setId,
+    exerciseId: s.exerciseId,
+    exerciseName: s.exerciseName,
+    exercisePosition: s.exercisePosition,
+    setOrdinal: setOrdinal ?? s.setOrdinal,
+    completion: s.completion,
+    skipped: s.skipped,
+    kind: s.kind,
+    loadG: loadG,
+    reps: reps,
+    startedAtMs: s.startedAtMs,
+    endedAtMs: s.endedAtMs,
+    offsetMs: s.offsetMs,
+    source: s.source,
+    blockJson: s.blockJson,
+  );
 
   // ---------------------------------------------------------- export
 
@@ -935,6 +1081,7 @@ class GymEngine implements GymApi {
         'one_tap_rate': c.oneTapRate,
         'one_tap_rate_incl_cold': c.oneTapRateInclCold,
         'app_versions': c.appVersions,
+        'workouts_deleted': c.workoutsDeleted,
         'native': native,
       },
       'settings': store.settings().toJson(),
@@ -949,6 +1096,7 @@ class GymEngine implements GymApi {
           },
       ],
       'workouts': [for (final w in workouts) _workoutJson(w)],
+      'deleted_workout_uuids': store.deletedWorkoutUuids(),
     };
     final json = const JsonEncoder.withIndent(' ').convert(bundle);
     return ExportFiles(json: json, csv: _csv(gyms, workouts));
@@ -965,6 +1113,7 @@ class GymEngine implements GymApi {
     'paused_ms': w.pausedMs,
     'app_version': w.appVersion,
     'swaps': w.swaps,
+    'edited_at_ms': w.editedAtMs,
     'sets': [
       for (final s in w.sets)
         {

@@ -116,6 +116,46 @@ void main() {
     }
   });
 
+  test('M1: 0.1 db migrates to v2, new columns NULL, fixture untouched', () {
+    final pinned = File('$fixtures/v0_1.db.sha256').readAsStringSync().trim();
+    final store = SqliteStore.open(freshCopy());
+    addTearDown(store.close);
+    expect(store.schemaVersion, 2);
+    final n = store.db.select('SELECT count(*) FROM workout').first.columnAt(0);
+    expect(n, greaterThan(0));
+    expect(
+      store.db
+          .select(
+            'SELECT count(*) FROM workout '
+            'WHERE deleted_at_ms IS NULL AND edited_at_ms IS NULL',
+          )
+          .first
+          .columnAt(0),
+      n,
+    );
+    expect(store.deletedWorkoutUuids(), isEmpty);
+    expect(store.workouts(), hasLength(n as int));
+    expect([
+      for (final w in store.workouts()) w.editedAtMs,
+    ], everyElement(isNull));
+    // Migrating a copy never touches the pinned fixture.
+    expect(
+      sha256.convert(File('$fixtures/v0_1.db').readAsBytesSync()).toString(),
+      pinned,
+    );
+  });
+
+  test('M2: a db stamped v3 is refused, not opened or downgraded', () {
+    final path = freshCopy();
+    sqlite3.open(path)
+      ..execute('PRAGMA user_version = 3')
+      ..close();
+    expect(() => SqliteStore.open(path), throwsStateError);
+    final raw = sqlite3.open(path);
+    addTearDown(raw.close);
+    expect(raw.select('PRAGMA user_version').first.columnAt(0), 3);
+  });
+
   test('the engine shows the same gyms, settings and history as 0.1', () {
     final want = json('v0_1_expect.json');
     final catalog = Catalog.fromJson(

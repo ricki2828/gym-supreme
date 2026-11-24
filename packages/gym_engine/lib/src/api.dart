@@ -7,6 +7,7 @@
 /// call ever shows up in a frame.
 library;
 
+import 'cut2/rotation.dart';
 import 'model.dart';
 import 'snapshot.dart';
 
@@ -241,6 +242,7 @@ class Counters {
     required this.coldStartSets,
     required this.appVersions,
     this.medianSwapsPerSession = 0,
+    this.workoutsDeleted = 0,
   });
 
   final int sessionsTotal;
@@ -255,6 +257,9 @@ class Counters {
 
   /// Gate: median swaps per session (plan 3).
   final double medianSwapsPerSession;
+
+  /// Workouts deleted from history (0.2.1). Not in any count above.
+  final int workoutsDeleted;
 
   /// Plan 3: tap_unchanged over all reps sets except cold_start.
   double get oneTapRate {
@@ -295,6 +300,53 @@ enum RecoveryAction {
 
   /// Unfinished and not stored: offer Resume with the snapshot.
   offerResume,
+}
+
+/// One change to a stored workout's sets ([GymApi.editWorkout], 0.2.1 D1).
+/// `set_id` never changes.
+sealed class WorkoutEdit {
+  const WorkoutEdit(this.setId);
+
+  /// New load and reps for a done reps set. [reps] >= 1; [loadG] >= 0 or
+  /// null (bodyweight / no load). `completion` and `source` stay as logged.
+  /// Refused for timed and skipped sets.
+  const factory WorkoutEdit.setValues(
+    String setId, {
+    required int? loadG,
+    required int reps,
+  }) = SetValuesEdit;
+
+  /// Deletes the set; that exercise's remaining sets (skipped ones too) are
+  /// renumbered 1..n in their order. Allowed for every kind.
+  const factory WorkoutEdit.removeSet(String setId) = RemoveSetEdit;
+
+  final String setId;
+}
+
+final class SetValuesEdit extends WorkoutEdit {
+  const SetValuesEdit(super.setId, {required this.loadG, required this.reps});
+  final int? loadG;
+  final int reps;
+}
+
+final class RemoveSetEdit extends WorkoutEdit {
+  const RemoveSetEdit(super.setId);
+}
+
+/// What [GymApi.deleteWorkout] did; pass [rotationBefore] to
+/// [GymApi.undoDelete].
+class DeletedWorkout {
+  const DeletedWorkout({
+    required this.uuid,
+    required this.deletedAtMs,
+    this.rotationBefore,
+  });
+
+  final String uuid;
+  final int deletedAtMs;
+
+  /// The rotation before the delete moved it back; null when it did not.
+  final Rotation? rotationBefore;
 }
 
 /// The engine's face to the app. One instance per open database.
@@ -342,8 +394,34 @@ abstract interface class GymApi {
 
   // Post-workout and history (items 6, 7).
   WorkoutSummary summary(String workoutUuid);
+
+  /// [summary], or null when the uuid is unknown or deleted (0.2.1: a
+  /// screen still open on a workout he just deleted).
+  WorkoutSummary? summaryOrNull(String workoutUuid);
   List<HistoryRow> history({int limit, int offset});
   Counters counters();
+
+  // Delete and edit history (0.2.1 D1).
+  /// Soft-deletes a stored workout: every stat, history, ghost and export
+  /// leaves it out from now on; its rows stay for undo. With [rotation]
+  /// (`Features.rotation`), applies `rotationAfterDelete`; if that throws,
+  /// the delete stands and `rotationBefore` is null. Null when the uuid is
+  /// unknown or already deleted (nothing changes).
+  DeletedWorkout? deleteWorkout(String uuid, {bool rotation});
+
+  /// Undoes [deleteWorkout]. [rotationBefore] (from its result) is saved
+  /// back only while the rotation is still what the delete left; a change he
+  /// made since is kept. False when the uuid is not deleted (nothing
+  /// changes, the rotation included). A rotation error never fails the
+  /// restore.
+  bool undoDelete(String uuid, {Rotation? rotationBefore});
+
+  /// Applies [edits] in order, all or nothing, and stamps `edited_at_ms`.
+  /// Keeps HR and the as-finished `snapshot_json`. Throws [ArgumentError]
+  /// (nothing written) for an unknown or deleted uuid, an unknown set id,
+  /// or a value the edit refuses. An empty list changes nothing. Returns the
+  /// stored record.
+  WorkoutRecord editWorkout(String uuid, List<WorkoutEdit> edits);
 
   // Export (item 10).
   ExportFiles export({required String appVersion, Map<String, int> native});
