@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.app.Activity
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
@@ -24,7 +25,10 @@ import app.gymsupreme.workout.WorkoutApiImpl
 import app.gymsupreme.workout.WorkoutService
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 import java.util.UUID
 
 class MainActivity : FlutterActivity() {
@@ -81,6 +85,65 @@ class MainActivity : FlutterActivity() {
         if (why != null) line.put("why", why)
         SpikeLog.write(this, line)
         cb(Result.success(on))
+    }
+
+    /** The one in-flight pickImportFile call (Dart awaits it). */
+    private var importCallback: ((Result<String?>) -> Unit)? = null
+
+    fun pickImportFile(callback: (Result<String?>) -> Unit) {
+        if (importCallback != null) {
+            callback(Result.failure(FlutterError("already_pending", "an import pick is open", null)))
+            return
+        }
+        importCallback = callback
+        val i = Intent(Intent.ACTION_OPEN_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            // Drive and Files report a JSON export as application/json, text/plain or
+            // application/octet-stream; Dart checks the content, so accept any type.
+            .setType("*/*")
+        SpikeLog.write(this, SpikeLog.line("import_pick_shown"))
+        try {
+            startActivityForResult(i, IMPORT_REQUEST_CODE)
+        } catch (e: Exception) {
+            resolveImport(Result.failure(FlutterError("io_error", "no file picker: ${e.javaClass.simpleName}", null)), "no_picker", null)
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != IMPORT_REQUEST_CODE) return
+        val uri = data?.data
+        if (resultCode != Activity.RESULT_OK || uri == null) {
+            resolveImport(Result.success(null), "cancelled", null)
+            return
+        }
+        val resolver = contentResolver
+        // Read off the main thread; the callback goes back on it.
+        Thread {
+            val outcome: Pair<Result<String?>, String> =
+                try {
+                    val bytes = resolver.openInputStream(uri)?.use { readCapped(it) }
+                    when {
+                        bytes == null -> Result.failure<String?>(FlutterError("io_error", "cannot open the file", null)) to "io_error"
+                        bytes.size > IMPORT_MAX_BYTES -> Result.failure<String?>(FlutterError("too_large", "file is over ${IMPORT_MAX_BYTES / (1024 * 1024)} MiB", null)) to "too_large"
+                        else -> Result.success<String?>(strictUtf8(bytes)) to "picked"
+                    }
+                } catch (e: java.nio.charset.CharacterCodingException) {
+                    Result.failure<String?>(FlutterError("io_error", "file is not UTF-8 text", null)) to "io_error"
+                } catch (e: Exception) {
+                    Result.failure<String?>(FlutterError("io_error", "cannot read the file: ${e.javaClass.simpleName}", null)) to "io_error"
+                }
+            runOnUiThread { resolveImport(outcome.first, outcome.second, outcome.first.getOrNull()?.length) }
+        }.start()
+    }
+
+    private fun resolveImport(result: Result<String?>, outcome: String, chars: Int?) {
+        val cb = importCallback ?: return
+        importCallback = null
+        val line = SpikeLog.line("import_pick").put("result", outcome)
+        if (chars != null) line.put("chars", chars)
+        SpikeLog.write(this, line)
+        cb(result)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -140,6 +203,7 @@ class MainActivity : FlutterActivity() {
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         resolveNotif(false, "activity_gone")
+        resolveImport(Result.success(null), "activity_gone", null)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         GymHostApi.setUp(messenger, null)
         WorkoutApi.setUp(messenger, null)
@@ -159,6 +223,32 @@ class MainActivity : FlutterActivity() {
 
         /** Distinct from SpikeChannel's 7301. */
         private const val NOTIF_REQUEST_CODE = 7302
+
+        /** pickImportFile (I1). Distinct from 7301 and 7302. */
+        private const val IMPORT_REQUEST_CODE = 7303
+
+        /** pickImportFile refuses anything bigger with `too_large`. */
+        const val IMPORT_MAX_BYTES = 16 * 1024 * 1024
+
+        /** Reads at most IMPORT_MAX_BYTES + 1 bytes, so an oversize file is seen without reading all of it. */
+        internal fun readCapped(input: java.io.InputStream): ByteArray {
+            val out = ByteArrayOutputStream()
+            val buf = ByteArray(64 * 1024)
+            while (out.size() <= IMPORT_MAX_BYTES) {
+                val n = input.read(buf)
+                if (n < 0) break
+                out.write(buf, 0, n)
+            }
+            return out.toByteArray()
+        }
+
+        /** UTF-8 that throws on malformed input instead of inserting U+FFFD. */
+        internal fun strictUtf8(bytes: ByteArray): String =
+            Charsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(bytes))
+                .toString()
     }
 }
 
@@ -177,6 +267,8 @@ private class HostApiImpl(private val activity: MainActivity) : GymHostApi {
 
     override fun requestNotificationPermission(callback: (Result<Boolean>) -> Unit) =
         activity.requestNotificationPermission(callback)
+
+    override fun pickImportFile(callback: (Result<String?>) -> Unit) = activity.pickImportFile(callback)
 
     override fun openNotificationSettings() {
         val i = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
