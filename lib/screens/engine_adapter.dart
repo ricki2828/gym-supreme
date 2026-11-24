@@ -86,6 +86,7 @@ LiveView? liveViewOf(
   required int nowMs,
   eng.LoadSteps? steps,
   eng.LastTime? Function(String exerciseId)? lastTime,
+  int? Function(String exerciseId)? startingWeight,
 }) {
   final type = workoutTypeOf(s.typeId);
   final pausedNow = s.state == eng.SessionState.paused && s.pausedAtMs != null
@@ -175,6 +176,7 @@ LiveView? liveViewOf(
     targetReps: set.planReps,
     targetLoadG: set.planLoadG,
     lastTime: lastTimeLine(lastTime?.call(ex.exerciseId), unit),
+    startingWeightG: startingWeight?.call(ex.exerciseId),
     canLoadUp: steps != null && steps.next(load) != null,
     canLoadDown: steps != null && steps.prev(load) != null,
     restS: ex.restS,

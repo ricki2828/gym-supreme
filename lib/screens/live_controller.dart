@@ -55,6 +55,10 @@ class LiveController extends ChangeNotifier {
 
   final Map<String, eng.LastTime?> _last = {};
 
+  /// Per exercise: his typed starting weight when it seeded this session
+  /// (no history anywhere; 0.3 S1), else null. Read once per workout.
+  final Map<String, int?> _start = {};
+
   eng.SessionSnapshot? get snapshot => _s;
   bool get active => _s != null && !_s!.finished;
 
@@ -567,6 +571,13 @@ class LiveController extends ChangeNotifier {
       lastTime: (exerciseId) => _last.putIfAbsent(
         exerciseId,
         () => engine.lastTime(gymId: s.gymId, exerciseId: exerciseId),
+      ),
+      startingWeight: (exerciseId) => _start.putIfAbsent(
+        exerciseId,
+        () =>
+            engine.startingLoad(gymId: s.gymId, exerciseId: exerciseId) == null
+            ? null
+            : engine.startingWeights()[exerciseId],
       ),
     );
   }

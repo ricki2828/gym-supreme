@@ -210,6 +210,9 @@ void main() {
       ),
     );
     expect(c.snapshot!.currentSet!.targetLoadG, 20000);
+    // The live view knows the load came from his starting weight.
+    expect(c.view()!.startingWeightG, 20000);
+    expect(c.view()!.coldStart, isTrue, reason: 'metric unchanged');
     final g = c.currentGhost()!;
     expect(g.baseline, isTrue);
     expect(g.ghostLoadG, 20000);
@@ -248,6 +251,7 @@ void main() {
     String currentId() =>
         c.snapshot!.exercises[c.snapshot!.current!.exercise].exerciseId;
     expect(currentId(), other.exerciseId);
+    expect(c.view()!.startingWeightG, isNull, reason: 'not seeded by one');
     // Do later: the starting-weight lift becomes current, target intact.
     await c.doLater();
     expect(c.lastError, isNull);
