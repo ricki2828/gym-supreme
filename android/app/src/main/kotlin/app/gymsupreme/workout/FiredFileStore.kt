@@ -11,8 +11,11 @@ import java.io.FileOutputStream
  * workout at a time. Every [add] is fsynced before it returns, so the service buzzes only after
  * the record survives a crash; pause (which stops the service), process death and reboot keep it.
  * The journal directory is outside Auto Backup. Cleared when Dart deletes the journal. Thread-safe.
+ * Never throws: an I/O failure (disk full, fsync error) is logged `fired_store_error` and the key
+ * stays recorded in memory, so this process still fires each cue once (review P2, PR #56).
  */
 class FiredFileStore private constructor(context: Context) : FiredStore {
+    private val app = context.applicationContext
     private val file = File(File(context.applicationContext.filesDir, JournalStore.DIR).also { it.mkdirs() }, FILE)
     private var uuid: String? = null
     private val keys = LinkedHashSet<String>()
@@ -23,8 +26,12 @@ class FiredFileStore private constructor(context: Context) : FiredStore {
         if (uuid == workoutUuid) return
         uuid = workoutUuid
         keys.clear()
-        val got = FiredLog.parse(readText(), workoutUuid)
-        if (got != null) keys.addAll(got) else rewrite()
+        val text = readText()
+        val got = FiredLog.parse(text, workoutUuid)
+        if (got != null) keys.addAll(got)
+        // Rewrite a file for another workout, or one with a torn last line: the next append would
+        // otherwise land on the fragment and that key would be unreadable after a restart.
+        if (got == null || (text.isNotEmpty() && !text.endsWith("\n"))) rewrite()
     }
 
     @Synchronized
@@ -34,9 +41,11 @@ class FiredFileStore private constructor(context: Context) : FiredStore {
     override fun add(key: String) {
         if (!keys.add(key)) return
         if (uuid == null) return
-        FileOutputStream(file, true).use { out ->
-            out.write(FiredLog.line(key).toByteArray(Charsets.UTF_8))
-            out.fd.sync()
+        guarded("add") {
+            FileOutputStream(file, true).use { out ->
+                out.write(FiredLog.line(key).toByteArray(Charsets.UTF_8))
+                out.fd.sync()
+            }
         }
     }
 
@@ -67,14 +76,24 @@ class FiredFileStore private constructor(context: Context) : FiredStore {
 
     private fun rewrite() {
         val u = uuid ?: return
-        val tmp = File(file.path + ".tmp")
-        FileOutputStream(tmp).use { out ->
-            out.write(FiredLog.encode(u, keys).toByteArray(Charsets.UTF_8))
-            out.fd.sync()
+        guarded("rewrite") {
+            val tmp = File(file.path + ".tmp")
+            FileOutputStream(tmp).use { out ->
+                out.write(FiredLog.encode(u, keys).toByteArray(Charsets.UTF_8))
+                out.fd.sync()
+            }
+            if (!tmp.renameTo(file)) {
+                file.delete()
+                tmp.renameTo(file)
+            }
         }
-        if (!tmp.renameTo(file)) {
-            file.delete()
-            tmp.renameTo(file)
+    }
+
+    private inline fun guarded(op: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: Exception) {
+            SpikeLog.write(app, SpikeLog.line("fired_store_error").put("op", op).put("message", "${e.javaClass.simpleName}: ${e.message}"))
         }
     }
 

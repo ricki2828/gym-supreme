@@ -47,6 +47,8 @@ restore() {
 trap restore EXIT
 
 if [ "$sdk" -ge 33 ]; then adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS || true; fi
+# 16 MB ring buffer: the 20-minute nightly reads every line back at the end (review P2, PR #56).
+adb logcat -G 16M || true
 adb logcat -c || true
 adb shell am start -W -n "$PKG/app.gymsupreme.MainActivity" --es gym_selftest_session "emom:$ROUNDS:$PERIOD:$LEAD" > /dev/null
 st="$(wait_for '"event":"selftest_session".*"step":"emom:' 40)" || { echo "::error::T1: emom step did not run" >&2; svc_lines | tail -n 20 >&2; exit 1; }
@@ -60,7 +62,12 @@ adb shell input keyevent KEYCODE_SLEEP
 adb shell dumpsys battery unplug || true
 adb shell dumpsys deviceidle enable deep > /dev/null 2>&1 || true
 echo "T1 force-idle: $(adb shell dumpsys deviceidle force-idle 2>&1 | tr -d '\r' | tr '\n' ' ')"
-echo "T1 idle state: deep=$(adb shell dumpsys deviceidle get deep | tr -d '\r') screen=$(adb shell dumpsys power | tr -d '\r' | grep -m1 -oE 'mWakefulness=[A-Za-z]+')"
+deep="$(adb shell dumpsys deviceidle get deep | tr -d '\r')"
+wake="$(adb shell dumpsys power | tr -d '\r' | grep -m1 -oE 'mWakefulness=[A-Za-z]+' || true)"
+echo "T1 idle state: deep=$deep screen=$wake"
+# The proof is screen off + Doze: fail rather than pass a run that never got there.
+[ "$deep" = "IDLE" ] || { echo "::error::T1: device not in deep idle (deep=$deep)" >&2; exit 1; }
+case "$wake" in mWakefulness=Asleep|mWakefulness=Dozing) ;; *) echo "::error::T1: screen not off ($wake)" >&2; exit 1 ;; esac
 
 total=$((ROUNDS + 1))
 end_s=$(( (LEAD + ROUNDS * PERIOD) / 1000 ))
@@ -75,7 +82,9 @@ if [ "$timers" = 1 ]; then
 else
   sleep $(( (LEAD + PERIOD) / 1000 + 10 ))
 fi
-echo "T1 idle state at end: deep=$(adb shell dumpsys deviceidle get deep | tr -d '\r')"
+deep_end="$(adb shell dumpsys deviceidle get deep | tr -d '\r')"
+echo "T1 idle state at end: deep=$deep_end"
+[ "$deep_end" = "IDLE" ] || { echo "::error::T1: device left deep idle during the block (deep=$deep_end)" >&2; exit 1; }
 svc_lines | grep -E '"event":"(timer_[a-z_]+|emom_reapply)"' | sed 's/^.*GymSupreme\/service: */T1 log: /' || true
 restore
 

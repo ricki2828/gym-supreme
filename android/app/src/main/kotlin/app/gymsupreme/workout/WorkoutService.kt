@@ -77,6 +77,7 @@ class WorkoutService : Service() {
     private var fired: FiredFileStore? = null
     @Volatile
     private var blocks: BlockScheduler? = null
+    private val blockLockGuard = Any()
     private var blockLock: PowerManager.WakeLock? = null
     private var blockLockUntil = 0L
     private val blockTotals = HashMap<String, Int>()
@@ -372,12 +373,13 @@ class WorkoutService : Service() {
         val h = Handler(th.looper)
         cues = h
         alerter = Alerter(this, h)
-        val store = FiredFileStore.get(this)
-        view?.workoutUuid?.let { store.bind(it) }
+        // Flag `timers` off: no fired.txt at all, rests dedupe in memory as before T1.
+        val store = if (Features.timers) FiredFileStore.get(this) else null
+        view?.workoutUuid?.let { store?.bind(it) }
         fired = store
         // A rest that buzzed before a process death does not buzz again on resume (T1, durable).
-        tracker = RestTracker(firedBefore = { store.contains(FiredKeys.rest(it)) })
-        blocks = BlockScheduler(store)
+        tracker = if (store != null) RestTracker(firedBefore = { store.contains(FiredKeys.rest(it)) }) else RestTracker()
+        blocks = store?.let { BlockScheduler(it) }
         blockTotals.clear()
         nextCue = null
         ignoredBlock = null
@@ -568,26 +570,32 @@ class WorkoutService : Service() {
 
     /** R4: a partial wake lock bounded to the block (last cue + margin), so cues fire with the screen off. */
     private fun holdBlockLock(now: Long, lastAt: Long) {
-        if (stopping) return
-        val until = lastAt + WAKE_MARGIN_MS
-        val l = blockLock ?: (getSystemService(Context.POWER_SERVICE) as PowerManager)
-            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "gymsupreme:cues").also {
-                it.setReferenceCounted(false)
-                blockLock = it
+        // Under the same monitor as releaseBlockLock, and stopping is set before stop releases: a
+        // tick racing stopWorkout either acquires first (stop releases it) or sees stopping.
+        synchronized(blockLockGuard) {
+            if (stopping) return
+            val until = lastAt + WAKE_MARGIN_MS
+            val l = blockLock ?: (getSystemService(Context.POWER_SERVICE) as PowerManager)
+                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "gymsupreme:cues").also {
+                    it.setReferenceCounted(false)
+                    blockLock = it
+                }
+            if (!l.isHeld || until > blockLockUntil) {
+                l.acquire((until - now).coerceAtLeast(WAKE_MARGIN_MS))
+                blockLockUntil = until
             }
-        if (!l.isHeld || until > blockLockUntil) {
-            l.acquire((until - now).coerceAtLeast(WAKE_MARGIN_MS))
-            blockLockUntil = until
         }
     }
 
     private fun releaseBlockLock(why: String) {
-        val l = blockLock ?: return
-        blockLock = null
-        blockLockUntil = 0
-        if (l.isHeld) {
-            l.release()
-            SpikeLog.write(this, SpikeLog.line("timer_wake_lock_released").put("why", why))
+        synchronized(blockLockGuard) {
+            val l = blockLock ?: return
+            blockLock = null
+            blockLockUntil = 0
+            if (l.isHeld) {
+                l.release()
+                SpikeLog.write(this, SpikeLog.line("timer_wake_lock_released").put("why", why))
+            }
         }
     }
 
