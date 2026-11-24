@@ -10,6 +10,22 @@ plugins {
 // of one APK cannot disagree. Plain ./gradlew runs (lint, unit tests) get "" = all off.
 val dartDefines: String = (project.findProperty("dart-defines") as String?) ?: ""
 
+// The same GS_FEATURES, decoded here for the one manifest decision Gradle makes (0.3 H1): the
+// Health Connect permission and privacy screen merge into the dogfood flavour only when the build
+// has `health` (or `all`). Without it the merged manifest is exactly what it was before H1, and
+// tools/check_manifest_permissions.sh forbids the permission.
+val gsFeatures: Set<String> = dartDefines.split(',')
+    .filter { it.isNotBlank() }
+    .mapNotNull { runCatching { String(java.util.Base64.getDecoder().decode(it), Charsets.UTF_8) }.getOrNull() }
+    .firstOrNull { it.startsWith("GS_FEATURES=") }
+    ?.removePrefix("GS_FEATURES=")
+    ?.split(',')
+    ?.map { it.trim() }
+    ?.filter { it.isNotEmpty() }
+    ?.toSet()
+    ?: emptySet()
+val healthManifest: Boolean = "health" in gsFeatures || "all" in gsFeatures
+
 android {
     // Permanent ids (plan 6.5): namespace and applicationId app.gymsupreme.
     namespace = "app.gymsupreme"
@@ -77,6 +93,11 @@ android {
         }
     }
 
+    sourceSets {
+        // H1: see healthManifest above. Dogfood only; play never declares Health Connect yet.
+        if (healthManifest) getByName("dogfood").manifest.srcFile("src/health/AndroidManifest.xml")
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -103,4 +124,9 @@ flutter {
 dependencies {
     // Pure Kotlin core from the included build android/core.
     implementation("app.gymsupreme:core")
+    // H1: Health Connect write (write only). Its client API is suspend functions.
+    implementation("androidx.health.connect:connect-client:1.1.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // JVM unit tests (health record mapping); CI runs :app:testPlayDebugUnitTest.
+    testImplementation("junit:junit:4.13.2")
 }

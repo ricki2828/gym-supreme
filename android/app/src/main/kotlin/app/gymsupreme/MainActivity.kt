@@ -11,6 +11,9 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.os.Bundle
 import android.util.Log
+import androidx.health.connect.client.PermissionController
+import app.gymsupreme.health.HealthApiImpl
+import app.gymsupreme.platform.HealthApi
 import app.gymsupreme.platform.GymHostApi
 import app.gymsupreme.platform.FlutterError
 import app.gymsupreme.platform.HostInfo
@@ -87,6 +90,31 @@ class MainActivity : FlutterActivity() {
         cb(Result.success(on))
     }
 
+    /** Health Connect's permission screen (0.3 H1): one at a time, answered in onActivityResult. */
+    private val healthContract = PermissionController.createRequestPermissionResultContract()
+    private var healthCallback: ((Set<String>?) -> Unit)? = null
+
+    /** Null to [callback] when a screen is already open; the granted set otherwise (empty on any failure). */
+    fun requestHealthPermissions(permissions: Set<String>, callback: (Set<String>?) -> Unit) {
+        if (healthCallback != null) {
+            callback(null)
+            return
+        }
+        healthCallback = callback
+        try {
+            startActivityForResult(healthContract.createIntent(this, permissions), HEALTH_REQUEST_CODE)
+        } catch (e: Exception) {
+            SpikeLog.write(this, SpikeLog.line("health_permission_error").put("message", e.javaClass.simpleName))
+            resolveHealth(emptySet())
+        }
+    }
+
+    private fun resolveHealth(granted: Set<String>) {
+        val cb = healthCallback ?: return
+        healthCallback = null
+        cb(granted)
+    }
+
     /** The one in-flight pickImportFile call (Dart awaits it). */
     private var importCallback: ((Result<String?>) -> Unit)? = null
 
@@ -111,6 +139,15 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == HEALTH_REQUEST_CODE) {
+            val granted = try {
+                healthContract.parseResult(resultCode, data)
+            } catch (_: Exception) {
+                emptySet()
+            }
+            resolveHealth(granted)
+            return
+        }
         if (requestCode != IMPORT_REQUEST_CODE) return
         val uri = data?.data
         if (resultCode != Activity.RESULT_OK || uri == null) {
@@ -201,6 +238,7 @@ class MainActivity : FlutterActivity() {
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         GymHostApi.setUp(messenger, HostApiImpl(this))
         WorkoutApi.setUp(messenger, WorkoutApiImpl(this))
+        HealthApi.setUp(messenger, HealthApiImpl(applicationContext) { perms, cb -> requestHealthPermissions(perms, cb) })
         snapshots = SnapshotsStream(this).also { SnapshotsStreamHandler.register(messenger, it) }
         spike = SpikeChannel(this, messenger)
     }
@@ -208,9 +246,11 @@ class MainActivity : FlutterActivity() {
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         resolveNotif(false, "activity_gone")
         resolveImport(Result.success(null), "activity_gone", null)
+        resolveHealth(emptySet())
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         GymHostApi.setUp(messenger, null)
         WorkoutApi.setUp(messenger, null)
+        HealthApi.setUp(messenger, null)
         snapshots?.dispose()
         snapshots = null
         spike?.dispose()
@@ -230,6 +270,9 @@ class MainActivity : FlutterActivity() {
 
         /** pickImportFile (I1). Distinct from 7301 and 7302. */
         private const val IMPORT_REQUEST_CODE = 7303
+
+        /** Health Connect permission (H1). Distinct from 7301-7303. */
+        private const val HEALTH_REQUEST_CODE = 7304
 
         /** pickImportFile refuses anything bigger with `too_large`. */
         const val IMPORT_MAX_BYTES = 8 * 1024 * 1024

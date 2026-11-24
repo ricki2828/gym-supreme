@@ -164,6 +164,124 @@ abstract class WorkoutApi {
   Map<String, int> getNativeCounters();
 }
 
+/// Whether this build and phone can write to Health Connect (0.3 H1).
+enum HealthAvailability {
+  /// Health Connect is there and this build declares the permission.
+  available,
+
+  /// Android 13 and older without the Health Connect app.
+  notInstalled,
+
+  /// The Health Connect app needs an update first.
+  needsUpdate,
+
+  /// Android 14+ where Health Connect is not supported.
+  unsupported,
+
+  /// This build does not declare `WRITE_EXERCISE` (play flavour, or a build
+  /// without the `health` flag).
+  notDeclared,
+
+  /// The `health` feature flag is off in this build.
+  flagOff,
+}
+
+class HealthStatus {
+  HealthStatus({
+    required this.availability,
+    required this.granted,
+    required this.enabled,
+  });
+
+  HealthAvailability availability;
+
+  /// `WRITE_EXERCISE` is granted.
+  bool granted;
+
+  /// His switch (off by default; kept on the phone, not in the backup).
+  /// Writes happen only while it is on and [granted] is true.
+  bool enabled;
+}
+
+/// One finished workout as a Health Connect strength-training session.
+class HealthSession {
+  HealthSession({
+    required this.clientRecordId,
+    required this.version,
+    required this.title,
+    required this.startEpochMs,
+    required this.endEpochMs,
+    required this.utcOffsetSeconds,
+  });
+
+  /// The workout uuid: writing it again replaces the record (upsert).
+  String clientRecordId;
+
+  /// `edited_at_ms ?? 0`: an edit raises it, so the rewrite wins; the same
+  /// version again is ignored by Health Connect (idempotent backfill).
+  int version;
+  String title;
+  int startEpochMs;
+  int endEpochMs;
+
+  /// The workout's own UTC offset (tz_offset_min * 60).
+  int utcOffsetSeconds;
+}
+
+enum HealthOutcome {
+  /// Written or deleted.
+  ok,
+
+  /// Health Connect missing, needs an update, or not declared.
+  notAvailable,
+
+  /// `WRITE_EXERCISE` not granted (or revoked).
+  permissionDenied,
+
+  /// His switch is off, or the `health` flag is off: nothing was sent.
+  disabled,
+
+  /// Health Connect threw; [HealthResult.detail] says what.
+  failed,
+}
+
+class HealthResult {
+  HealthResult({required this.outcome, required this.count, this.detail});
+
+  HealthOutcome outcome;
+
+  /// Records written or deleted.
+  int count;
+  String? detail;
+}
+
+/// Health Connect write of finished sessions (0.3 H1, flag `health`). Write
+/// only: no read permission is declared or asked. Never throws for a Health
+/// Connect problem: it answers with a [HealthOutcome]. Logcat
+/// `GymSupreme/service` lines: `health_status`, `health_permission_shown`,
+/// `health_permission`, `health_write`, `health_delete`.
+@HostApi()
+abstract class HealthApi {
+  @async
+  HealthStatus status();
+
+  /// Turning it on asks for `WRITE_EXERCISE` on Health Connect's own screen
+  /// when it is not granted yet; it stays off when he refuses or Health
+  /// Connect is not available. Off never asks. Refusal code
+  /// `already_pending` while a permission screen is open.
+  @async
+  HealthStatus setEnabled(bool enabled);
+
+  /// Upserts by `clientRecordId`, in batches. [HealthOutcome.disabled] while
+  /// the switch is off.
+  @async
+  HealthResult writeSessions(List<HealthSession> sessions);
+
+  /// Deletes by `clientRecordId` (an id with no record is fine).
+  @async
+  HealthResult deleteSessions(List<String> clientRecordIds);
+}
+
 @EventChannelApi()
 abstract class WorkoutEvents {
   /// Every snapshot the service accepted, as JSON; each carries its own

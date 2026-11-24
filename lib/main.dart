@@ -152,6 +152,8 @@ class _GymSupremeAppState extends State<GymSupremeApp> {
           notifications: s.notifications,
           // Delete, undo and every edit refresh the backup snapshot.
           persist: s.persist,
+          // 0.3 H1: finish, edit, delete and undo keep Health Connect in step.
+          health: s.health,
         ),
         onOpenDiagnostics: showDiagnostics
             ? () => _nav.currentState!.push(

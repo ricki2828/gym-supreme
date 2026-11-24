@@ -6,7 +6,10 @@
 #   location, Health Connect, CAMERA, AD_ID...) fails until it is added here on purpose.
 # - Every allowlisted permission must be present.
 # - BLUETOOTH_SCAN must carry usesPermissionFlags=neverForLocation.
-# Usage: tools/check_manifest_permissions.sh <apk> <build-tools-dir> <package>
+# - Health Connect (0.3 H1): with `health` in GS_FEATURES (the build's own, from the environment)
+#   exactly android.permission.health.WRITE_EXERCISE is added to the allowlist and required;
+#   without it, it is forbidden like any other extra. Nothing else from Health Connect, ever.
+# Usage: GS_FEATURES=... tools/check_manifest_permissions.sh <apk> <build-tools-dir> <package>
 set -euo pipefail
 APK="${1:?apk}"; BT="${2:?build-tools dir}"; PKG="${3:?package}"
 allowed="android.permission.BLUETOOTH_CONNECT
@@ -17,6 +20,13 @@ android.permission.FOREGROUND_SERVICE_SPECIAL_USE
 android.permission.POST_NOTIFICATIONS
 android.permission.VIBRATE
 android.permission.WAKE_LOCK"
+case ",${GS_FEATURES:-}," in
+  *,health,* | ,all,)
+    allowed="$allowed
+android.permission.health.WRITE_EXERCISE"
+    echo "health flag on: WRITE_EXERCISE required" ;;
+  *) echo "health flag off: no Health Connect permission allowed" ;;
+esac
 # Allowed but not required: androidx.core adds it when a dependency registers receivers.
 optional="$PKG.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
 dump="$("$BT/aapt" dump permissions "$APK")"

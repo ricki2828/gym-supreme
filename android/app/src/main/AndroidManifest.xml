@@ -1,7 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <!-- Plan 7 and R1. No INTERNET, no location, no Health Connect: CI fails the dogfood build if
-         its merged manifest gains any of them (tools/check_manifest_permissions.sh). -->
+    <!-- Plan 7 and R1. No INTERNET, no location: CI fails the dogfood build if its merged manifest
+         gains any of them (tools/check_manifest_permissions.sh). Health Connect WRITE_EXERCISE
+         only from src/health/AndroidManifest.xml, merged into dogfood builds with the `health`
+         flag (0.3 H1); the gate requires it then and forbids it otherwise. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
