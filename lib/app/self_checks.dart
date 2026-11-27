@@ -212,6 +212,7 @@ SelfCheckVerdict? cueVerdict(List<CueEvidence> all) {
     ];
     if (hints.isNotEmpty) why.add('late ones: ${hints.join(', ')}');
   }
+  if (late.isEmpty) why.add('$onTime of $n on time');
   if (missed > 0) why.add('$missed missed');
   if (tone > 0) why.add('tone failed on $tone');
   return SelfCheckVerdict(
