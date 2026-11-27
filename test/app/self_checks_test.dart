@@ -304,6 +304,36 @@ void main() {
       expect(v.text, contains('1 tap with no workout to record into'));
     });
 
+    test('Done, undo, Done again on one set is a correction, not a double', () {
+      final v = lockVerdict(
+        lockEvidence(
+          locks(
+            [
+              (act: 1, out: 0, set: 9, wall: 10000),
+              (act: 4, out: 0, set: 9, wall: 10800),
+              (act: 1, out: 0, set: 9, wall: 11500),
+            ],
+            app: {0, 1, 2},
+          ),
+        ),
+      )!;
+      expect(v.state, CheckState.good);
+      expect(v.text, contains('2 Done taps recorded'));
+    });
+
+    test('an undo of a different set does not excuse a double', () {
+      final v = lockVerdict(
+        lockEvidence(
+          locks([
+            (act: 1, out: 0, set: 9, wall: 10000),
+            (act: 4, out: 0, set: 3, wall: 10800),
+            (act: 1, out: 0, set: 9, wall: 11500),
+          ]),
+        ),
+      )!;
+      expect(v.state, CheckState.off);
+    });
+
     test('an in-app Done and a lock-screen Done on one set is a double', () {
       final v = lockVerdict(
         lockEvidence(

@@ -30,4 +30,8 @@ object SelfCheckKeys {
         }
         return out
     }
+
+    /** Ids of sets done in [before] and no longer done in [now] (an undo in the app). */
+    fun newlyUndoneSetIds(before: Map<String, Any?>?, now: Map<String, Any?>): List<String> =
+        if (before == null) emptyList() else (doneSetIds(before) - doneSetIds(now)).toList()
 }

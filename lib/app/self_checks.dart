@@ -77,7 +77,7 @@ class LockEvidence {
   final int seq;
   final int wallMs;
 
-  /// 1 done, 2 +1 rep, 3 skip rest.
+  /// 1 done, 2 +1 rep, 3 skip rest, 4 undo of a Done in the app.
   final int action;
 
   /// 0 applied, 1 debounced, 2 stale rev, 3 flag off, 4 error, 5 not pending,
@@ -255,12 +255,17 @@ SelfCheckVerdict? lockVerdict(List<LockEvidence> all) {
   final applied = done.where((t) => t.applied).toList();
   final lockN = applied.where((t) => !t.fromApp).length;
   final appN = applied.length - lockN;
+  final undos = all.where((t) => t.action == 4).toList();
+  // Done, undo, Done again on one set is a correction, not a double.
+  bool undoneBetween(LockEvidence a, LockEvidence b) =>
+      undos.any((u) => u.set == a.set && u.seq > a.seq && u.seq < b.seq);
   var doubles = 0;
   for (var i = 0; i < applied.length; i++) {
     for (var j = i + 1; j < applied.length; j++) {
       if (applied[i].set == applied[j].set &&
           (applied[j].wallMs - applied[i].wallMs).abs() <=
-              doubleRecordWindowMs) {
+              doubleRecordWindowMs &&
+          !undoneBetween(applied[i], applied[j])) {
         doubles++;
         break;
       }

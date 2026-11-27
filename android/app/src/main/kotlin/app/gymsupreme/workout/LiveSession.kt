@@ -2,13 +2,14 @@ package app.gymsupreme.workout
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import app.gymsupreme.core.journal.FinishStamp
 import app.gymsupreme.core.journal.Journal
 import app.gymsupreme.core.journal.SnapshotView
 import app.gymsupreme.core.json.Json
 import app.gymsupreme.core.json.JsonException
 import app.gymsupreme.core.json.JsonWriter
-import app.gymsupreme.core.selfcheck.SelfCheckKeys
+import app.gymsupreme.core.selfcheck.AppDoneRecorder
 import app.gymsupreme.core.session.LockReducer
 
 /**
@@ -29,6 +30,14 @@ class LiveSession private constructor(private val context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("gymsupreme.journal", Context.MODE_PRIVATE)
     private var head: Journal.Head? = null
     private var loaded = false
+
+    /** Self-checks: in-app Done and undo, from the accepted snapshots (kept in memory, see the class). */
+    private val recorder = AppDoneRecorder(
+        readLast = { store.read().lastLine },
+        done = { SelfCheckLog.lock(context, 1L, "applied", it, 0L, fromApp = true) },
+        undone = { SelfCheckLog.lock(context, 4L, "applied", it, 0L, fromApp = true) },
+        onError = { Log.w(SpikeLog.TAG, "self-check app Done compare failed: $it") },
+    )
 
     /** Snapshots the service accepted or wrote, for Dart's stream (cut 2: lock-screen changes). */
     var onSnapshot: ((String) -> Unit)? = null
@@ -78,9 +87,9 @@ class LiveSession private constructor(private val context: Context) {
         val r = Journal.submit(json, 0, cur, isStart = true)
         if (r is Journal.Submit.Rejected) throw Refused(r.code, r.message)
         r as Journal.Submit.Accepted
-        logAppDone(r.line)
         store.append(r.line)
         head = r.head
+        recorder.remember(r.line) // a new workout: nothing to compare with, nothing to log
         SpikeLog.write(context, SpikeLog.line("session_start").put("uuid", r.head.uuid))
         apply(r.snapshot, r.line)
         return r.head.rev
@@ -94,18 +103,8 @@ class LiveSession private constructor(private val context: Context) {
         store.append(r.line)
         head = r.head
         apply(r.snapshot, r.line)
+        recorder.accepted(r.line) // last: never delays the fsync or the service update
         return r.head.rev
-    }
-
-    /** Self-checks: Done taps made in the app, to compare with lock-screen Done on the same set. Never throws. */
-    private fun logAppDone(newLine: String) {
-        try {
-            val prev = store.read().lastLine?.let { Json.parseObject(it) }
-            for (id in SelfCheckKeys.newAppDoneSetIds(prev, Json.parseObject(newLine))) {
-                SelfCheckLog.lock(context, 1L, "applied", id, 0L, fromApp = true)
-            }
-        } catch (_: Exception) {
-        }
     }
 
     /** The journal head's rev, or null (self-test). */
@@ -128,7 +127,7 @@ class LiveSession private constructor(private val context: Context) {
         val cur = current() ?: return LockOutcome("no_journal")
         if (cur.finished) return LockOutcome("finished")
         if (rev != cur.rev) return LockOutcome("stale_rev")
-        val line = store.read().lastLine ?: return LockOutcome("no_journal")
+        val line = recorder.lastLine() ?: return LockOutcome("no_journal")
         return when (val r = LockReducer.apply(Json.parseObject(line), action, setId, System.currentTimeMillis())) {
             is LockReducer.Result.NoOp -> LockOutcome("noop:${r.reason}")
             is LockReducer.Result.Applied -> {
@@ -158,7 +157,7 @@ class LiveSession private constructor(private val context: Context) {
      */
     fun finish(): String {
         val cur = current() ?: throw Refused("not_running", "no workout in progress")
-        val line = store.read().lastLine ?: throw Refused("not_running", "journal unreadable")
+        val line = recorder.lastLine() ?: throw Refused("not_running", "journal unreadable")
         if (cur.finished) {
             WorkoutService.instance?.endSession("finish")
             onSnapshot?.invoke(line)
@@ -168,6 +167,7 @@ class LiveSession private constructor(private val context: Context) {
         val r = Journal.submit(out, cur.rev, cur, isStart = false)
         if (r is Journal.Submit.Rejected) throw Refused(r.code, r.message)
         store.append(out)
+        recorder.remember(out)
         head = (r as Journal.Submit.Accepted).head
         WorkoutService.instance?.endSession("finish")
         SpikeLog.write(context, SpikeLog.line("session_finish").put("uuid", cur.uuid).put("rev", cur.rev + 1))
@@ -180,6 +180,7 @@ class LiveSession private constructor(private val context: Context) {
         loaded = true
         val r = inspect()
         head = r.last
+        recorder.remember(r.lastLine)
         return r.lastLine
     }
 
@@ -216,6 +217,7 @@ class LiveSession private constructor(private val context: Context) {
         if (ok) {
             WorkoutService.cancelPendingStart()
             head = null
+            recorder.remember(null)
             prefs.edit().remove("counted:$uuid").apply()
             // T1: the workout's fired cues and rests go with its journal.
             FiredFileStore.get(context).clear(uuid)
