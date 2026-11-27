@@ -88,7 +88,7 @@ void main() {
       expect(v.state, CheckState.off);
       expect(v.text, contains('1 missed'));
       expect(v.text, contains('tone failed on 1'));
-      expect(v.text, contains('1 of 3 on time'));
+      expect(v.text, contains('2 of 3 on time'));
     });
 
     test('late cues name the device state they ran in', () {
