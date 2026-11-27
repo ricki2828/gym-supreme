@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gym_supreme/app/self_checks.dart';
 import 'package:gym_supreme/screens/diagnostics_panel.dart';
 
 import 'diagnostics_fixtures.dart';
@@ -132,5 +133,39 @@ void main() {
     );
     await tester.scrollUntilVisible(row, 200);
     expect(row, findsOneWidget);
+  });
+
+  testWidgets('self-checks section shows verdicts; sc_ keys stay out of the '
+      'counter list', (tester) async {
+    phone(tester);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: DiagnosticsPanel(
+            appVersion: 'x',
+            gate: gate,
+            native: {'sc_cue_01_late': 5, 'sc_cue_01_seq': 1},
+            selfChecks: [
+              SelfCheckVerdict(
+                'cues',
+                'Timer cues and rest alerts',
+                CheckState.good,
+                'All good: 20 of 20 on time, worst 40 ms late.',
+              ),
+              SelfCheckVerdict(
+                'health',
+                'Health Connect',
+                CheckState.off,
+                "Something's off: last write failed",
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    expect(find.text('SELF-CHECKS'), findsOneWidget);
+    expect(find.textContaining('All good: 20 of 20'), findsOneWidget);
+    expect(find.textContaining("Something's off"), findsOneWidget);
+    expect(find.text('sc_cue_01_late'), findsNothing);
   });
 }

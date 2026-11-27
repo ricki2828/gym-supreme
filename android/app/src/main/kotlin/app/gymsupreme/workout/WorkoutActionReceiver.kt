@@ -35,6 +35,7 @@ class WorkoutActionReceiver : BroadcastReceiver() {
         val rev = intent.getLongExtra(EXTRA_REV, -1)
         val setId = intent.getStringExtra(EXTRA_SET_ID)
         val line = SpikeLog.line("lock_action").put("action", lock.wire).put("rev", rev).put("set_id", setId)
+        var result = "error"
         try {
             val now = SystemClock.elapsedRealtime()
             val outcome = when {
@@ -54,11 +55,13 @@ class WorkoutActionReceiver : BroadcastReceiver() {
                     r.outcome
                 }
             }
+            result = outcome
             line.put("outcome", outcome)
         } catch (e: Exception) {
             line.put("outcome", "error").put("error", "${e.javaClass.simpleName}: ${e.message}")
         }
         SpikeLog.write(context, line)
+        SelfCheckLog.lock(context, lock.ordinal + 1L, result, setId, rev)
     }
 
     companion object {
