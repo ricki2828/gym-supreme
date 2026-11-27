@@ -17,7 +17,7 @@ const int restAlertsConsidered = 30;
 /// Two applied Done taps on one set this close are a double record.
 const int doubleRecordWindowMs = 5000;
 
-/// Evidence older than this is shown as "last checked <date>", not as a
+/// Evidence older than this is shown as "last checked `date`", not as a
 /// current verdict.
 const int evidenceMaxAgeDays = 14;
 
@@ -373,7 +373,7 @@ int _newest(Iterable<int> walls) => walls.fold(0, (m, w) => w > m ? w : m);
 /// whose feature is on ([timers], [lockDone], [health]) but has no evidence
 /// yet shows a quiet "nothing logged yet" line, so the section says what it
 /// is waiting for. Evidence older than [evidenceMaxAgeDays] at [nowMs] is
-/// shown as "last checked <date>", not as a current verdict; cue and Done
+/// shown as "last checked `date`", not as a current verdict; cue and Done
 /// lines end with the date of the newest entry.
 List<SelfCheckVerdict> evaluateSelfChecks(
   Map<String, int> native, {
