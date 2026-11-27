@@ -8,6 +8,7 @@ import app.gymsupreme.core.journal.SnapshotView
 import app.gymsupreme.core.json.Json
 import app.gymsupreme.core.json.JsonException
 import app.gymsupreme.core.json.JsonWriter
+import app.gymsupreme.core.selfcheck.SelfCheckKeys
 import app.gymsupreme.core.session.LockReducer
 
 /**
@@ -77,6 +78,7 @@ class LiveSession private constructor(private val context: Context) {
         val r = Journal.submit(json, 0, cur, isStart = true)
         if (r is Journal.Submit.Rejected) throw Refused(r.code, r.message)
         r as Journal.Submit.Accepted
+        logAppDone(r.line)
         store.append(r.line)
         head = r.head
         SpikeLog.write(context, SpikeLog.line("session_start").put("uuid", r.head.uuid))
@@ -93,6 +95,17 @@ class LiveSession private constructor(private val context: Context) {
         head = r.head
         apply(r.snapshot, r.line)
         return r.head.rev
+    }
+
+    /** Self-checks: Done taps made in the app, to compare with lock-screen Done on the same set. Never throws. */
+    private fun logAppDone(newLine: String) {
+        try {
+            val prev = store.read().lastLine?.let { Json.parseObject(it) }
+            for (id in SelfCheckKeys.newAppDoneSetIds(prev, Json.parseObject(newLine))) {
+                SelfCheckLog.lock(context, 1L, "applied", id, 0L, fromApp = true)
+            }
+        } catch (_: Exception) {
+        }
     }
 
     /** The journal head's rev, or null (self-test). */

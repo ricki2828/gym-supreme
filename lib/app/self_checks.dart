@@ -17,6 +17,10 @@ const int restAlertsConsidered = 30;
 /// Two applied Done taps on one set this close are a double record.
 const int doubleRecordWindowMs = 5000;
 
+/// Evidence older than this is shown as "last checked <date>", not as a
+/// current verdict.
+const int evidenceMaxAgeDays = 14;
+
 enum CheckState { good, off, quiet }
 
 class SelfCheckVerdict {
@@ -63,6 +67,7 @@ class LockEvidence {
     required this.action,
     required this.outcome,
     required this.set,
+    this.fromApp = false,
   });
   final int seq;
   final int wallMs;
@@ -70,9 +75,15 @@ class LockEvidence {
   /// 1 done, 2 +1 rep, 3 skip rest.
   final int action;
 
-  /// 0 applied, 1 debounced, 2 stale rev, 3 flag off, 4 error, 5 other.
+  /// 0 applied, 1 debounced, 2 stale rev, 3 flag off, 4 error, 5 not pending,
+  /// 6 paused, 7 finished, 8 unknown set, 9 not eligible, 10 no session,
+  /// 11 no journal, 12 other.
   final int outcome;
   final int set;
+
+  /// A Done made in the app (logged when the journal takes the snapshot),
+  /// not a notification tap.
+  final bool fromApp;
   bool get applied => outcome == 0;
   bool get isDone => action == 1;
 }
@@ -98,9 +109,11 @@ class HealthEvidence {
 List<Map<String, int>> _ring(
   Map<String, int> native,
   String base,
-  int slots,
   List<String> fields,
 ) {
+  // The ring size is the writer's (`<base>_slots`), so the two sides cannot
+  // drift; a missing key reads the keys that are there.
+  final slots = native['${base}_slots'] ?? 100;
   final out = <Map<String, int>>[];
   for (var i = 0; i < slots; i++) {
     final slot = '${base}_${i.toString().padLeft(2, '0')}';
@@ -116,21 +129,23 @@ List<Map<String, int>> _ring(
   return out;
 }
 
-List<CueEvidence> cueEvidence(Map<String, int> native) =>
-    _ring(native, 'sc_cue', 60, ['late', 'flags', 'blk'])
-        .map(
-          (m) => CueEvidence(
-            seq: m['seq']!,
-            wallMs: m['wall']!,
-            lateMs: m['late']!,
-            flags: m['flags']!,
-            block: m['blk']!,
-          ),
-        )
-        .toList();
+/// Timer cues (oldest first) followed by rest alerts (oldest first): two
+/// rings, so neither evicts the other.
+List<CueEvidence> cueEvidence(Map<String, int> native) => [
+  for (final base in ['sc_cue', 'sc_rest'])
+    ..._ring(native, base, ['late', 'flags', 'blk']).map(
+      (m) => CueEvidence(
+        seq: m['seq']!,
+        wallMs: m['wall']!,
+        lateMs: m['late']!,
+        flags: m['flags']!,
+        block: m['blk']!,
+      ),
+    ),
+];
 
 List<LockEvidence> lockEvidence(Map<String, int> native) =>
-    _ring(native, 'sc_lock', 20, ['act', 'out', 'set'])
+    _ring(native, 'sc_lock', ['act', 'out', 'set', 'src'])
         .map(
           (m) => LockEvidence(
             seq: m['seq']!,
@@ -138,12 +153,13 @@ List<LockEvidence> lockEvidence(Map<String, int> native) =>
             action: m['act']!,
             outcome: m['out']!,
             set: m['set']!,
+            fromApp: m['src'] == 1,
           ),
         )
         .toList();
 
 List<HealthEvidence> healthEvidence(Map<String, int> native) =>
-    _ring(native, 'sc_health', 10, ['op', 'out', 'n'])
+    _ring(native, 'sc_health', ['op', 'out', 'n'])
         .map(
           (m) => HealthEvidence(
             seq: m['seq']!,
@@ -223,13 +239,17 @@ SelfCheckVerdict? cueVerdict(List<CueEvidence> all) {
   );
 }
 
-/// Done taps: how many recorded, and any set recorded twice inside
-/// [doubleRecordWindowMs].
+/// Done taps, lock screen and in app: how many recorded, and any set
+/// recorded twice (by either route) inside [doubleRecordWindowMs]. A second
+/// tap on a set already done ("not pending") and a double-tap held back by the
+/// debounce are the guards working, not problems.
 SelfCheckVerdict? lockVerdict(List<LockEvidence> all) {
-  const title = 'Lock-screen Done';
+  const title = 'Done taps (lock screen and app)';
   final done = all.where((t) => t.isDone).toList();
   if (done.isEmpty) return null;
   final applied = done.where((t) => t.applied).toList();
+  final lockN = applied.where((t) => !t.fromApp).length;
+  final appN = applied.length - lockN;
   var doubles = 0;
   for (var i = 0; i < applied.length; i++) {
     for (var j = i + 1; j < applied.length; j++) {
@@ -241,40 +261,51 @@ SelfCheckVerdict? lockVerdict(List<LockEvidence> all) {
       }
     }
   }
-  final errors = done.where((t) => t.outcome == 4).length;
-  final stale = done.where((t) => t.outcome == 2).length;
-  final held = done.where((t) => t.outcome == 1).length;
-  final other = done.where((t) => t.outcome == 5).length;
+  int count(bool Function(int o) f) => done.where((t) => f(t.outcome)).length;
+  final errors = count((o) => o == 4);
+  final stale = count((o) => o == 2);
+  final unmatched = count((o) => o == 8 || o == 9);
+  final nothing = count((o) => o == 10 || o == 11 || o == 12);
+  final guards = count((o) => o == 1 || o == 5);
+  final paused = count((o) => o == 6);
+  final finished = count((o) => o == 7);
+  String taps(int n) => '$n tap${n == 1 ? '' : 's'}';
   final notes = <String>[
-    if (held > 0) '$held double-tap${held == 1 ? '' : 's'} held back',
-    if (stale > 0) '$stale on an old notification, not recorded',
-    if (other > 0) '$other with no workout to record into',
+    if (guards > 0) '${taps(guards)} held back as double taps',
+    if (paused > 0) '${taps(paused)} while paused',
+    if (finished > 0) '${taps(finished)} after the workout finished',
   ];
   final tail = notes.isEmpty ? '' : ' (${notes.join(', ')})';
-  if (doubles == 0 && errors == 0 && stale == 0 && other == 0) {
+  final recorded =
+      '${applied.length} Done ${applied.length == 1 ? 'tap' : 'taps'} '
+      'recorded ($lockN lock screen, $appN in app)';
+  if (doubles == 0 &&
+      errors == 0 &&
+      stale == 0 &&
+      unmatched == 0 &&
+      nothing == 0) {
     return SelfCheckVerdict(
       'lock_done',
       title,
       CheckState.good,
-      'All good: ${applied.length} Done '
-          'tap${applied.length == 1 ? '' : 's'} recorded, none doubled.$tail',
+      'All good: $recorded, no set recorded twice.$tail',
     );
   }
   final why = <String>[
     if (doubles > 0)
       '$doubles set${doubles == 1 ? '' : 's'} recorded twice within '
           '${doubleRecordWindowMs ~/ 1000} s',
-    if (errors > 0) '$errors tap${errors == 1 ? '' : 's'} failed',
-    if (stale > 0)
-      '$stale tap${stale == 1 ? '' : 's'} not recorded (old notification)',
-    if (other > 0)
-      '$other tap${other == 1 ? '' : 's'} had no workout to record into',
+    if (errors > 0) '${taps(errors)} failed',
+    if (stale > 0) '${taps(stale)} on an old notification, not recorded',
+    if (unmatched > 0)
+      '${taps(unmatched)} on a set the workout no longer matched',
+    if (nothing > 0) '${taps(nothing)} with no workout to record into',
   ];
   return SelfCheckVerdict(
     'lock_done',
     title,
     CheckState.off,
-    "Something's off: ${why.join('; ')}. ${applied.length} recorded.",
+    "Something's off: ${why.join('; ')}. $recorded.$tail",
   );
 }
 
@@ -323,16 +354,35 @@ SelfCheckVerdict? healthVerdict(List<HealthEvidence> all) {
   );
 }
 
+SelfCheckVerdict _aged(SelfCheckVerdict v, int newestMs, int nowMs) {
+  final stale = nowMs - newestMs > evidenceMaxAgeDays * 86400000;
+  if (stale) {
+    return SelfCheckVerdict(
+      v.id,
+      v.title,
+      CheckState.quiet,
+      'Last checked ${_stamp(newestMs)}: ${v.text}',
+    );
+  }
+  return v;
+}
+
+int _newest(Iterable<int> walls) => walls.fold(0, (m, w) => w > m ? w : m);
+
 /// The verdicts for every check that has evidence, cues first. A check
 /// whose feature is on ([timers], [lockDone], [health]) but has no evidence
 /// yet shows a quiet "nothing logged yet" line, so the section says what it
-/// is waiting for.
+/// is waiting for. Evidence older than [evidenceMaxAgeDays] at [nowMs] is
+/// shown as "last checked <date>", not as a current verdict; cue and Done
+/// lines end with the date of the newest entry.
 List<SelfCheckVerdict> evaluateSelfChecks(
   Map<String, int> native, {
   bool timers = false,
   bool lockDone = false,
   bool health = false,
+  int? nowMs,
 }) {
+  final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
   SelfCheckVerdict waiting(String id, String title, String what) =>
       SelfCheckVerdict(
         id,
@@ -340,31 +390,53 @@ List<SelfCheckVerdict> evaluateSelfChecks(
         CheckState.quiet,
         'Nothing logged yet. Appears after $what.',
       );
+  SelfCheckVerdict withDate(SelfCheckVerdict v, int newest) => _aged(
+    SelfCheckVerdict(
+      v.id,
+      v.title,
+      v.state,
+      '${v.text} Newest ${_stamp(newest)}.',
+    ),
+    newest,
+    now,
+  );
+  final cues = cueEvidence(native);
+  final cue = cueVerdict(cues);
+  final locks = lockEvidence(native);
+  final lock = lockVerdict(locks);
+  final hc = healthEvidence(native);
+  final hv = healthVerdict(hc);
   return [
-    cueVerdict(cueEvidence(native)) ??
-        (timers
-            ? waiting(
-                'cues',
-                'Timer cues and rest alerts',
-                'a timed session or a rest alert',
-              )
-            : null),
-    lockVerdict(lockEvidence(native)) ??
-        (lockDone
-            ? waiting(
-                'lock_done',
-                'Lock-screen Done',
-                'a Done tap on the lock screen',
-              )
-            : null),
-    healthVerdict(healthEvidence(native)) ??
-        (health
-            ? waiting(
-                'health',
-                'Health Connect',
-                'a workout is written to Health Connect',
-              )
-            : null),
+    cue != null
+        ? withDate(cue, _newest(cues.map((c) => c.wallMs)))
+        : (timers
+              ? waiting(
+                  'cues',
+                  'Timer cues and rest alerts',
+                  'a timed session or a rest alert',
+                )
+              : null),
+    lock != null
+        ? withDate(
+            lock,
+            _newest(locks.where((t) => t.isDone).map((t) => t.wallMs)),
+          )
+        : (lockDone
+              ? waiting(
+                  'lock_done',
+                  'Done taps (lock screen and app)',
+                  'a Done tap',
+                )
+              : null),
+    hv != null
+        ? _aged(hv, _newest(hc.map((h) => h.wallMs)), now)
+        : (health
+              ? waiting(
+                  'health',
+                  'Health Connect',
+                  'a workout is written to Health Connect',
+                )
+              : null),
   ].nonNulls.toList();
 }
 

@@ -6,7 +6,7 @@ Map<String, int> cues(
   List<({int late, int flags, int blk})> list, {
   int start = 1,
 }) {
-  final m = <String, int>{};
+  final m = <String, int>{'sc_cue_slots': 60, 'sc_rest_slots': 30};
   for (var i = 0; i < list.length; i++) {
     final seq = start + i;
     final slot = 'sc_cue_${(seq % 60).toString().padLeft(2, '0')}';
@@ -19,8 +19,11 @@ Map<String, int> cues(
   return m;
 }
 
-Map<String, int> locks(List<({int act, int out, int set, int wall})> list) {
-  final m = <String, int>{};
+Map<String, int> locks(
+  List<({int act, int out, int set, int wall})> list, {
+  Set<int> app = const {},
+}) {
+  final m = <String, int>{'sc_lock_slots': 20};
   for (var i = 0; i < list.length; i++) {
     final slot = 'sc_lock_${((i + 1) % 20).toString().padLeft(2, '0')}';
     m['${slot}_seq'] = i + 1;
@@ -28,12 +31,13 @@ Map<String, int> locks(List<({int act, int out, int set, int wall})> list) {
     m['${slot}_act'] = list[i].act;
     m['${slot}_out'] = list[i].out;
     m['${slot}_set'] = list[i].set;
+    m['${slot}_src'] = app.contains(i) ? 1 : 0;
   }
   return m;
 }
 
 Map<String, int> health(List<({int op, int out, int n})> list) {
-  final m = <String, int>{};
+  final m = <String, int>{'sc_health_slots': 10};
   for (var i = 0; i < list.length; i++) {
     final slot = 'sc_health_${((i + 1) % 10).toString().padLeft(2, '0')}';
     m['${slot}_seq'] = i + 1;
@@ -155,7 +159,10 @@ void main() {
       expect(v.state, CheckState.good);
       expect(
         v.text,
-        startsWith('All good: 5 Done taps recorded, none doubled'),
+        startsWith(
+          'All good: 5 Done taps recorded (5 lock screen, 0 in app), '
+          'no set recorded twice',
+        ),
       );
     });
 
@@ -194,7 +201,7 @@ void main() {
         ),
       )!;
       expect(v.state, CheckState.good);
-      expect(v.text, contains('1 double-tap held back'));
+      expect(v.text, contains('1 tap held back as double taps'));
     });
 
     test('stale and failed taps are off; other actions are ignored', () {
@@ -209,8 +216,8 @@ void main() {
       )!;
       expect(v.state, CheckState.off);
       expect(v.text, contains('1 tap failed'));
-      expect(v.text, contains('1 tap not recorded (old notification)'));
-      expect(v.text, contains('0 recorded'));
+      expect(v.text, contains('1 tap on an old notification, not recorded'));
+      expect(v.text, contains('0 Done taps recorded'));
     });
 
     test('no Done taps: no verdict', () {
@@ -253,6 +260,111 @@ void main() {
     });
   });
 
+  group('lock-screen Done, more outcomes', () {
+    test('a tap on a set already done is the guard working', () {
+      final v = lockVerdict(
+        lockEvidence(
+          locks([
+            (act: 1, out: 0, set: 5, wall: 10000),
+            (act: 1, out: 5, set: 5, wall: 30000),
+          ]),
+        ),
+      )!;
+      expect(v.state, CheckState.good);
+      expect(v.text, contains('1 tap held back as double taps'));
+    });
+
+    test('paused and finished are notes, not problems', () {
+      final v = lockVerdict(
+        lockEvidence(
+          locks([
+            (act: 1, out: 0, set: 1, wall: 1000),
+            (act: 1, out: 6, set: 2, wall: 2000),
+            (act: 1, out: 7, set: 3, wall: 3000),
+          ]),
+        ),
+      )!;
+      expect(v.state, CheckState.good);
+      expect(v.text, contains('1 tap while paused'));
+      expect(v.text, contains('1 tap after the workout finished'));
+    });
+
+    test('unknown set and no session are told apart', () {
+      final v = lockVerdict(
+        lockEvidence(
+          locks([
+            (act: 1, out: 8, set: 1, wall: 1000),
+            (act: 1, out: 9, set: 2, wall: 2000),
+            (act: 1, out: 10, set: 3, wall: 3000),
+          ]),
+        ),
+      )!;
+      expect(v.state, CheckState.off);
+      expect(v.text, contains('2 taps on a set the workout no longer matched'));
+      expect(v.text, contains('1 tap with no workout to record into'));
+    });
+
+    test('an in-app Done and a lock-screen Done on one set is a double', () {
+      final v = lockVerdict(
+        lockEvidence(
+          locks(
+            [
+              (act: 1, out: 0, set: 9, wall: 10000),
+              (act: 1, out: 0, set: 9, wall: 11500),
+            ],
+            app: {0},
+          ),
+        ),
+      )!;
+      expect(v.state, CheckState.off);
+      expect(v.text, contains('1 set recorded twice within 5 s'));
+      expect(v.text, contains('(1 lock screen, 1 in app)'));
+    });
+  });
+
+  group('rings and age', () {
+    test('rest alerts have their own ring and are not evicted by cues', () {
+      final m = {
+        ...cues([for (var i = 0; i < 70; i++) (late: 5, flags: 0, blk: 1)]),
+        'sc_rest_01_seq': 1,
+        'sc_rest_01_wall': 5,
+        'sc_rest_01_late': 4000,
+        'sc_rest_01_flags': 32,
+        'sc_rest_01_blk': 0,
+      };
+      final e = cueEvidence(m);
+      expect(e.where((c) => c.rest).length, 1);
+      expect(e.where((c) => !c.rest).length, 60);
+      final v = cueVerdict(e)!;
+      expect(v.state, CheckState.off);
+    });
+
+    test('the ring size is the writer\'s', () {
+      final m = {
+        'sc_lock_slots': 3,
+        'sc_lock_02_seq': 2,
+        'sc_lock_02_wall': 1,
+        'sc_lock_05_seq': 9, // beyond a 3-slot ring: not read
+      };
+      expect(lockEvidence(m).length, 1);
+    });
+
+    test(
+      'old evidence is quiet with its date; fresh evidence ends with one',
+      () {
+        final base = {
+          ...cues([(late: 10, flags: 0, blk: 1)]),
+        }; // wall = 1000 ms after the epoch
+        final old = evaluateSelfChecks(base, nowMs: 100 * 86400000).single;
+        expect(old.state, CheckState.quiet);
+        expect(old.text, startsWith('Last checked 19'));
+        final fresh = evaluateSelfChecks(base, nowMs: 5000).single;
+        expect(fresh.state, CheckState.good);
+        expect(fresh.text, contains('Newest 19'));
+      },
+    );
+  });
+
   group('evaluateSelfChecks', () {
     test('nothing and no flags: no section', () {
       expect(evaluateSelfChecks({}), isEmpty);
@@ -265,7 +377,10 @@ void main() {
     });
 
     test('evidence shows even with the flag off; keys are recognised', () {
-      final v = evaluateSelfChecks(health([(op: 0, out: 0, n: 1)]));
+      final v = evaluateSelfChecks(
+        health([(op: 0, out: 0, n: 1)]),
+        nowMs: 1700000000000 + 1000,
+      );
       expect(v.single.id, 'health');
       expect(isSelfCheckKey('sc_cue_01_late'), isTrue);
       expect(isSelfCheckKey('rest_alerts_fired'), isFalse);
