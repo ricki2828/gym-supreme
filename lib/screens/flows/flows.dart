@@ -23,7 +23,10 @@ import '../live_screen.dart';
 import '../notification_access.dart';
 import '../picker_screen.dart';
 import '../post_workout_screen.dart';
+import '../progress_model.dart';
+import '../progress_screen.dart';
 import '../screen_awake.dart';
+import '../settings_profile.dart';
 import '../starting_weights_screen.dart';
 import '../view_models.dart';
 import '../weight_list_screen.dart';
@@ -387,6 +390,7 @@ class _GymRootState extends State<GymRoot> {
         gym: gym,
         onSaved: _refresh,
       ),
+      ProgressTab(deps: widget.deps),
     ];
     return Scaffold(
       backgroundColor: Lit.ground,
@@ -405,6 +409,10 @@ class _GymRootState extends State<GymRoot> {
           NavigationDestination(
             icon: Icon(Icons.fitness_center),
             label: 'Gyms',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.show_chart),
+            label: 'Progress',
           ),
         ],
       ),
@@ -644,6 +652,92 @@ class _Today extends StatelessWidget {
     if (days < 7) return 'on ${shortDate(at).split(' ').first}';
     return 'on ${shortDate(at)}';
   }
+}
+
+/// The Progress tab over the engine: reads finished workouts once per open
+/// (and after a profile or confirm change), never inside `build`.
+class ProgressTab extends StatefulWidget {
+  const ProgressTab({super.key, required this.deps});
+  final GymDeps deps;
+  @override
+  State<ProgressTab> createState() => _ProgressTabState();
+}
+
+class _ProgressTabState extends State<ProgressTab> {
+  late ProgressView _view = _build();
+
+  ProgressView _build() {
+    final d = widget.deps;
+    final st = d.store;
+    return buildProgress(
+      workouts: st == null ? const [] : st.workouts(),
+      catalog: d.catalog,
+      gymNames: {for (final g in d.engine.gyms()) g.id: g.name},
+      profile: Profile.load(st),
+      nowMs: d.nowMs(),
+      tzOffsetMin: d.tzOffsetMin(),
+      legacyBodyweightG: d.engine.settings().bodyweightG,
+      confirmed: loadConfirmed(st),
+    );
+  }
+
+  void _reload() {
+    if (mounted) setState(() => _view = _build());
+  }
+
+  void _say(String t) =>
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(t)));
+
+  void _confirm(String setId) {
+    final st = widget.deps.store;
+    if (st == null) return;
+    try {
+      saveConfirmed(st, {...loadConfirmed(st), setId});
+      widget.deps.persist?.call();
+    } on Object {
+      _say('Could not save that. Try again.');
+      return;
+    }
+    _reload();
+  }
+
+  Future<void> _openProfile() async {
+    final st = widget.deps.store;
+    if (st == null) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => SettingsProfileScreen(
+          initial: Profile.load(st),
+          today: _view.today,
+          onSave: (p) {
+            try {
+              p.save(st);
+              widget.deps.persist?.call();
+            } on Object {
+              _say('Could not save your profile.');
+            }
+          },
+        ),
+      ),
+    );
+    _reload();
+  }
+
+  @override
+  Widget build(BuildContext context) => ProgressScreen(
+    view: _view,
+    onOpenProfile: _openProfile,
+    onOpenLift: (c) => showLiftSheet(
+      context,
+      card: c,
+      onConfirm: (id) {
+        Navigator.of(context).pop();
+        _confirm(id);
+      },
+    ),
+    onConfirm: _confirm,
+  );
 }
 
 class _BodyTab extends StatelessWidget {
