@@ -45,13 +45,21 @@ class AppDoneRecorder(
      * new and log. The compare never touches the remembered line and never throws.
      */
     fun <T> accept(newLine: String, append: () -> Unit, apply: () -> T): T {
-        val prev = lastLine()
+        // A failing cold-start read must not fail the submit; without a previous line there is nothing to compare.
+        var comparable = true
+        val prev = try {
+            lastLine()
+        } catch (e: Exception) {
+            comparable = false
+            onError(e)
+            null
+        }
         append()
         remember(newLine)
         try {
             return apply()
         } finally {
-            compare(prev, newLine)
+            if (comparable) compare(prev, newLine)
         }
     }
 

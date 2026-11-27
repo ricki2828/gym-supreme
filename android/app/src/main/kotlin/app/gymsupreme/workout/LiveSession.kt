@@ -45,7 +45,9 @@ class LiveSession private constructor(private val context: Context) {
     private fun current(): Journal.Head? {
         if (!loaded) {
             loaded = true
-            head = inspect().last
+            val r = inspect()
+            head = r.last
+            recorder.remember(r.lastLine) // one read for both: a cold submit needs no second one
         }
         return head
     }

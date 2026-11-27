@@ -64,6 +64,20 @@ class AppDoneRecorderTest {
     }
 
     @Test
+    fun aThrowingColdStartReadStillAppendsAndAppliesAndLogsNothing() {
+        val errors = ArrayList<Exception>()
+        val rec = AppDoneRecorder({ throw java.io.IOException("read") }, { errors.add(RuntimeException("done")) }, { }, { errors.add(it) })
+        var appended = false
+        var applied = false
+        val next = line("a" to "done")
+        rec.accept(next, { appended = true }, { applied = true })
+        assertEquals(true, appended && applied)
+        assertEquals(1, errors.size) // only the read error, no "done" row
+        assertEquals("read", errors[0].message)
+        assertEquals(next, rec.lastLine())
+    }
+
+    @Test
     fun aFailedAppendLeavesTheLineAlone() {
         val r = Rig()
         val old = line("a" to "pending")
