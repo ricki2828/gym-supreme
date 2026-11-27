@@ -100,10 +100,15 @@ class LiveSession private constructor(private val context: Context) {
         val r = Journal.submit(json, baseRev, current(), isStart = false)
         if (r is Journal.Submit.Rejected) throw Refused(r.code, r.message)
         r as Journal.Submit.Accepted
-        store.append(r.line)
-        head = r.head
-        apply(r.snapshot, r.line)
-        recorder.accepted(r.line) // last: never delays the fsync or the service update
+        // append -> remember -> apply -> compare, in that order (see AppDoneRecorder.accept).
+        recorder.accept(
+            r.line,
+            append = {
+                store.append(r.line)
+                head = r.head
+            },
+            apply = { apply(r.snapshot, r.line) },
+        )
         return r.head.rev
     }
 

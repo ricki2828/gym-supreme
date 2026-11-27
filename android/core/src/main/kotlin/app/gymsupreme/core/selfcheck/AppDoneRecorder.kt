@@ -8,9 +8,9 @@ import app.gymsupreme.core.json.Json
  * re-reads or re-parses the whole journal; [readLast] is only the fallback for a cold start (a
  * resumed journal nobody has written to yet).
  *
- * Call [remember] where a snapshot is accepted but must not be logged ([start][remember] of a new
- * workout, a lock-screen action, finish, delete) and [accepted] for an app submit, AFTER the line
- * is appended and applied. Never throws.
+ * Call [remember] where a snapshot is accepted but must not be logged (start of a new workout,
+ * finish, delete) and [accept] around an app submit. [lastLine] is what a reducer must read, so it
+ * is updated before anything that can throw.
  */
 class AppDoneRecorder(
     private val readLast: () -> String?,
@@ -37,17 +37,31 @@ class AppDoneRecorder(
         known = true
     }
 
-    @Synchronized
-    fun accepted(newLine: String) {
+    /**
+     * The submit sequence, in the one order that is safe: read the previous line (the cold-start
+     * disk read happens HERE, before [append] changes the file), [append] (which also moves the
+     * caller's head), [remember] the new line at once so the next reader never sees a stale one,
+     * then [apply] (which may throw: the line is already current), and last compare previous with
+     * new and log. The compare never touches the remembered line and never throws.
+     */
+    fun <T> accept(newLine: String, append: () -> Unit, apply: () -> T): T {
+        val prev = lastLine()
+        append()
+        remember(newLine)
         try {
-            val prev = lastLine()
-            remember(newLine)
+            return apply()
+        } finally {
+            compare(prev, newLine)
+        }
+    }
+
+    private fun compare(prev: String?, newLine: String) {
+        try {
             val before = prev?.let { Json.parseObject(it) }
             val now = Json.parseObject(newLine)
             SelfCheckKeys.newAppDoneSetIds(before, now).forEach(done)
             SelfCheckKeys.newlyUndoneSetIds(before, now).forEach(undone)
         } catch (e: Exception) {
-            remember(newLine)
             onError(e)
         }
     }
