@@ -19,6 +19,7 @@ export 'src/snapshot.dart';
 export 'src/starting_weights.dart'
     show StartingWeightLift, startingWeightMaxG, startingWeightsSettingKey;
 export 'src/store.dart';
+export 'src/strength/strength.dart';
 
 /// Bumped when the Kotlin/Dart journal contract changes.
 const int contractFixtureVersion = 1;
