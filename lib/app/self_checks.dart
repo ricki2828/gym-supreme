@@ -21,6 +21,11 @@ const int doubleRecordWindowMs = 5000;
 /// current verdict.
 const int evidenceMaxAgeDays = 14;
 
+/// Titles of the three checks: the one source for verdicts and goldens.
+const String cuesTitle = 'Timer cues and rest alerts';
+const String lockTitle = 'Done taps (lock screen and app)';
+const String healthTitle = 'Health Connect';
+
 enum CheckState { good, off, quiet }
 
 class SelfCheckVerdict {
@@ -179,7 +184,7 @@ String _lateText(int ms) => ms < 1000 ? '$ms ms' : _secs(ms);
 /// [restAlertsConsidered] rest alerts (rest alerts under Doze / battery saver
 /// share the cue path, so they share the verdict).
 SelfCheckVerdict? cueVerdict(List<CueEvidence> all) {
-  const title = 'Timer cues and rest alerts';
+  const title = cuesTitle;
   if (all.isEmpty) return null;
   final timer = all.where((c) => !c.rest).toList();
   final blocks = <int>[];
@@ -244,7 +249,7 @@ SelfCheckVerdict? cueVerdict(List<CueEvidence> all) {
 /// tap on a set already done ("not pending") and a double-tap held back by the
 /// debounce are the guards working, not problems.
 SelfCheckVerdict? lockVerdict(List<LockEvidence> all) {
-  const title = 'Done taps (lock screen and app)';
+  const title = lockTitle;
   final done = all.where((t) => t.isDone).toList();
   if (done.isEmpty) return null;
   final applied = done.where((t) => t.applied).toList();
@@ -325,7 +330,7 @@ const _healthOutcomes = [
 
 /// Last write and last delete result.
 SelfCheckVerdict? healthVerdict(List<HealthEvidence> all) {
-  const title = 'Health Connect';
+  const title = healthTitle;
   if (all.isEmpty) return null;
   final write = all.where((h) => !h.delete).lastOrNull;
   final delete = all.where((h) => h.delete).lastOrNull;
@@ -410,30 +415,20 @@ List<SelfCheckVerdict> evaluateSelfChecks(
     cue != null
         ? withDate(cue, _newest(cues.map((c) => c.wallMs)))
         : (timers
-              ? waiting(
-                  'cues',
-                  'Timer cues and rest alerts',
-                  'a timed session or a rest alert',
-                )
+              ? waiting('cues', cuesTitle, 'a timed session or a rest alert')
               : null),
     lock != null
         ? withDate(
             lock,
             _newest(locks.where((t) => t.isDone).map((t) => t.wallMs)),
           )
-        : (lockDone
-              ? waiting(
-                  'lock_done',
-                  'Done taps (lock screen and app)',
-                  'a Done tap',
-                )
-              : null),
+        : (lockDone ? waiting('lock_done', lockTitle, 'a Done tap') : null),
     hv != null
         ? _aged(hv, _newest(hc.map((h) => h.wallMs)), now)
         : (health
               ? waiting(
                   'health',
-                  'Health Connect',
+                  healthTitle,
                   'a workout is written to Health Connect',
                 )
               : null),

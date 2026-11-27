@@ -99,44 +99,55 @@ void main() {
       ),
     ),
   );
-  testWidgets(
-    'diagnostics self-checks',
-    (t) => shot(
+  testWidgets('diagnostics self-checks', (t) {
+    // Built by the app's own verdict code from counters shaped like the
+    // native rings, so titles and wording cannot drift from the app.
+    const now = 1790000000000;
+    final native = <String, int>{
+      'sc_cue_slots': 60,
+      'sc_rest_slots': 30,
+      'sc_lock_slots': 20,
+      for (var i = 1; i <= 8; i++) ...{
+        'sc_cue_0${i}_seq': i,
+        'sc_cue_0${i}_wall': now - 60000 + i * 1000,
+        'sc_cue_0${i}_late': i == 3 ? 340 : 40,
+        'sc_cue_0${i}_flags': 0,
+        'sc_cue_0${i}_blk': 7,
+      },
+      'sc_rest_01_seq': 1,
+      'sc_rest_01_wall': now - 30000,
+      'sc_rest_01_late': 20,
+      'sc_rest_01_flags': 32,
+      'sc_rest_01_blk': 0,
+      for (var i = 1; i <= 2; i++) ...{
+        'sc_lock_0${i}_seq': i,
+        'sc_lock_0${i}_wall': now - 20000 + i * 1500,
+        'sc_lock_0${i}_act': 1,
+        'sc_lock_0${i}_out': 0,
+        'sc_lock_0${i}_set': 9,
+        'sc_lock_0${i}_src': i - 1,
+      },
+    };
+    return shot(
       t,
       'diagnostics_self_checks',
-      const Scaffold(
+      Scaffold(
         backgroundColor: Lit.ground,
         body: Padding(
-          padding: EdgeInsets.all(20),
+          padding: const EdgeInsets.all(20),
           child: SelfChecksSection(
-            checks: [
-              SelfCheckVerdict(
-                'cues',
-                'Timer cues and rest alerts',
-                CheckState.good,
-                'All good: 58 of 58 on time, worst 340 ms late. '
-                    '(58 cues: 3 timed sessions, 4 rest alerts)',
-              ),
-              SelfCheckVerdict(
-                'lock_done',
-                'Lock-screen Done',
-                CheckState.off,
-                "Something's off: 1 set recorded twice within 5 s. "
-                    '5 recorded.',
-              ),
-              SelfCheckVerdict(
-                'health',
-                'Health Connect',
-                CheckState.quiet,
-                'Nothing logged yet. Appears after a workout is written to '
-                    'Health Connect.',
-              ),
-            ],
+            checks: evaluateSelfChecks(
+              native,
+              timers: true,
+              lockDone: true,
+              health: true,
+              nowMs: now,
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  });
   testWidgets(
     'workout detail',
     (t) => shot(t, 'workout_detail', WorkoutDetailScreen(view: pushDetail)),
