@@ -13,6 +13,7 @@ import app.gymsupreme.platform.HealthResult
 import app.gymsupreme.platform.HealthSession
 import app.gymsupreme.platform.HealthStatus
 import app.gymsupreme.workout.Features
+import app.gymsupreme.workout.SelfCheckLog
 import app.gymsupreme.workout.SpikeLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -165,6 +166,7 @@ class HealthApiImpl(
         val l = SpikeLog.line(event).put("outcome", outcome.name.lowercase()).put("count", count).put("asked", asked)
         if (detail != null) l.put("detail", detail)
         SpikeLog.write(context, l)
+        SelfCheckLog.health(context, event == "health_delete", outcome.name, count)
         callback(Result.success(HealthResult(outcome, count.toLong(), detail)))
     }
 

@@ -30,6 +30,26 @@ object DeviceState {
             .put("sdk", Build.VERSION.SDK_INT)
     }
 
+    /** The few fields the self-checks keep per cue. [route]: 0 speaker, 1 wired, 2 bluetooth, 3 other. */
+    data class Snap(val screenOn: Boolean, val batterySaver: Boolean, val doze: Boolean, val music: Boolean, val route: Int)
+
+    fun snapshot(context: Context): Snap {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val types = try {
+            am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).map { it.type }
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val route = when {
+            types.any { it == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || it == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || it == 26 } -> 2
+            types.any { it == AudioDeviceInfo.TYPE_WIRED_HEADPHONES || it == AudioDeviceInfo.TYPE_WIRED_HEADSET } -> 1
+            types.any { it == AudioDeviceInfo.TYPE_USB_HEADSET || it == AudioDeviceInfo.TYPE_USB_DEVICE || it == 27 } -> 3
+            else -> 0
+        }
+        return Snap(pm.isInteractive, pm.isPowerSaveMode, pm.isDeviceIdleMode, am.isMusicActive, route)
+    }
+
     private fun ringer(m: Int) = when (m) {
         AudioManager.RINGER_MODE_SILENT -> "silent"
         AudioManager.RINGER_MODE_VIBRATE -> "vibrate"

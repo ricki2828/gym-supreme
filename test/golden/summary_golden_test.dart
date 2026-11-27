@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_supreme/screens/body_screen.dart';
+import 'package:gym_supreme/app/self_checks.dart';
 import 'package:gym_supreme/screens/diagnostics_panel.dart';
 import 'package:gym_supreme/screens/history_screen.dart';
 import 'package:gym_supreme/screens/post_workout_screen.dart';
@@ -93,6 +94,44 @@ void main() {
             onExportCsv: () {},
             onOpenNotificationSettings: () {},
             onOpenSpike: () {},
+          ),
+        ),
+      ),
+    ),
+  );
+  testWidgets(
+    'diagnostics self-checks',
+    (t) => shot(
+      t,
+      'diagnostics_self_checks',
+      const Scaffold(
+        backgroundColor: Lit.ground,
+        body: Padding(
+          padding: EdgeInsets.all(20),
+          child: SelfChecksSection(
+            checks: [
+              SelfCheckVerdict(
+                'cues',
+                'Timer cues and rest alerts',
+                CheckState.good,
+                'All good: 58 of 58 on time, worst 340 ms late. '
+                    '(58 cues: 3 timed sessions, 4 rest alerts)',
+              ),
+              SelfCheckVerdict(
+                'lock_done',
+                'Lock-screen Done',
+                CheckState.off,
+                "Something's off: 1 set recorded twice within 5 s. "
+                    '5 recorded.',
+              ),
+              SelfCheckVerdict(
+                'health',
+                'Health Connect',
+                CheckState.quiet,
+                'Nothing logged yet. Appears after a workout is written to '
+                    'Health Connect.',
+              ),
+            ],
           ),
         ),
       ),

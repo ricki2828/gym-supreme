@@ -405,6 +405,7 @@ class WorkoutService : Service() {
             }
             is RestTracker.Action.Missed -> {
                 NativeCounters.add(this, NativeCounters.REST_ALERTS_MISSED)
+                SelfCheckLog.cue(this, null, action.lateMs, missed = true, toneFailed = false, rest = true)
                 SpikeLog.write(this, SpikeLog.line("rest_missed").put("set_id", action.spec.key).put("late_ms", action.lateMs))
             }
         }
@@ -465,7 +466,9 @@ class WorkoutService : Service() {
         if (late > NativeCounters.LATE_MS) NativeCounters.add(this, NativeCounters.REST_ALERTS_LATE)
         NativeCounters.max(this, NativeCounters.REST_ALERT_MAX_LATE_MS, late)
         // Headphones at media volume 0 is the user's choice, not a failure.
-        if (r == null || !(r.audio.startsWith("ok") || r.audio == "skipped:media_volume_0")) NativeCounters.add(this, NativeCounters.REST_ALERTS_AUDIO_FAILED)
+        val restToneFailed = r == null || !(r.audio.startsWith("ok") || r.audio == "skipped:media_volume_0")
+        if (restToneFailed) NativeCounters.add(this, NativeCounters.REST_ALERTS_AUDIO_FAILED)
+        SelfCheckLog.cue(this, null, late, missed = false, toneFailed = restToneFailed, rest = true)
         SpikeLog.write(
             this,
             DeviceState.addTo(
@@ -613,6 +616,14 @@ class WorkoutService : Service() {
             if (r == null || !(r.audio.startsWith("ok") || r.audio == "skipped:media_volume_0")) NativeCounters.add(this, NativeCounters.TIMER_CUES_AUDIO_FAILED)
         }
         CueLog.cue(this, d.setId, d.run, d.cue.index, d.lateMs, d.missed)
+        SelfCheckLog.cue(
+            this,
+            "${d.setId}|${d.run}",
+            d.lateMs,
+            d.missed,
+            toneFailed = !d.missed && (r == null || !(r.audio.startsWith("ok") || r.audio == "skipped:media_volume_0")),
+            rest = false,
+        )
         update { it.copy(lastCue = d.cue.label, lastLateMs = d.lateMs) }
         SpikeLog.write(
             this,

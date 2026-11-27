@@ -10,9 +10,9 @@ import 'package:flutter/services.dart';
 import 'package:meta/meta.dart' show immutable, protected, visibleForTesting;
 
 Object? _extractReplyValueOrThrow(
-    List<Object?>? replyList,
-    String channelName, {
-    required bool isNullValid,
+  List<Object?>? replyList,
+  String channelName, {
+  required bool isNullValid,
 }) {
   if (replyList == null) {
     throw PlatformException(
@@ -46,8 +46,9 @@ bool _deepEquals(Object? a, Object? b) {
   }
   if (a is List && b is List) {
     return a.length == b.length &&
-        a.indexed
-            .every(((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]));
+        a.indexed.every(
+          ((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]),
+        );
   }
   if (a is Map && b is Map) {
     if (a.length != b.length) {
@@ -96,20 +97,24 @@ int _deepHash(Object? value) {
   return value.hashCode;
 }
 
-
 /// Whether this build and phone can write to Health Connect (0.3 H1).
 enum HealthAvailability {
   /// Health Connect is there and this build declares the permission.
   available,
+
   /// Android 13 and older without the Health Connect app.
   notInstalled,
+
   /// The Health Connect app needs an update first.
   needsUpdate,
+
   /// Android 14+ where Health Connect is not supported.
   unsupported,
+
   /// This build does not declare `WRITE_EXERCISE` (play flavour, or a build
   /// without the `health` flag).
   notDeclared,
+
   /// The `health` feature flag is off in this build.
   flagOff,
 }
@@ -118,6 +123,7 @@ enum HealthAvailability {
 enum HealthExerciseKind {
   /// Push, Pull, Legs, Core and mixed picks: `EXERCISE_TYPE_STRENGTH_TRAINING`.
   strength,
+
   /// The Engine type (EMOM, AMRAP, intervals):
   /// `EXERCISE_TYPE_HIGH_INTENSITY_INTERVAL_TRAINING`, so it never counts
   /// toward Body Age's strength factor.
@@ -127,12 +133,16 @@ enum HealthExerciseKind {
 enum HealthOutcome {
   /// Written or deleted.
   ok,
+
   /// Health Connect missing, needs an update, or not declared.
   notAvailable,
+
   /// `WRITE_EXERCISE` not granted (or revoked).
   permissionDenied,
+
   /// His switch is off, or the `health` flag is off: nothing was sent.
   disabled,
+
   /// Health Connect threw; [HealthResult.detail] says what.
   failed,
 }
@@ -176,7 +186,8 @@ class HostInfo {
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static HostInfo decode(Object result) {
     result as List<Object?>;
@@ -199,7 +210,12 @@ class HostInfo {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(sdkInt, other.sdkInt) && _deepEquals(model, other.model) && _deepEquals(versionCode, other.versionCode) && _deepEquals(release, other.release) && _deepEquals(notificationsEnabled, other.notificationsEnabled) && _deepEquals(batterySaver, other.batterySaver);
+    return _deepEquals(sdkInt, other.sdkInt) &&
+        _deepEquals(model, other.model) &&
+        _deepEquals(versionCode, other.versionCode) &&
+        _deepEquals(release, other.release) &&
+        _deepEquals(notificationsEnabled, other.notificationsEnabled) &&
+        _deepEquals(batterySaver, other.batterySaver);
   }
 
   @override
@@ -224,15 +240,12 @@ class HealthStatus {
   bool enabled;
 
   List<Object?> _toList() {
-    return <Object?>[
-      availability,
-      granted,
-      enabled,
-    ];
+    return <Object?>[availability, granted, enabled];
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static HealthStatus decode(Object result) {
     result as List<Object?>;
@@ -252,7 +265,9 @@ class HealthStatus {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(availability, other.availability) && _deepEquals(granted, other.granted) && _deepEquals(enabled, other.enabled);
+    return _deepEquals(availability, other.availability) &&
+        _deepEquals(granted, other.granted) &&
+        _deepEquals(enabled, other.enabled);
   }
 
   @override
@@ -303,7 +318,8 @@ class HealthSession {
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static HealthSession decode(Object result) {
     result as List<Object?>;
@@ -327,7 +343,13 @@ class HealthSession {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(clientRecordId, other.clientRecordId) && _deepEquals(version, other.version) && _deepEquals(title, other.title) && _deepEquals(startEpochMs, other.startEpochMs) && _deepEquals(endEpochMs, other.endEpochMs) && _deepEquals(utcOffsetSeconds, other.utcOffsetSeconds) && _deepEquals(kind, other.kind);
+    return _deepEquals(clientRecordId, other.clientRecordId) &&
+        _deepEquals(version, other.version) &&
+        _deepEquals(title, other.title) &&
+        _deepEquals(startEpochMs, other.startEpochMs) &&
+        _deepEquals(endEpochMs, other.endEpochMs) &&
+        _deepEquals(utcOffsetSeconds, other.utcOffsetSeconds) &&
+        _deepEquals(kind, other.kind);
   }
 
   @override
@@ -336,11 +358,7 @@ class HealthSession {
 }
 
 class HealthResult {
-  HealthResult({
-    required this.outcome,
-    required this.count,
-    this.detail,
-  });
+  HealthResult({required this.outcome, required this.count, this.detail});
 
   HealthOutcome outcome;
 
@@ -350,15 +368,12 @@ class HealthResult {
   String? detail;
 
   List<Object?> _toList() {
-    return <Object?>[
-      outcome,
-      count,
-      detail,
-    ];
+    return <Object?>[outcome, count, detail];
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static HealthResult decode(Object result) {
     result as List<Object?>;
@@ -378,14 +393,15 @@ class HealthResult {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(outcome, other.outcome) && _deepEquals(count, other.count) && _deepEquals(detail, other.detail);
+    return _deepEquals(outcome, other.outcome) &&
+        _deepEquals(count, other.count) &&
+        _deepEquals(detail, other.detail);
   }
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
   int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
 }
-
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -394,25 +410,25 @@ class _PigeonCodec extends StandardMessageCodec {
     if (value is int) {
       buffer.putUint8(4);
       buffer.putInt64(value);
-    }    else if (value is HealthAvailability) {
+    } else if (value is HealthAvailability) {
       buffer.putUint8(129);
       writeValue(buffer, value.index);
-    }    else if (value is HealthExerciseKind) {
+    } else if (value is HealthExerciseKind) {
       buffer.putUint8(130);
       writeValue(buffer, value.index);
-    }    else if (value is HealthOutcome) {
+    } else if (value is HealthOutcome) {
       buffer.putUint8(131);
       writeValue(buffer, value.index);
-    }    else if (value is HostInfo) {
+    } else if (value is HostInfo) {
       buffer.putUint8(132);
       writeValue(buffer, value.encode());
-    }    else if (value is HealthStatus) {
+    } else if (value is HealthStatus) {
       buffer.putUint8(133);
       writeValue(buffer, value.encode());
-    }    else if (value is HealthSession) {
+    } else if (value is HealthSession) {
       buffer.putUint8(134);
       writeValue(buffer, value.encode());
-    }    else if (value is HealthResult) {
+    } else if (value is HealthResult) {
       buffer.putUint8(135);
       writeValue(buffer, value.encode());
     } else {
@@ -446,15 +462,21 @@ class _PigeonCodec extends StandardMessageCodec {
   }
 }
 
-const StandardMethodCodec pigeonMethodCodec = StandardMethodCodec(_PigeonCodec());
+const StandardMethodCodec pigeonMethodCodec = StandardMethodCodec(
+  _PigeonCodec(),
+);
 
 class GymHostApi {
   /// Constructor for [GymHostApi].  The [binaryMessenger] named argument is
   /// available for dependency injection.  If it is left null, the default
   /// BinaryMessenger will be used which routes to the host platform.
-  GymHostApi({BinaryMessenger? binaryMessenger, String messageChannelSuffix = ''})
-      : pigeonVar_binaryMessenger = binaryMessenger,
-        pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
+  GymHostApi({
+    BinaryMessenger? binaryMessenger,
+    String messageChannelSuffix = '',
+  }) : pigeonVar_binaryMessenger = binaryMessenger,
+       pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty
+           ? '.$messageChannelSuffix'
+           : '';
   final BinaryMessenger? pigeonVar_binaryMessenger;
 
   static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
@@ -462,7 +484,8 @@ class GymHostApi {
   final String pigeonVar_messageChannelSuffix;
 
   Future<HostInfo> getHostInfo() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.GymHostApi.getHostInfo$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.GymHostApi.getHostInfo$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -472,17 +495,17 @@ class GymHostApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as HostInfo;
   }
 
   /// Opens this app's notification settings (the banner's "Turn on").
   Future<void> openNotificationSettings() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.GymHostApi.openNotificationSettings$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.GymHostApi.openNotificationSettings$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -492,11 +515,10 @@ class GymHostApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: true,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
   }
 
   /// CI e2e (phase-1 exit): the `gym_e2e` string extra of the latest launch
@@ -504,7 +526,8 @@ class GymHostApi {
   /// and debug builds only; always null on play. Dart calls it on start and on
   /// every resume.
   Future<String?> takeLaunchCommand() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.GymHostApi.takeLaunchCommand$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.GymHostApi.takeLaunchCommand$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -514,11 +537,10 @@ class GymHostApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: true,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
     return pigeonVar_replyValue as String?;
   }
 
@@ -531,7 +553,8 @@ class GymHostApi {
   /// fails with code `already_pending`. If the activity goes away while a
   /// dialog is open, the call returns false.
   Future<bool> requestNotificationPermission() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.GymHostApi.requestNotificationPermission$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.GymHostApi.requestNotificationPermission$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -541,11 +564,10 @@ class GymHostApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as bool;
   }
 
@@ -557,7 +579,8 @@ class GymHostApi {
   /// file cannot be read or is not UTF-8). If the activity goes away while the
   /// picker is open, the call returns null.
   Future<String?> pickImportFile() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.GymHostApi.pickImportFile$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.GymHostApi.pickImportFile$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -567,11 +590,10 @@ class GymHostApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: true,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
     return pigeonVar_replyValue as String?;
   }
 
@@ -582,21 +604,23 @@ class GymHostApi {
   /// never fails; it logs `keep_screen_on` with `on` for CI. Calls with the
   /// current value are fine (idempotent).
   Future<void> setKeepScreenOn(bool on) async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.GymHostApi.setKeepScreenOn$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.GymHostApi.setKeepScreenOn$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[on]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[on],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: true,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
   }
 }
 
@@ -649,9 +673,13 @@ class WorkoutApi {
   /// Constructor for [WorkoutApi].  The [binaryMessenger] named argument is
   /// available for dependency injection.  If it is left null, the default
   /// BinaryMessenger will be used which routes to the host platform.
-  WorkoutApi({BinaryMessenger? binaryMessenger, String messageChannelSuffix = ''})
-      : pigeonVar_binaryMessenger = binaryMessenger,
-        pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
+  WorkoutApi({
+    BinaryMessenger? binaryMessenger,
+    String messageChannelSuffix = '',
+  }) : pigeonVar_binaryMessenger = binaryMessenger,
+       pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty
+           ? '.$messageChannelSuffix'
+           : '';
   final BinaryMessenger? pigeonVar_binaryMessenger;
 
   static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
@@ -661,48 +689,53 @@ class WorkoutApi {
   /// Starts the foreground service from the visible activity with rev 0.
   /// Returns the accepted rev (0).
   Future<int> startSession(String snapshotJson) async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.WorkoutApi.startSession$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.WorkoutApi.startSession$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[snapshotJson]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[snapshotJson],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as int;
   }
 
   /// Replaces the live snapshot. Returns the new rev; `stale_rev` if
   /// [baseRev] is not the current rev.
   Future<int> submitSnapshot(String snapshotJson, int baseRev) async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.WorkoutApi.submitSnapshot$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.WorkoutApi.submitSnapshot$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[snapshotJson, baseRev]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[snapshotJson, baseRev],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as int;
   }
 
   /// Stops the service and keeps the journal (resume on next open).
   Future<void> pauseSession() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.WorkoutApi.pauseSession$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.WorkoutApi.pauseSession$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -712,18 +745,18 @@ class WorkoutApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: true,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
   }
 
   /// Writes the final snapshot with `finished: true`, fsyncs, stops the
   /// service and returns that snapshot. Dart then upserts it into SQLite and
   /// only after that calls [deleteJournal].
   Future<String> finishSession() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.WorkoutApi.finishSession$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.WorkoutApi.finishSession$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -733,17 +766,17 @@ class WorkoutApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as String;
   }
 
   /// The last good journal snapshot on disk (torn tail ignored), or null.
   Future<String?> readPendingJournal() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.WorkoutApi.readPendingJournal$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.WorkoutApi.readPendingJournal$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -753,59 +786,67 @@ class WorkoutApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: true,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
     return pigeonVar_replyValue as String?;
   }
 
   /// Deletes the journal for [workoutUuid] (after the SQLite upsert).
   Future<void> deleteJournal(String workoutUuid) async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.WorkoutApi.deleteJournal$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.WorkoutApi.deleteJournal$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[workoutUuid]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[workoutUuid],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: true,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
   }
 
   /// Writes [content] to files/export/[fileName] (a plain name, no slashes;
   /// refused with `bad_file_name` otherwise) and opens the Android share
   /// sheet for it (export).
-  Future<void> shareFile(String fileName, String mimeType, String content) async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.WorkoutApi.shareFile$pigeonVar_messageChannelSuffix';
+  Future<void> shareFile(
+    String fileName,
+    String mimeType,
+    String content,
+  ) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.WorkoutApi.shareFile$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[fileName, mimeType, content]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[fileName, mimeType, content],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: true,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: true,
+    );
   }
 
   /// Native counters for the export: journals_lost, journal_corrupt_lines,
   /// journal_torn_tails, rest_alerts_fired, rest_alerts_late (>1 s),
   /// rest_alerts_missed, rest_alert_max_late_ms, rest_alerts_audio_failed.
   Future<Map<String, int>> getNativeCounters() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.WorkoutApi.getNativeCounters$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.WorkoutApi.getNativeCounters$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -815,11 +856,10 @@ class WorkoutApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return (pigeonVar_replyValue! as Map<Object?, Object?>).cast<String, int>();
   }
 }
@@ -833,9 +873,13 @@ class HealthApi {
   /// Constructor for [HealthApi].  The [binaryMessenger] named argument is
   /// available for dependency injection.  If it is left null, the default
   /// BinaryMessenger will be used which routes to the host platform.
-  HealthApi({BinaryMessenger? binaryMessenger, String messageChannelSuffix = ''})
-      : pigeonVar_binaryMessenger = binaryMessenger,
-        pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
+  HealthApi({
+    BinaryMessenger? binaryMessenger,
+    String messageChannelSuffix = '',
+  }) : pigeonVar_binaryMessenger = binaryMessenger,
+       pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty
+           ? '.$messageChannelSuffix'
+           : '';
   final BinaryMessenger? pigeonVar_binaryMessenger;
 
   static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
@@ -843,7 +887,8 @@ class HealthApi {
   final String pigeonVar_messageChannelSuffix;
 
   Future<HealthStatus> status() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.HealthApi.status$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.HealthApi.status$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -853,11 +898,10 @@ class HealthApi {
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as HealthStatus;
   }
 
@@ -866,74 +910,81 @@ class HealthApi {
   /// Connect is not available. Off never asks. Refusal code
   /// `already_pending` while a permission screen is open.
   Future<HealthStatus> setEnabled(bool enabled) async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.HealthApi.setEnabled$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.HealthApi.setEnabled$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[enabled]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[enabled],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as HealthStatus;
   }
 
   /// Upserts by `clientRecordId`, in batches. [HealthOutcome.disabled] while
   /// the switch is off.
   Future<HealthResult> writeSessions(List<HealthSession> sessions) async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.HealthApi.writeSessions$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.HealthApi.writeSessions$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[sessions]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[sessions],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as HealthResult;
   }
 
   /// Deletes by `clientRecordId` (an id with no record is fine).
   Future<HealthResult> deleteSessions(List<String> clientRecordIds) async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.gym_supreme.HealthApi.deleteSessions$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.gym_supreme.HealthApi.deleteSessions$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[clientRecordIds]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[clientRecordIds],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
-        pigeonVar_replyList,
-        pigeonVar_channelName,
-        isNullValid: false,
-    )
-    ;
+      pigeonVar_replyList,
+      pigeonVar_channelName,
+      isNullValid: false,
+    );
     return pigeonVar_replyValue! as HealthResult;
   }
 }
 
-Stream<String> snapshots( {String instanceName = ''}) {
+Stream<String> snapshots({String instanceName = ''}) {
   if (instanceName.isNotEmpty) {
     instanceName = '.$instanceName';
   }
-  final EventChannel snapshotsChannel =
-      EventChannel('dev.flutter.pigeon.gym_supreme.WorkoutEvents.snapshots$instanceName', pigeonMethodCodec);
+  final EventChannel snapshotsChannel = EventChannel(
+    'dev.flutter.pigeon.gym_supreme.WorkoutEvents.snapshots$instanceName',
+    pigeonMethodCodec,
+  );
   return snapshotsChannel.receiveBroadcastStream().map((dynamic event) {
     return event as String;
   });
 }
-    

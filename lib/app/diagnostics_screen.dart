@@ -7,7 +7,9 @@ import '../screens/import_flow.dart';
 import '../spike/spike_screen.dart';
 import '../platform/platform_api.g.dart';
 import 'flavor.dart';
+import 'feature_flags.dart';
 import 'health_sync.dart';
+import 'self_checks.dart';
 import 'services.dart';
 
 /// The last timer block's cue log in one readable line (0.3 cut T1), from
@@ -242,6 +244,12 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       onExportCsv: () => _export(csv: true),
       onImport: host == null ? null : _import,
       health: _healthSection(),
+      selfChecks: evaluateSelfChecks(
+        _native,
+        timers: Features.timers,
+        lockDone: Features.lockDone,
+        health: Features.health,
+      ),
       onOpenNotificationSettings: host == null
           ? null
           : () => host.openNotificationSettings(),

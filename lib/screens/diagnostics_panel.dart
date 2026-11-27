@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supreme_ui/supreme_ui.dart';
 
+import '../app/self_checks.dart';
 import '../widgets/lit_widgets.dart';
 
 /// Core-gate numbers (plan 3, B4) from the engine's Counters.
@@ -83,6 +84,7 @@ class DiagnosticsPanel extends StatelessWidget {
     this.onOpenNotificationSettings,
     this.onOpenSpike,
     this.health,
+    this.selfChecks = const [],
   });
   final String appVersion;
   final GateView gate;
@@ -102,6 +104,9 @@ class DiagnosticsPanel extends StatelessWidget {
   /// the section (flag off: the page is as it was).
   final Widget? health;
 
+  /// One verdict per self-check (0.3.2); empty hides the section.
+  final List<SelfCheckVerdict> selfChecks;
+
   @override
   Widget build(BuildContext context) {
     final lost = native['journals_lost'] ?? 0;
@@ -120,6 +125,10 @@ class DiagnosticsPanel extends StatelessWidget {
             action: 'Turn on',
             onTap: onOpenNotificationSettings,
           ),
+        ],
+        if (selfChecks.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          SelfChecksSection(checks: selfChecks),
         ],
         const SizedBox(height: 18),
         _Section('Core gate'),
@@ -163,7 +172,9 @@ class DiagnosticsPanel extends StatelessWidget {
         _Section('Service and journal'),
         for (final k in [
           ...nativeCounterLabels.keys.where(native.containsKey),
-          ...native.keys.where((k) => !nativeCounterLabels.containsKey(k)),
+          ...native.keys.where(
+            (k) => !nativeCounterLabels.containsKey(k) && !isSelfCheckKey(k),
+          ),
         ])
           _Row(
             nativeCounterLabels[k] ?? k,
@@ -295,6 +306,73 @@ class _Section extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 4),
     child: Text(title.toUpperCase(), style: LitType.display(26)),
   );
+}
+
+/// The Self-checks section: one verdict line per check, built from what the
+/// app logged in real use. The raw evidence is in the JSON export
+/// (`counters.native`, keys `sc_*`).
+class SelfChecksSection extends StatelessWidget {
+  const SelfChecksSection({super.key, required this.checks});
+  final List<SelfCheckVerdict> checks;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Section('Self-checks'),
+        for (final c in checks)
+          Semantics(
+            label: '${c.title}, ${c.text}',
+            excludeSemantics: true,
+            child: Container(
+              key: Key('selfcheck.${c.id}'),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Lit.hair)),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, right: 8),
+                    child: switch (c.state) {
+                      CheckState.good => const Icon(
+                        Icons.check_circle,
+                        size: 18,
+                        color: Color(0xFF1F9D57),
+                      ),
+                      CheckState.off => const Icon(
+                        Icons.error,
+                        size: 18,
+                        color: Color(0xFFD7263D),
+                      ),
+                      CheckState.quiet => const Icon(
+                        Icons.hourglass_empty,
+                        size: 18,
+                        color: Lit.inkQuiet,
+                      ),
+                    },
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          c.title,
+                          style: LitType.body(15, Lit.ink, FontWeight.w700),
+                        ),
+                        Text(c.text, style: LitType.body(14, Lit.inkSecondary)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 class _Row extends StatelessWidget {
