@@ -99,7 +99,8 @@ void main() {
       final v = view(sixWeeks(), profile: weighed('2026-11-20'));
       final b = v.cards.firstWhere((c) => c.key == bench);
       expect(b.bestKg, closeTo(77.5 * (1 + 5 / 30), 0.01));
-      expect(b.ratio, closeTo(b.bestKg! / 82.5, 0.001));
+      expect(b.bestKg, closeTo(90.4167, 0.001));
+      expect(b.ratio, closeTo(1.0959, 0.001)); // 90.4167 / 82.5
       expect(b.trend.length, trendWeeks);
       expect(b.trendPoints, greaterThanOrEqualTo(2));
       expect(b.trend.last, isNull); // last session was last week
@@ -135,6 +136,23 @@ void main() {
       expect(lp.firstAtGym, isTrue);
       expect(lp.ignored.single.reason, contains('First session'));
       expect(v.firstData, isTrue);
+    });
+
+    test('a stack lift at two gyms: two cards, separate PBs', () {
+      final v = view([
+        workout('a', 12, [set(legPress, 1, 100, 5)], gym: 'g1'),
+        workout('b', 6, [set(legPress, 1, 60, 5)], gym: 'g2'),
+        workout('c', 2, [set(legPress, 1, 110, 5)], gym: 'g1'),
+      ]);
+      final cards = v.cards.where((c) => c.key.startsWith(legPress)).toList();
+      expect(cards.map((c) => c.key).toSet(), {'$legPress@g1', '$legPress@g2'});
+      final g1 = cards.firstWhere((c) => c.gymName == 'Condo gym');
+      final g2 = cards.firstWhere((c) => c.gymName == 'Hotel gym');
+      expect(g1.bestKg, closeTo(110 * (1 + 5 / 30), 0.01));
+      expect(g2.bestKg, closeTo(60 * (1 + 5 / 30), 0.01));
+      final pbs = v.pbs.map((p) => p.lift).toList();
+      expect(pbs.where((l) => l.contains('Condo gym')).length, 2);
+      expect(pbs.where((l) => l.contains('Hotel gym')).length, 1);
     });
 
     test('typo flag: listed, confirm clears it (two parked sets too)', () {
@@ -253,8 +271,18 @@ void main() {
       expect(v.weeks.length, trendWeeks);
       expect(v.weeks.last.kgReps, 0); // nothing this week
       expect(v.weeks.any((w) => w.kgReps > 0), isTrue);
-      final names = [for (final m in v.muscles) m.name];
-      expect(names, isNotEmpty);
+      // Last week: 2 bench + 2 squat working sets per session (warm-up
+      // excluded), sessions on 16 and 21 Nov fall in the weeks of 16 and 23.
+      final chest = v.muscles.firstWhere((m) => m.name == 'Chest');
+      expect(chest.thisWeek, 0);
+      expect(chest.lastWeek, 4);
+      expect(
+        v.muscles.map((m) => m.thisWeek + m.lastWeek).toList(),
+        orderedEquals(
+          [...v.muscles.map((m) => m.thisWeek + m.lastWeek)]
+            ..sort((a, b) => b.compareTo(a)),
+        ),
+      );
     });
 
     test('PBs: newest first, first best has no gain', () {
@@ -262,6 +290,9 @@ void main() {
       expect(v.pbs, isNotEmpty);
       expect(v.pbs.length, 12); // capped, newest kept
       expect(v.pbs.first.gainKg, isNotNull);
+      expect(v.pbs.first.date, '21 Nov');
+      expect(v.pbs.last.date, '27 Oct');
+      expect(v.pbs.first.kg, greaterThan(v.pbs[2].kg));
       final first = firstData().pbs;
       expect(first.every((p) => p.gainKg == null), isTrue);
     });
