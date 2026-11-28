@@ -665,6 +665,7 @@ class ProgressTab extends StatefulWidget {
 
 class _ProgressTabState extends State<ProgressTab> {
   ProgressView? _view;
+  bool _failed = false;
   int _gen = 0;
 
   @override
@@ -680,9 +681,8 @@ class _ProgressTabState extends State<ProgressTab> {
     final d = widget.deps;
     final st = d.store;
     final gen = ++_gen;
-    final ProgressInput input;
     try {
-      input = ProgressInput(
+      final input = ProgressInput(
         workouts: st == null ? const [] : st.workouts(),
         catalog: d.catalog,
         gymNames: {for (final g in d.engine.gyms()) g.id: g.name},
@@ -692,11 +692,16 @@ class _ProgressTabState extends State<ProgressTab> {
         legacyBodyweightG: d.engine.settings().bodyweightG,
         confirmed: loadConfirmed(st),
       );
+      final v = await progressRunner(input);
+      if (mounted && gen == _gen) {
+        setState(() {
+          _view = v;
+          _failed = false;
+        });
+      }
     } on Object {
-      return;
+      if (mounted && gen == _gen) setState(() => _failed = true);
     }
-    final v = await progressRunner(input);
-    if (mounted && gen == _gen) setState(() => _view = v);
   }
 
   void _say(String t) =>
@@ -723,13 +728,12 @@ class _ProgressTabState extends State<ProgressTab> {
 
   Future<void> _openProfile() async {
     final st = widget.deps.store;
-    final v = _view;
-    if (st == null || v == null) return;
+    if (st == null) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => SettingsProfileScreen(
           initial: Profile.load(st),
-          today: v.today,
+          today: todayIso(widget.deps.nowMs(), widget.deps.tzOffsetMin()),
           onSave: (p) {
             try {
               p.save(st);
@@ -748,6 +752,52 @@ class _ProgressTabState extends State<ProgressTab> {
   @override
   Widget build(BuildContext context) {
     final v = _view;
+    if (v == null && _failed) {
+      return Scaffold(
+        backgroundColor: Lit.ground,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('PROGRESS', style: LitType.display(44)),
+                const SizedBox(height: 12),
+                Text(
+                  'Could not load progress',
+                  key: const Key('progress.error'),
+                  style: LitType.body(16, Lit.ink, FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Your workouts are safe. Try again.',
+                  style: LitType.body(14, Lit.inkSecondary),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    FilledButton(
+                      key: const Key('progress.retry'),
+                      onPressed: () {
+                        setState(() => _failed = false);
+                        _reload();
+                      },
+                      child: const Text('Retry'),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      key: const Key('progress.profile'),
+                      onPressed: _openProfile,
+                      child: const Text('Profile'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     if (v == null) {
       return const Scaffold(
         backgroundColor: Lit.ground,

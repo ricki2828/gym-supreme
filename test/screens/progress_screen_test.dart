@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_engine/gym_engine.dart' as eng;
@@ -159,6 +160,7 @@ void main() {
     setUp(() {
       persisted = 0;
       progressRunner = buildProgressInline;
+      addTearDown(() => progressRunner = (i) => compute(buildProgressFrom, i));
       store = eng.MemoryStore()
         ..upsertGym(
           const eng.Gym(id: 'g1', name: 'Condo gym', kit: {}, createdAtMs: 1),
@@ -218,6 +220,45 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(find.text('PROGRESS'), findsOneWidget);
+    });
+
+    testWidgets('a failing analysis shows an error, Retry recovers', (
+      tester,
+    ) async {
+      progressRunner = (_) => Future.error(StateError('boom'));
+      await openTab(tester);
+      expect(find.byKey(const Key('progress.error')), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byKey(const Key('progress.profile')), findsOneWidget);
+      progressRunner = buildProgressInline;
+      await tester.tap(find.byKey(const Key('progress.retry')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('progress.error')), findsNothing);
+      expect(find.text('PROGRESS'), findsOneWidget);
+    });
+
+    testWidgets('building the input can throw: error, not a spinner', (
+      tester,
+    ) async {
+      final bad = _ThrowingStore();
+      final d = GymDeps(
+        engine: eng.GymEngine(
+          catalog: progressCatalog,
+          store: bad,
+          nowMs: () => progressNow,
+          tzOffsetMin: () => 0,
+          random: Random(5),
+        ),
+        port: FlakyPort(),
+        catalog: progressCatalog,
+        nowMs: () => progressNow,
+        tzOffsetMin: () => 0,
+        store: bad,
+      );
+      phone(tester);
+      await tester.pumpWidget(MaterialApp(home: ProgressTab(deps: d)));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('progress.error')), findsOneWidget);
     });
 
     testWidgets('confirm saves the set id and refreshes', (tester) async {
@@ -281,4 +322,10 @@ void main() {
       expect(Profile.load(store).log, isEmpty);
     });
   });
+}
+
+/// A store whose reads fail, for the error state.
+class _ThrowingStore extends eng.MemoryStore {
+  @override
+  List<eng.WorkoutRecord> workouts() => throw StateError('disk');
 }

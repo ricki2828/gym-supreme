@@ -229,6 +229,20 @@ void main() {
       expect(f.light, isTrue);
       expect(f.reason, lightReason);
       expect(view(ws).cards.single.hasLightFlag, isTrue);
+      // The prior sits outside the 90-day window: still light.
+      final old = [
+        workout('o', 100, [set(bench, 1, 100, 5)]),
+        workout('p', 1, [set(bench, 1, 10, 5)]),
+      ];
+      expect(view(old).flagged, isEmpty); // no prior in 90 days: not parked
+      // Prior inside the engine's look-back but the lift has no other
+      // in-window point (best is null): wording still comes from the engine.
+      final solo = [
+        workout('q', 85, [set(bench, 1, 100, 5)]),
+        workout('r', 1, [set(bench, 1, 10, 5)]),
+      ];
+      final f2 = view(solo).flagged;
+      expect(f2.single.$2.light, isTrue);
     });
 
     test('x bodyweight uses the weight on the best\'s day, not today', () {

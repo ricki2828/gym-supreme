@@ -474,7 +474,7 @@ ProgressView buildProgress({
     }
   }
 
-  IgnoredSet ignoredOf(eng.SetVerdict v, eng.ExerciseStrength? es) {
+  IgnoredSet ignoredOf(eng.SetVerdict v) {
     final s = v.set;
     final what = s.loadG != null && s.reps != null
         ? '${kgText(s.loadG! / 1000)} kg × ${s.reps}'
@@ -484,18 +484,7 @@ ProgressView buildProgress({
         ? '${kgText(s.loadG! / 1000)} kg'
         : 'set ${s.setOrdinal}';
     final typo = v.reason == eng.RejectReason.typoUnconfirmed;
-    // Light = under the best the lift had before that workout.
-    var light = false;
-    if (typo && es != null && v.e1rm != null) {
-      double? prior;
-      for (final p in es.points) {
-        if (p.startedAtMs < v.startedAtMs &&
-            (prior == null || p.e1rm.grams > prior)) {
-          prior = p.e1rm.grams;
-        }
-      }
-      light = v.e1rm!.grams < (prior ?? es.best.e1rm.grams);
-    }
+    final light = typo && v.parkedLow;
     return IgnoredSet(
       setId: s.setId,
       when: dayOf(v.startedAtMs),
@@ -538,7 +527,7 @@ ProgressView buildProgress({
     final verdicts = verdictsByKey[k]!;
     final ignored = [
       for (final v in verdicts.reversed)
-        if (v.rejected) ignoredOf(v, es),
+        if (v.rejected) ignoredOf(v),
     ];
     for (final i in ignored) {
       if (i.canConfirm) flagged.add((nameOf(ex), i));
@@ -560,7 +549,7 @@ ProgressView buildProgress({
     final bwAt = best == null
         ? null
         : profile.bodyweightFor(
-            todayIso(best.startedAtMs, tzOffsetMin),
+            todayIso(best.startedAtMs, offsetOf[best.workoutUuid] ?? 0),
             legacyG: legacyBodyweightG,
           );
     cards.add(
