@@ -50,6 +50,7 @@ class SetVerdict {
     this.reason,
     this.e1rm,
     this.isTop = false,
+    this.parkedLow = false,
   });
 
   final SetRecord set;
@@ -65,6 +66,10 @@ class SetVerdict {
 
   /// The workout's top set for the exercise that counts.
   final bool isTop;
+
+  /// With [RejectReason.typoUnconfirmed]: parked for being far lighter than
+  /// the prior best (else far heavier).
+  final bool parkedLow;
 
   bool get rejected => reason != null;
 }
@@ -230,6 +235,9 @@ class StrengthAnalysis {
   /// Set ids parked by the typo guard and never confirmed.
   final Set<String> _parkedIds = {};
 
+  /// The parked ids that were parked for being too light.
+  final Set<String> _parkedLow = {};
+
   /// Accepted lift-days by group key, oldest first.
   final Map<String, List<_LiftDay>> _days = {};
 
@@ -301,6 +309,7 @@ class StrengthAnalysis {
         reason: isParked ? RejectReason.typoUnconfirmed : r.reason,
         e1rm: r.e1rm,
         isTop: !isParked && r.reason == null && topIds.contains(id),
+        parkedLow: isParked && _parkedLow.contains(id),
       );
       _verdicts.add(v);
       (_byExercise[r.set.exerciseId] ??= []).add(v);
@@ -417,6 +426,7 @@ class StrengthAnalysis {
       if (low) {
         // The best set is implausibly light: park it, no point.
         _parkedIds.add(top.set.setId);
+        _parkedLow.add(top.set.setId);
         (parkedByGroup[group] ??= []).add(
           _Parked(pointOf(top), solid == null ? null : pointOf(solid), [
             top.set.setId,

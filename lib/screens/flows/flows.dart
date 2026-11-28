@@ -23,7 +23,10 @@ import '../live_screen.dart';
 import '../notification_access.dart';
 import '../picker_screen.dart';
 import '../post_workout_screen.dart';
+import '../progress_model.dart';
+import '../progress_screen.dart';
 import '../screen_awake.dart';
+import '../settings_profile.dart';
 import '../starting_weights_screen.dart';
 import '../view_models.dart';
 import '../weight_list_screen.dart';
@@ -387,6 +390,7 @@ class _GymRootState extends State<GymRoot> {
         gym: gym,
         onSaved: _refresh,
       ),
+      ProgressTab(deps: widget.deps),
     ];
     return Scaffold(
       backgroundColor: Lit.ground,
@@ -405,6 +409,10 @@ class _GymRootState extends State<GymRoot> {
           NavigationDestination(
             icon: Icon(Icons.fitness_center),
             label: 'Gyms',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.show_chart),
+            label: 'Progress',
           ),
         ],
       ),
@@ -643,6 +651,172 @@ class _Today extends StatelessWidget {
     if (days == 1) return 'yesterday';
     if (days < 7) return 'on ${shortDate(at).split(' ').first}';
     return 'on ${shortDate(at)}';
+  }
+}
+
+/// The Progress tab over the engine: reads finished workouts once per open
+/// (and after a profile or confirm change), never inside `build`.
+class ProgressTab extends StatefulWidget {
+  const ProgressTab({super.key, required this.deps});
+  final GymDeps deps;
+  @override
+  State<ProgressTab> createState() => _ProgressTabState();
+}
+
+class _ProgressTabState extends State<ProgressTab> {
+  ProgressView? _view;
+  bool _failed = false;
+  int _gen = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  /// Reads the stored workouts here (the database lives on this isolate),
+  /// then runs the analysis off the UI thread. A late result from an older
+  /// reload is dropped.
+  Future<void> _reload() async {
+    final d = widget.deps;
+    final st = d.store;
+    final gen = ++_gen;
+    try {
+      final input = ProgressInput(
+        workouts: st == null ? const [] : st.workouts(),
+        catalog: d.catalog,
+        gymNames: {for (final g in d.engine.gyms()) g.id: g.name},
+        profile: Profile.load(st),
+        nowMs: d.nowMs(),
+        tzOffsetMin: d.tzOffsetMin(),
+        legacyBodyweightG: d.engine.settings().bodyweightG,
+        confirmed: loadConfirmed(st),
+      );
+      final v = await progressRunner(input);
+      if (mounted && gen == _gen) {
+        setState(() {
+          _view = v;
+          _failed = false;
+        });
+      }
+    } on Object {
+      if (mounted && gen == _gen) setState(() => _failed = true);
+    }
+  }
+
+  void _say(String t) =>
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(t)));
+
+  void _confirm(IgnoredSet set) {
+    final st = widget.deps.store;
+    final c = set.confirmation;
+    if (st == null || c == null) return;
+    try {
+      saveConfirmed(st, [
+        for (final x in loadConfirmed(st))
+          if (x.setId != c.setId) x,
+        c,
+      ]);
+    } on Object {
+      _say('Could not save that. Try again.');
+      return;
+    }
+    widget.deps.persist?.call();
+    _reload();
+  }
+
+  Future<void> _openProfile() async {
+    final st = widget.deps.store;
+    if (st == null) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => SettingsProfileScreen(
+          initial: Profile.load(st),
+          today: todayIso(widget.deps.nowMs(), widget.deps.tzOffsetMin()),
+          onSave: (p) {
+            try {
+              p.save(st);
+            } on Object {
+              return false;
+            }
+            widget.deps.persist?.call();
+            return true;
+          },
+        ),
+      ),
+    );
+    _reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final v = _view;
+    if (v == null && _failed) {
+      return Scaffold(
+        backgroundColor: Lit.ground,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('PROGRESS', style: LitType.display(44)),
+                const SizedBox(height: 12),
+                Text(
+                  'Could not load progress',
+                  key: const Key('progress.error'),
+                  style: LitType.body(16, Lit.ink, FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Your workouts are safe. Try again.',
+                  style: LitType.body(14, Lit.inkSecondary),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    FilledButton(
+                      key: const Key('progress.retry'),
+                      onPressed: () {
+                        setState(() => _failed = false);
+                        _reload();
+                      },
+                      child: const Text('Retry'),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      key: const Key('progress.profile'),
+                      onPressed: _openProfile,
+                      child: const Text('Profile'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    if (v == null) {
+      return const Scaffold(
+        backgroundColor: Lit.ground,
+        body: Center(child: CircularProgressIndicator(color: Lit.ink)),
+      );
+    }
+    return ProgressScreen(
+      view: v,
+      onOpenProfile: _openProfile,
+      onOpenLift: (c) => showLiftSheet(
+        context,
+        card: c,
+        onConfirm: (s) {
+          Navigator.of(context).pop();
+          _confirm(s);
+        },
+      ),
+      onConfirm: _confirm,
+    );
   }
 }
 
