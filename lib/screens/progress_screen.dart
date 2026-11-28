@@ -21,7 +21,7 @@ class ProgressScreen extends StatelessWidget {
   final void Function(LiftCard card) onOpenLift;
 
   /// Typo-flagged set: he says the number is right.
-  final void Function(String setId) onConfirm;
+  final void Function(IgnoredSet set) onConfirm;
 
   @override
   Widget build(BuildContext context) {
@@ -46,10 +46,11 @@ class ProgressScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 6),
-            if (view.profile.isEmpty || bw == null)
+            if (view.profile.isEmpty || bw == null || bw.date == null)
               _ProfileNudge(
                 onTap: onOpenProfile,
                 hasProfile: !view.profile.isEmpty,
+                undated: bw != null && bw.date == null,
               ),
             if (bw != null && bw.stale)
               _StaleBodyweight(
@@ -147,9 +148,16 @@ class _Box extends StatelessWidget {
 }
 
 class _ProfileNudge extends StatelessWidget {
-  const _ProfileNudge({required this.onTap, required this.hasProfile});
+  const _ProfileNudge({
+    required this.onTap,
+    required this.hasProfile,
+    this.undated = false,
+  });
   final VoidCallback onTap;
   final bool hasProfile;
+
+  /// Only the old undated bodyweight exists.
+  final bool undated;
   @override
   Widget build(BuildContext context) => _Box(
     key: const Key('progress.noProfile'),
@@ -158,13 +166,20 @@ class _ProfileNudge extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          hasProfile ? 'ADD YOUR BODYWEIGHT' : 'NO PROFILE YET',
+          undated
+              ? 'ADD A DATED WEIGH-IN'
+              : hasProfile
+              ? 'ADD YOUR BODYWEIGHT'
+              : 'NO PROFILE YET',
           style: LitType.display(22),
         ),
         const SizedBox(height: 4),
         Text(
-          'Add your bodyweight to see each lift as a multiple of it. '
-          'It stays on this phone.',
+          undated
+              ? 'Your saved bodyweight has no date, so it cannot be checked '
+                    'for age. Log a weigh-in. It stays on this phone.'
+              : 'Add your bodyweight to see each lift as a multiple of it. '
+                    'It stays on this phone.',
           style: LitType.body(14, Lit.inkSecondary),
         ),
       ],
@@ -227,7 +242,7 @@ class _FlagRow extends StatelessWidget {
   });
   final String lift;
   final IgnoredSet set;
-  final void Function(String) onConfirm;
+  final void Function(IgnoredSet) onConfirm;
   @override
   Widget build(BuildContext context) => _Box(
     colour: Lit.core,
@@ -238,7 +253,7 @@ class _FlagRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Confirm big number?',
+                set.light ? 'Confirm light number?' : 'Confirm big number?',
                 style: LitType.body(14, Lit.ink, FontWeight.w800),
               ),
               Text(
@@ -251,7 +266,7 @@ class _FlagRow extends StatelessWidget {
         const SizedBox(width: 8),
         TextButton(
           key: Key('progress.confirm.${set.setId}'),
-          onPressed: () => onConfirm(set.setId),
+          onPressed: () => onConfirm(set),
           child: Text('Yes', style: LitType.body(14, Lit.ink, FontWeight.w800)),
         ),
       ],
@@ -271,7 +286,10 @@ class _LiftTile extends StatelessWidget {
     final notes = <String>[
       if (c.firstAtGym)
         'First session at ${c.gymName ?? 'this gym'}: set weights not counted',
-      if (c.hasTypoFlag) 'A big number is waiting for your OK',
+      if (c.hasTypoFlag)
+        c.hasLightFlag
+            ? 'A light number is waiting for your OK'
+            : 'A big number is waiting for your OK',
     ];
     return Semantics(
       container: true,
@@ -625,7 +643,7 @@ class _PbRow extends StatelessWidget {
 Future<void> showLiftSheet(
   BuildContext context, {
   required LiftCard card,
-  required void Function(String setId) onConfirm,
+  required void Function(IgnoredSet set) onConfirm,
 }) => showModalBottomSheet<void>(
   context: context,
   isScrollControlled: true,
@@ -637,7 +655,7 @@ Future<void> showLiftSheet(
 class LiftSheet extends StatelessWidget {
   const LiftSheet({super.key, required this.card, required this.onConfirm});
   final LiftCard card;
-  final void Function(String setId) onConfirm;
+  final void Function(IgnoredSet set) onConfirm;
 
   @override
   Widget build(BuildContext context) {
@@ -665,6 +683,17 @@ class LiftSheet extends StatelessWidget {
                         'Epley estimate, 1 to 10 reps; 11-12 reps are rough.',
               style: LitType.body(14, Lit.ink),
             ),
+            if (card.ratio != null && card.bwKg != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '${card.ratio!.toStringAsFixed(2)} × bodyweight, vs '
+                  '${kgText(card.bwKg!)} kg'
+                  '${card.bwDate == null ? ' (no date)' : ' (${dateLabel(card.bwDate!)})'}',
+                  key: const Key('progress.sheet.bw'),
+                  style: LitType.body(14, Lit.ink, FontWeight.w700),
+                ),
+              ),
             const SizedBox(height: 16),
             Text('LEFT OUT', style: LitType.display(24)),
             Text(
@@ -701,7 +730,7 @@ class LiftSheet extends StatelessWidget {
                       if (s.canConfirm)
                         TextButton(
                           key: Key('progress.sheet.confirm.${s.setId}'),
-                          onPressed: () => onConfirm(s.setId),
+                          onPressed: () => onConfirm(s),
                           child: Text(
                             'It is right',
                             style: LitType.body(13, Lit.ink, FontWeight.w800),

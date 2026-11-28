@@ -73,7 +73,7 @@ List<eng.WorkoutRecord> sixWeeks() => [
 ProgressView view(
   List<eng.WorkoutRecord> ws, {
   Profile profile = const Profile(),
-  Set<String> confirmed = const {},
+  List<Confirmation> confirmed = const [],
   int? legacyG,
 }) => buildProgress(
   workouts: ws,
@@ -118,3 +118,6 @@ List<eng.WorkoutRecord> typoWorkouts() => [
   workout('t2', 10, [set(bench, 1, 72.5, 5)]),
   workout('t3', 1, [set(bench, 1, 70, 5), set(bench, 2, 200, 5)]),
 ];
+
+/// The confirmation a user tap on [set] would store.
+Confirmation confirmationOf(IgnoredSet s) => s.confirmation!;

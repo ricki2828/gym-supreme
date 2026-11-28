@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:gym_engine/gym_engine.dart' as eng;
 
 /// Pure view models for the Progress tab (G1b). No widgets here: the adapter
@@ -146,6 +147,18 @@ class Profile {
     );
   }
 
+  /// The weight to divide a lift by: the newest entry on or before [date]
+  /// (the lift's own day); a lift older than the first weigh-in uses the
+  /// earliest entry; the undated [legacyG] only when the log is empty.
+  BodyweightRef? bodyweightFor(String date, {int? legacyG}) {
+    if (log.isEmpty) return bodyweight(date, legacyG: legacyG);
+    BodyweightEntry pick = log.first;
+    for (final e in log) {
+      if (e.date.compareTo(date) <= 0) pick = e;
+    }
+    return BodyweightRef(kg: pick.kg, date: pick.date);
+  }
+
   String toJsonText() => jsonEncode({
     'v': 1,
     if (birthYear != null) 'birth_year': birthYear,
@@ -176,7 +189,7 @@ class Profile {
       }
       log.sort((a, b) => a.date.compareTo(b.date));
       return Profile(
-        birthYear: by is int ? by : null,
+        birthYear: by is int && by >= 1900 && by <= 2100 ? by : null,
         sex: sx == 'male' || sx == 'female' ? sx as String : null,
         log: log,
       );
@@ -200,23 +213,38 @@ class Profile {
 
 const Object _keep = Object();
 
-/// Set ids he confirmed after a typo flag (stored under `strength_confirmed`).
-Set<String> loadConfirmed(eng.HistoryStore? store) {
-  if (store == null) return {};
+/// "This number is right", for one set as it was when he confirmed. An edit
+/// to the load or reps afterwards voids it.
+class Confirmation {
+  const Confirmation(this.setId, this.loadG, this.reps);
+  final String setId;
+  final int loadG;
+  final int reps;
+
+  Map<String, Object?> toJson() => {'id': setId, 'g': loadG, 'r': reps};
+}
+
+/// Stored under `strength_confirmed`. Old id-only entries (plain strings)
+/// are read as unconfirmed; nothing throws.
+List<Confirmation> loadConfirmed(eng.HistoryStore? store) {
+  if (store == null) return [];
   try {
     final t = store.setting(confirmedKey);
-    if (t == null) return {};
-    return {
-      for (final x in jsonDecode(t) as List)
-        if (x is String) x,
-    };
+    if (t == null) return [];
+    final out = <Confirmation>[];
+    for (final x in jsonDecode(t) as List) {
+      if (x is Map && x['id'] is String && x['g'] is int && x['r'] is int) {
+        out.add(Confirmation(x['id'] as String, x['g'] as int, x['r'] as int));
+      }
+    }
+    return out;
   } on Object {
-    return {};
+    return [];
   }
 }
 
-void saveConfirmed(eng.HistoryStore store, Set<String> ids) =>
-    store.saveSetting(confirmedKey, jsonEncode(ids.toList()..sort()));
+void saveConfirmed(eng.HistoryStore store, List<Confirmation> list) => store
+    .saveSetting(confirmedKey, jsonEncode([for (final c in list) c.toJson()]));
 
 /// One set the strength numbers ignored, with the reason in plain words.
 class IgnoredSet {
@@ -226,6 +254,9 @@ class IgnoredSet {
     required this.what,
     required this.reason,
     this.canConfirm = false,
+    this.light = false,
+    this.loadG,
+    this.reps,
   });
   final String setId;
   final String when;
@@ -236,6 +267,15 @@ class IgnoredSet {
 
   /// Typo-flagged: he can confirm it is right.
   final bool canConfirm;
+
+  /// Typo-flagged because it is far lighter than usual (else far heavier).
+  final bool light;
+  final int? loadG;
+  final int? reps;
+
+  Confirmation? get confirmation => canConfirm && loadG != null && reps != null
+      ? Confirmation(setId, loadG!, reps!)
+      : null;
 }
 
 String reasonText(eng.RejectReason r) => switch (r) {
@@ -252,6 +292,8 @@ String reasonText(eng.RejectReason r) => switch (r) {
     'Big jump from your recent best: is it right?',
 };
 
+const String lightReason = 'Much lighter than usual: is it right?';
+
 /// One lift on the Strength list.
 class LiftCard {
   const LiftCard({
@@ -263,6 +305,8 @@ class LiftCard {
     this.solidKg,
     this.bestDate,
     this.ratio,
+    this.bwKg,
+    this.bwDate,
     this.trend = const [],
     this.ignored = const [],
     this.firstAtGym = false,
@@ -289,6 +333,11 @@ class LiftCard {
   /// Best e1RM over bodyweight; null without a bodyweight.
   final double? ratio;
 
+  /// The bodyweight [ratio] used (the one on or before the best's day), and
+  /// its weigh-in date as "YYYY-MM-DD" (null = the old undated setting).
+  final double? bwKg;
+  final String? bwDate;
+
   /// [trendWeeks] weekly bests (kg), oldest first; null = no session.
   final List<double?> trend;
   final List<IgnoredSet> ignored;
@@ -297,6 +346,7 @@ class LiftCard {
 
   int get trendPoints => trend.where((v) => v != null).length;
   bool get hasTypoFlag => ignored.any((s) => s.canConfirm);
+  bool get hasLightFlag => ignored.any((s) => s.canConfirm && s.light);
 }
 
 class PbRow {
@@ -380,15 +430,27 @@ ProgressView buildProgress({
   required int nowMs,
   required int tzOffsetMin,
   int? legacyBodyweightG,
-  Set<String> confirmed = const {},
+  List<Confirmation> confirmed = const [],
 }) {
   final today = todayIso(nowMs, tzOffsetMin);
   final bw = profile.bodyweight(today, legacyG: legacyBodyweightG);
+  // A confirmation holds only while the set still has the load and reps he
+  // confirmed (an edit voids it).
+  final setsById = {
+    for (final w in workouts)
+      for (final st in w.sets) st.setId: st,
+  };
+  final confirmedIds = {
+    for (final c in confirmed)
+      if (setsById[c.setId]?.loadG == c.loadG &&
+          setsById[c.setId]?.reps == c.reps)
+        c.setId,
+  };
   final analysis = eng.StrengthAnalysis(
     workouts: workouts,
     catalog: catalog,
     nowMs: nowMs,
-    confirmedSetIds: confirmed,
+    confirmedSetIds: confirmedIds,
   );
   final windowFrom = nowMs - eng.strengthWindowDays * _dayMs;
   bool inWindow(int ms) => ms >= windowFrom && ms <= nowMs;
@@ -412,7 +474,7 @@ ProgressView buildProgress({
     }
   }
 
-  IgnoredSet ignoredOf(eng.SetVerdict v) {
+  IgnoredSet ignoredOf(eng.SetVerdict v, eng.ExerciseStrength? es) {
     final s = v.set;
     final what = s.loadG != null && s.reps != null
         ? '${kgText(s.loadG! / 1000)} kg × ${s.reps}'
@@ -421,19 +483,44 @@ ProgressView buildProgress({
         : s.loadG != null
         ? '${kgText(s.loadG! / 1000)} kg'
         : 'set ${s.setOrdinal}';
+    final typo = v.reason == eng.RejectReason.typoUnconfirmed;
+    // Light = under the best the lift had before that workout.
+    var light = false;
+    if (typo && es != null && v.e1rm != null) {
+      double? prior;
+      for (final p in es.points) {
+        if (p.startedAtMs < v.startedAtMs &&
+            (prior == null || p.e1rm.grams > prior)) {
+          prior = p.e1rm.grams;
+        }
+      }
+      light = v.e1rm!.grams < (prior ?? es.best.e1rm.grams);
+    }
     return IgnoredSet(
       setId: s.setId,
       when: dayOf(v.startedAtMs),
       what: what,
-      reason: reasonText(v.reason!),
-      canConfirm: v.reason == eng.RejectReason.typoUnconfirmed,
+      reason: light ? lightReason : reasonText(v.reason!),
+      canConfirm: typo,
+      light: typo && light,
+      loadG: s.loadG,
+      reps: s.reps,
     );
   }
 
   // Week buckets for the trend, newest week last.
-  final offsetMs = tzOffsetMin * 60000;
-  int weekIndex(int ms) {
-    final d = DateTime.fromMillisecondsSinceEpoch(ms + offsetMs, isUtc: true);
+  // Each workout is bucketed by its own stored offset, as analysis.weekly
+  // does; "now" uses the newest workout's offset (UTC with none).
+  final offsetOf = {for (final w in workouts) w.uuid: w.tzOffsetMin};
+  var newest = workouts.isEmpty ? null : workouts.first;
+  for (final w in workouts) {
+    if (w.startedAtMs >= newest!.startedAtMs) newest = w;
+  }
+  int weekIndex(int ms, int offsetMin) {
+    final d = DateTime.fromMillisecondsSinceEpoch(
+      ms + offsetMin * 60000,
+      isUtc: true,
+    );
     final mon = DateTime.utc(
       d.year,
       d.month,
@@ -442,7 +529,7 @@ ProgressView buildProgress({
     return mon.millisecondsSinceEpoch ~/ (7 * _dayMs);
   }
 
-  final nowWeek = weekIndex(nowMs);
+  final nowWeek = weekIndex(nowMs, newest?.tzOffsetMin ?? 0);
   final cards = <LiftCard>[];
   final flagged = <(String, IgnoredSet)>[];
   for (final k in windowKeys) {
@@ -451,7 +538,7 @@ ProgressView buildProgress({
     final verdicts = verdictsByKey[k]!;
     final ignored = [
       for (final v in verdicts.reversed)
-        if (v.rejected) ignoredOf(v),
+        if (v.rejected) ignoredOf(v, es),
     ];
     for (final i in ignored) {
       if (i.canConfirm) flagged.add((nameOf(ex), i));
@@ -461,7 +548,8 @@ ProgressView buildProgress({
     if (es != null) {
       sessions = es.points.length;
       for (final p in es.points) {
-        final back = nowWeek - weekIndex(p.startedAtMs);
+        final back =
+            nowWeek - weekIndex(p.startedAtMs, offsetOf[p.workoutUuid] ?? 0);
         if (back < 0 || back >= trendWeeks) continue;
         final i = trendWeeks - 1 - back;
         final kg = p.e1rm.kg;
@@ -469,6 +557,12 @@ ProgressView buildProgress({
       }
     }
     final best = es?.best;
+    final bwAt = best == null
+        ? null
+        : profile.bodyweightFor(
+            todayIso(best.startedAtMs, tzOffsetMin),
+            legacyG: legacyBodyweightG,
+          );
     cards.add(
       LiftCard(
         key: k,
@@ -478,9 +572,11 @@ ProgressView buildProgress({
         rough: best?.e1rm.rough ?? false,
         solidKg: es?.bestSolid?.e1rm.kg,
         bestDate: best == null ? null : dayOf(best.startedAtMs),
-        ratio: best != null && bw != null && bw.kg > 0
-            ? best.e1rm.kg / bw.kg
+        ratio: best != null && bwAt != null && bwAt.kg > 0
+            ? best.e1rm.kg / bwAt.kg
             : null,
+        bwKg: bwAt?.kg,
+        bwDate: bwAt?.date,
         trend: trend,
         ignored: ignored,
         firstAtGym: verdicts.any((v) => v.reason == eng.RejectReason.coldStart),
@@ -563,3 +659,45 @@ ProgressView buildProgress({
     }.length,
   );
 }
+
+/// Everything [buildProgress] needs, as one value that can cross to an
+/// isolate (plain data only).
+class ProgressInput {
+  const ProgressInput({
+    required this.workouts,
+    required this.catalog,
+    required this.gymNames,
+    required this.profile,
+    required this.nowMs,
+    required this.tzOffsetMin,
+    this.legacyBodyweightG,
+    this.confirmed = const [],
+  });
+  final List<eng.WorkoutRecord> workouts;
+  final eng.Catalog catalog;
+  final Map<String, String> gymNames;
+  final Profile profile;
+  final int nowMs;
+  final int tzOffsetMin;
+  final int? legacyBodyweightG;
+  final List<Confirmation> confirmed;
+}
+
+ProgressView buildProgressFrom(ProgressInput i) => buildProgress(
+  workouts: i.workouts,
+  catalog: i.catalog,
+  gymNames: i.gymNames,
+  profile: i.profile,
+  nowMs: i.nowMs,
+  tzOffsetMin: i.tzOffsetMin,
+  legacyBodyweightG: i.legacyBodyweightG,
+  confirmed: i.confirmed,
+);
+
+/// How the tab runs the analysis: on a background isolate. Tests swap in
+/// [buildProgressInline] (an isolate hangs under fake async).
+Future<ProgressView> Function(ProgressInput) progressRunner = (i) =>
+    compute(buildProgressFrom, i);
+
+Future<ProgressView> buildProgressInline(ProgressInput i) async =>
+    buildProgressFrom(i);

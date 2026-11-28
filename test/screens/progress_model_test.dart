@@ -25,6 +25,11 @@ void main() {
       );
     });
 
+    test('birth year outside 1900-2100 is dropped', () {
+      expect(Profile.parse('{"birth_year":1850}').birthYear, isNull);
+      expect(Profile.parse('{"birth_year":1990}').birthYear, 1990);
+    });
+
     test('same-day weigh-in replaces', () {
       final p = const Profile()
           .withWeighIn('2026-11-01', 80000)
@@ -65,6 +70,22 @@ void main() {
       expect(Profile.load(st).birthYear, 1985);
       expect(st.settings().toJson(), const eng.Settings().toJson());
     });
+  });
+
+  test('the analysis crosses to a background isolate', () async {
+    final v = await progressRunner(
+      ProgressInput(
+        workouts: sixWeeks(),
+        catalog: progressCatalog,
+        gymNames: gymNames,
+        profile: weighed('2026-11-20'),
+        nowMs: progressNow,
+        tzOffsetMin: 0,
+        confirmed: const [Confirmation('x', 1, 1)],
+      ),
+    );
+    expect(v.cards.length, 2);
+    expect(v.cards.first.ratio, isNotNull);
   });
 
   group('buildProgress', () {
@@ -120,9 +141,10 @@ void main() {
       final ws = typoWorkouts();
       final v = view(ws);
       expect(v.flagged.length, 1);
-      final id = v.flagged.single.$2.setId;
+      final c = confirmationOf(v.flagged.single.$2);
       expect(v.cards.single.hasTypoFlag, isTrue);
-      final after = view(ws, confirmed: {id});
+      expect(v.flagged.single.$2.light, isFalse);
+      final after = view(ws, confirmed: [c]);
       expect(after.flagged, isEmpty);
       expect(after.cards.single.bestKg, greaterThan(150));
 
@@ -133,19 +155,97 @@ void main() {
       ];
       final v2 = view(two);
       expect(v2.flagged.length, 2);
-      final first = v2.flagged.first.$2.setId;
-      expect(view(two, confirmed: {first}).flagged.length, 1);
+      final first = confirmationOf(v2.flagged.first.$2);
+      expect(view(two, confirmed: [first]).flagged.length, 1);
       expect(
-        view(two, confirmed: {for (final f in v2.flagged) f.$2.setId}).flagged,
+        view(
+          two,
+          confirmed: [for (final f in v2.flagged) confirmationOf(f.$2)],
+        ).flagged,
         isEmpty,
       );
     });
 
-    test('confirmed ids persist in the raw setting', () {
+    test('confirmations persist; old id-only values read as unconfirmed', () {
       final st = eng.MemoryStore();
       expect(loadConfirmed(st), isEmpty);
-      saveConfirmed(st, {'b', 'a'});
-      expect(loadConfirmed(st), {'a', 'b'});
+      saveConfirmed(st, [const Confirmation('a', 1000, 5)]);
+      final back = loadConfirmed(st).single;
+      expect([back.setId, back.loadG, back.reps], ['a', 1000, 5]);
+      st.saveSetting(confirmedKey, '["a","b"]');
+      expect(loadConfirmed(st), isEmpty);
+      st.saveSetting(confirmedKey, 'garbage');
+      expect(loadConfirmed(st), isEmpty);
+    });
+
+    test('an edit after confirming voids the confirmation', () {
+      final ws = typoWorkouts();
+      final c = confirmationOf(view(ws).flagged.single.$2);
+      expect(view(ws, confirmed: [c]).flagged, isEmpty);
+      // The same set edited 200 kg -> 2000 kg.
+      final edited = [
+        for (final w in ws)
+          eng.WorkoutRecord(
+            uuid: w.uuid,
+            gymId: w.gymId,
+            startedAtMs: w.startedAtMs,
+            tzOffsetMin: w.tzOffsetMin,
+            endedAtMs: w.endedAtMs,
+            sets: [
+              for (final s in w.sets)
+                s.setId == c.setId ? _withLoad(s, 2000000) : s,
+            ],
+          ),
+      ];
+      final v = view(edited, confirmed: [c]);
+      expect(v.flagged.single.$2.what, '2000 kg × 5');
+      expect(v.cards.single.bestKg, lessThan(150));
+    });
+
+    test('light outlier gets light wording', () {
+      final ws = [
+        workout('a', 20, [set(bench, 1, 100, 5)]),
+        workout('b', 1, [set(bench, 1, 10, 5)]),
+      ];
+      final f = view(ws).flagged.single.$2;
+      expect(f.light, isTrue);
+      expect(f.reason, lightReason);
+      expect(view(ws).cards.single.hasLightFlag, isTrue);
+    });
+
+    test('x bodyweight uses the weight on the best\'s day, not today', () {
+      final ws = [
+        workout('a', 30, [set(squat, 1, 120, 5)]), // 26 Oct
+      ];
+      final p = const Profile()
+          .withWeighIn('2026-10-01', 90000)
+          .withWeighIn('2026-11-20', 80000);
+      final c = view(ws, profile: p).cards.single;
+      expect(c.bwKg, 90);
+      expect(c.bwDate, '2026-10-01');
+      expect(c.ratio, closeTo(120 * (1 + 5 / 30) / 90, 0.001));
+      // Today's weight still drives the banner.
+      expect(view(ws, profile: p).bodyweight!.kg, 80);
+      // Older than the first weigh-in: the earliest entry.
+      final early = const Profile().withWeighIn('2026-11-10', 85000);
+      expect(view(ws, profile: early).cards.single.bwKg, 85);
+      // Undated legacy only with an empty log.
+      final l = view(ws, legacyG: 88000).cards.single;
+      expect([l.bwKg, l.bwDate], [88, null]);
+    });
+
+    test('trend weeks follow each workout\'s own offset', () {
+      // Sunday 22 Nov 23:00 UTC at +8h is Monday 23 Nov local: this week.
+      final w = eng.WorkoutRecord(
+        uuid: 'tz',
+        gymId: 'g1',
+        startedAtMs: DateTime.utc(2026, 11, 22, 23).millisecondsSinceEpoch,
+        tzOffsetMin: 480,
+        endedAtMs: DateTime.utc(2026, 11, 23, 1).millisecondsSinceEpoch,
+        sets: [set(bench, 1, 70, 5)],
+      );
+      final c = view([w]).cards.single;
+      expect(c.trend.last, isNotNull);
     });
 
     test('weekly volume and hard sets by muscle', () {
@@ -167,3 +267,14 @@ void main() {
     });
   });
 }
+
+eng.SetRecord _withLoad(eng.SetRecord s, int loadG) => eng.SetRecord(
+  setId: s.setId,
+  exerciseId: s.exerciseId,
+  exerciseName: s.exerciseName,
+  exercisePosition: s.exercisePosition,
+  setOrdinal: s.setOrdinal,
+  completion: s.completion,
+  loadG: loadG,
+  reps: s.reps,
+);

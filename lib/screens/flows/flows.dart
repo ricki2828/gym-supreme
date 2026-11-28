@@ -664,59 +664,80 @@ class ProgressTab extends StatefulWidget {
 }
 
 class _ProgressTabState extends State<ProgressTab> {
-  late ProgressView _view = _build();
+  ProgressView? _view;
+  int _gen = 0;
 
-  ProgressView _build() {
-    final d = widget.deps;
-    final st = d.store;
-    return buildProgress(
-      workouts: st == null ? const [] : st.workouts(),
-      catalog: d.catalog,
-      gymNames: {for (final g in d.engine.gyms()) g.id: g.name},
-      profile: Profile.load(st),
-      nowMs: d.nowMs(),
-      tzOffsetMin: d.tzOffsetMin(),
-      legacyBodyweightG: d.engine.settings().bodyweightG,
-      confirmed: loadConfirmed(st),
-    );
+  @override
+  void initState() {
+    super.initState();
+    _reload();
   }
 
-  void _reload() {
-    if (mounted) setState(() => _view = _build());
+  /// Reads the stored workouts here (the database lives on this isolate),
+  /// then runs the analysis off the UI thread. A late result from an older
+  /// reload is dropped.
+  Future<void> _reload() async {
+    final d = widget.deps;
+    final st = d.store;
+    final gen = ++_gen;
+    final ProgressInput input;
+    try {
+      input = ProgressInput(
+        workouts: st == null ? const [] : st.workouts(),
+        catalog: d.catalog,
+        gymNames: {for (final g in d.engine.gyms()) g.id: g.name},
+        profile: Profile.load(st),
+        nowMs: d.nowMs(),
+        tzOffsetMin: d.tzOffsetMin(),
+        legacyBodyweightG: d.engine.settings().bodyweightG,
+        confirmed: loadConfirmed(st),
+      );
+    } on Object {
+      return;
+    }
+    final v = await progressRunner(input);
+    if (mounted && gen == _gen) setState(() => _view = v);
   }
 
   void _say(String t) =>
       ScaffoldMessenger.maybeOf(context)
           ?.showSnackBar(SnackBar(content: Text(t)));
 
-  void _confirm(String setId) {
+  void _confirm(IgnoredSet set) {
     final st = widget.deps.store;
-    if (st == null) return;
+    final c = set.confirmation;
+    if (st == null || c == null) return;
     try {
-      saveConfirmed(st, {...loadConfirmed(st), setId});
-      widget.deps.persist?.call();
+      saveConfirmed(st, [
+        for (final x in loadConfirmed(st))
+          if (x.setId != c.setId) x,
+        c,
+      ]);
     } on Object {
       _say('Could not save that. Try again.');
       return;
     }
+    widget.deps.persist?.call();
     _reload();
   }
 
   Future<void> _openProfile() async {
     final st = widget.deps.store;
-    if (st == null) return;
+    final v = _view;
+    if (st == null || v == null) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => SettingsProfileScreen(
           initial: Profile.load(st),
-          today: _view.today,
+          today: v.today,
           onSave: (p) {
             try {
               p.save(st);
-              widget.deps.persist?.call();
             } on Object {
-              _say('Could not save your profile.');
+              return false;
             }
+            widget.deps.persist?.call();
+            return true;
           },
         ),
       ),
@@ -725,19 +746,28 @@ class _ProgressTabState extends State<ProgressTab> {
   }
 
   @override
-  Widget build(BuildContext context) => ProgressScreen(
-    view: _view,
-    onOpenProfile: _openProfile,
-    onOpenLift: (c) => showLiftSheet(
-      context,
-      card: c,
-      onConfirm: (id) {
-        Navigator.of(context).pop();
-        _confirm(id);
-      },
-    ),
-    onConfirm: _confirm,
-  );
+  Widget build(BuildContext context) {
+    final v = _view;
+    if (v == null) {
+      return const Scaffold(
+        backgroundColor: Lit.ground,
+        body: Center(child: CircularProgressIndicator(color: Lit.ink)),
+      );
+    }
+    return ProgressScreen(
+      view: v,
+      onOpenProfile: _openProfile,
+      onOpenLift: (c) => showLiftSheet(
+        context,
+        card: c,
+        onConfirm: (s) {
+          Navigator.of(context).pop();
+          _confirm(s);
+        },
+      ),
+      onConfirm: _confirm,
+    );
+  }
 }
 
 class _BodyTab extends StatelessWidget {

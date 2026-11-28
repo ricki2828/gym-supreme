@@ -19,7 +19,9 @@ class SettingsProfileScreen extends StatefulWidget {
 
   /// Today's local date, "YYYY-MM-DD".
   final String today;
-  final void Function(Profile profile) onSave;
+
+  /// Saves; false when it could not (the screen then keeps the old value).
+  final bool Function(Profile profile) onSave;
 
   @override
   State<SettingsProfileScreen> createState() => _SettingsProfileScreenState();
@@ -43,8 +45,13 @@ class _SettingsProfileScreenState extends State<SettingsProfileScreen> {
   }
 
   void _set(Profile p) {
-    setState(() => _p = p);
-    widget.onSave(p);
+    if (widget.onSave(p)) {
+      setState(() => _p = p);
+    } else {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('Could not save. Try again.')),
+      );
+    }
   }
 
   int get _thisYear => int.parse(widget.today.substring(0, 4));

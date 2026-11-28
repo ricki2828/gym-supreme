@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:gym_engine/gym_engine.dart' as eng;
 import 'package:gym_supreme/screens/flows/flows.dart';
 import 'package:gym_supreme/screens/progress_model.dart';
 import 'package:gym_supreme/screens/progress_screen.dart';
+import 'package:gym_supreme/screens/settings_profile.dart';
 
 import 'fixtures.dart';
 import 'flaky_port.dart';
@@ -14,7 +16,7 @@ import 'progress_fixtures.dart';
 Future<void> pumpScreen(
   WidgetTester tester,
   ProgressView v, {
-  void Function(String)? onConfirm,
+  void Function(IgnoredSet)? onConfirm,
   void Function(LiftCard)? onOpen,
   VoidCallback? onProfile,
 }) async {
@@ -65,7 +67,7 @@ void main() {
   });
 
   testWidgets('typo flag: nudge confirms; sheet lists reasons', (tester) async {
-    final confirmed = <String>[];
+    final confirmed = <IgnoredSet>[];
     LiftCard? opened;
     final v = view(typoWorkouts());
     await pumpScreen(
@@ -76,7 +78,7 @@ void main() {
     );
     expect(find.text('Confirm big number?'), findsOneWidget);
     await tester.tap(find.textContaining('Yes'));
-    expect(confirmed, [v.flagged.single.$2.setId]);
+    expect(confirmed.single.setId, v.flagged.single.$2.setId);
 
     await tester.tap(find.byKey(Key('progress.lift.$bench')));
     expect(opened, isNotNull);
@@ -107,6 +109,48 @@ void main() {
     expect(find.text('Every set counted.'), findsOneWidget);
   });
 
+  testWidgets('failed profile save keeps the old value', (tester) async {
+    phone(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsProfileScreen(
+          initial: const Profile(),
+          today: '2026-11-26',
+          onSave: (_) => false,
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const Key('profile.sex.male')));
+    await tester.pump();
+    expect(find.text('Could not save. Try again.'), findsOneWidget);
+    final chip = tester.widget<ChoiceChip>(
+      find.byKey(const Key('profile.sex.male')),
+    );
+    expect(chip.selected, isFalse);
+  });
+
+  testWidgets('sheet shows the bodyweight the ratio used', (tester) async {
+    final p = const Profile().withWeighIn('2026-10-01', 90000);
+    final c = view([
+      workout('a', 30, [set(squat, 1, 120, 5)]),
+    ], profile: p).cards.single;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LiftSheet(card: c, onConfirm: (_) {}),
+        ),
+      ),
+    );
+    expect(find.textContaining('vs 90 kg (1 Oct 2026)'), findsOneWidget);
+  });
+
+  testWidgets('undated legacy bodyweight nudges for a dated weigh-in', (
+    tester,
+  ) async {
+    await pumpScreen(tester, view(sixWeeks(), legacyG: 85000));
+    expect(find.text('ADD A DATED WEIGH-IN'), findsOneWidget);
+  });
+
   group('Progress tab over the engine', () {
     late eng.MemoryStore store;
     late GymDeps deps;
@@ -114,6 +158,7 @@ void main() {
 
     setUp(() {
       persisted = 0;
+      progressRunner = buildProgressInline;
       store = eng.MemoryStore()
         ..upsertGym(
           const eng.Gym(id: 'g1', name: 'Condo gym', kit: {}, createdAtMs: 1),
@@ -139,13 +184,41 @@ void main() {
       );
     });
 
-    Future<void> openTab(WidgetTester tester) async {
+    Future<void> openTab(WidgetTester tester, {bool settle = true}) async {
       phone(tester);
       await tester.pumpWidget(MaterialApp(home: GymRoot(deps: deps)));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Progress'));
-      await tester.pumpAndSettle();
+      if (settle) {
+        await tester.pumpAndSettle();
+      } else {
+        await tester.pump();
+      }
     }
+
+    testWidgets('shows a placeholder until the analysis returns', (
+      tester,
+    ) async {
+      final done = Completer<ProgressView>();
+      progressRunner = (_) => done.future;
+      await openTab(tester, settle: false);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      done.complete(
+        buildProgressFrom(
+          ProgressInput(
+            workouts: store.workouts(),
+            catalog: progressCatalog,
+            gymNames: gymNames,
+            profile: const Profile(),
+            nowMs: progressNow,
+            tzOffsetMin: 0,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text('PROGRESS'), findsOneWidget);
+    });
 
     testWidgets('confirm saves the set id and refreshes', (tester) async {
       await openTab(tester);
@@ -153,6 +226,7 @@ void main() {
       await tester.tap(find.textContaining('Yes'));
       await tester.pumpAndSettle();
       expect(loadConfirmed(store), hasLength(1));
+      expect(loadConfirmed(store).single.loadG, 200000);
       expect(persisted, 1);
       expect(find.text('Confirm big number?'), findsNothing);
     });
